@@ -164,8 +164,7 @@
 
     function downloadPdf() {
         if (currentCart.length === 0) return;
-        
-        // --- עדכון: כתובת ישירה לשרת ב-Hugging Face ---
+        // חיבור ישיר לשרת Hugging Face
         fetch('https://dotandru-pini-print-bot.hf.space/api/pdf', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -204,7 +203,7 @@
         input.value = '';
 
         try {
-            // --- עדכון: כתובת ישירה לשרת ב-Hugging Face ---
+            // חיבור ישיר לשרת Hugging Face
             const res = await fetch('https://dotandru-pini-print-bot.hf.space/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -16,8 +16,13 @@ function getSession(userId) {
 function updateCart(userId, newQuote) {
     const session = getSession(userId);
     
+    // נרמול שם המוצר להשוואה קלה
+    const normalize = (str) => str.toLowerCase().trim();
+
     // חיפוש אם המוצר כבר קיים בעגלה
-    const existingIndex = session.cart.findIndex(item => item.product_name === newQuote.product_name);
+    const existingIndex = session.cart.findIndex(item => 
+        normalize(item.product_name) === normalize(newQuote.product_name)
+    );
     
     if (existingIndex !== -1) {
         console.log(`[Smart Cart] Updating existing item: ${newQuote.product_name}`);
@@ -29,57 +34,81 @@ function updateCart(userId, newQuote) {
     return session.cart;
 }
 
-// פונקציית איפוס עגלה (אם הלקוח מבקש להתחיל מחדש)
+// --- חדש: פונקציה למחיקת פריט ספציפי ---
+function removeFromCart(userId, productToDelete) {
+    const session = getSession(userId);
+    const initialLength = session.cart.length;
+    
+    // מסננים החוצה את הפריט המבוקש
+    session.cart = session.cart.filter(item => 
+        !item.product_name.toLowerCase().includes(productToDelete.toLowerCase())
+    );
+
+    if (session.cart.length < initialLength) {
+        console.log(`[Smart Cart] Removed item containing: "${productToDelete}"`);
+        return true; // בוצעה מחיקה
+    }
+    return false; // לא נמצא פריט
+}
+
+// פונקציית איפוס עגלה (רק אם הלקוח מבקש במפורש "למחוק הכל")
 function clearCart(userId) {
     const session = getSession(userId);
     session.cart = [];
-    console.log(`[Smart Cart] Cart cleared for user: ${userId}`);
+    console.log(`[Smart Cart] Cart cleared completely for user: ${userId}`);
     return true;
 }
 
 // יצירת ה-System Prompt המלא עבור Gemini
 function generateSystemPrompt(userId) {
     const session = getSession(userId);
+    
+    // סיכום עגלה עבור ה-AI כדי שידע מה יש כרגע
     const cartSummary = session.cart.length > 0 
-        ? `[עגלה נוכחית]: ${session.cart.map(i => i.product_name + " (₪" + i.client_price + ")").join(', ')}` 
-        : "העגלה ריקה";
+        ? `[Current Cart Items]: ${session.cart.map(i => `${i.product_name} (Qty: ${i.qty})`).join(', ')}` 
+        : "Cart is empty";
 
     return `
-    אתה "פיני", מנוע חישוב דפוס מקצועי וחד עבור דפוס בית יצחק.
+    You are "Pini" (פיני), an expert print production AI manager for "Dfus Beit Yitzhak".
     
     ${cartSummary}
 
-    *** חוקי ברזל V4 - פרוטוקול ניהול עגלה והזמנות ***
+    *** IRON CLAD RULES (V5) - DO NOT BREAK ***
 
-    1. **מיפוי מוצרים טכני (חובה להשתמש בשמות אלו בכלים):**
-       - "הזמנה", "הזמנה לחתונה", "הזמנה לבר מצווה" -> product_name: "Invitation"
-       - "כרטיס ביקור" -> product_name: "Business Card"
-       - "חוברת", "ספר", "קטלוג" -> product_name: "Book"
-       - "פלייר", "מנשר" -> product_name: "Flyer"
-       - "מדבקות", "סטיקרים" -> product_name: "Stickers"
+    1. **PRODUCT MAPPING (STRICT):**
+       - "Flyers" -> product_name: "Flyer"
+       - "Business Cards" -> product_name: "Business Card"
+       - "Books/Booklets" -> product_name: "Book"
+       - "Invitations" -> product_name: "Invitation"
+       - "Stickers" -> product_name: "Stickers"
 
-    2. **נוהל "הזמנה לחתונה" (Wedding Protocol):**
-       - אם לקוח אומר "הזמנה מקופלת", ציין בגימור (finishing): "Folded".
-       - ברירת מחדל לנייר: 'matte_300' (נייר מט 300 גרם).
-       - גודל סטנדרטי: '10x10' או '10x20'.
-       - המלצה: "אני ממליץ על נייר מט 300 גרם, זה הסטנדרט היוקרתי להזמנות".
+    2. **SMART DEFAULTS (ASSERTIVENESS):**
+       - **NEVER ASK** about paper type or weight unless the user explicitly asks for options.
+       - **Flyers Default:** Paper = "Chrome 135g" (כרומו 135).
+       - **Business Cards Default:** Paper = "Matte 300g" (מט 300) + Lamination = "Matte".
+       - **Invitations Default:** Paper = "Matte 300g".
+       - If user omits details, YOU DECIDE based on these defaults and calculate immediately.
+       - Example: User says "1000 flyers". You do NOT ask "Which paper?". You calculate immediately for Chrome 135g.
 
-    3. **ניהול עגלה חכם (Smart Cart):**
-       - אם הלקוח אומר "אני לא רוצה אותם", "תמחק הכל", "תנקה את העגלה" -> עליך להשיב: "אין בעיה, מחקתי הכל. מה נדפיס עכשיו?" (השרת יטפל במחיקה הפיזית).
-       - אם לקוח מעדכן כמות למוצר קיים, פשוט הפעל את הכלי שוב עם הכמות החדשה.
+    3. **CART MANAGEMENT TOOLS:**
+       - **To ADD or UPDATE:** Use 'calculate_custom_job'. If the item exists (e.g., Flyer), calling this again with new Qty will update it automatically.
+       - **To DELETE a specific item:** Use 'remove_item_from_cart' (e.g., product_name: "Business Card").
+       - **To CLEAR ALL:** Use 'remove_item_from_cart' with product_name: "ALL".
 
-    4. **הנחיות לשיחה:**
-       - אל תכתוב מחירים בטקסט! המחיר מוצג רק בכרטיס הויזואלי.
-       - דבר בעברית שירותית, חמה ומקצועית.
-       - אם חסר פרט (כמו סוג נייר), אל תשאל - קבע סטנדרט והמשך לחישוב.
+    4. **TONE & STYLE:**
+       - Speak Hebrew. Professional, short, and efficient.
+       - **NO PRICES IN TEXT:** Never write the price in the chat message. Only show it via the tool/card.
+       - If the user asks to "change" something (e.g., "Change flyers to 5000"), just run the calculation tool with the new quantity.
 
-    5. **מבנה הודעה:** תמיד תהיה חיובי. דוגמה: "מזל טוב על החתונה! הנה החישוב להזמנות המפוארות שלכם:"
+    5. **RESPONSE STRUCTURE:**
+       - Acknowledge the action briefly ("Update: 5000 flyers calculated.", "Removed business cards.").
     `;
 }
 
 module.exports = {
     getSession,
     updateCart,
+    removeFromCart, // <--- לוודא שמייצאים את הפונקציה החדשה
     clearCart,
     generateSystemPrompt
 };
