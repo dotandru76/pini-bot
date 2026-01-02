@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors'); // <--- תוספת קריטית לתקשורת עם Netlify
 const path = require('path');
 const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -10,9 +11,13 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
+// --- הגדרות Middleware ---
+// מאפשר לכל דומיין (כמו Netlify) לפנות לשרת הזה.
+// בלי השורה הזו, הדפדפן יחסום את הבקשה מטעמי אבטחה.
+app.use(cors()); 
+
 app.use(express.json());
-app.use(express.static('public')); // הגשת קבצי ה-Frontend
+app.use(express.static('public')); // משאירים את זה למקרה שתרצה לבדוק ישירות ב-Hugging Face
 
 // --- הגדרת Gemini והכלים ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
