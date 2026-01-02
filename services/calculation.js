@@ -1,110 +1,85 @@
 const fs = require('fs');
 const path = require('path');
 
-// טעינת בסיסי הנתונים
+// טעינת בסיסי הנתונים עם הגנה
 let materials, products;
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
     products = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
-    console.log("DB Loaded successfully");
+    console.log("✅ DB Loaded successfully");
 } catch (error) {
-    console.error("Error loading DB files", error);
+    console.error("❌ Error loading DB files:", error.message);
+    // Minimal Fallback to prevent crash
     materials = { papers: {}, finishing: {}, machine_specs: { digital: { click_color: 0.5, setup_cost: 20 } } };
 }
 
-// --- מנוע חיפוש דינמי לחומרי גלם ---
-// פונקציה זו מחפשת התאמה בתוך ה-JSON במקום להסתמך על חוקים קבועים מראש
+// מנוע חיפוש גנרי (לנייר וגימורים)
 const findBestMatchInDB = (userInput, category) => {
     if (!userInput) return null;
-    const searchStr = userInput.toLowerCase().replace(/ /g, '_'); // נרמול קלט
-    const dbCategory = materials[category]; // papers, finishing, etc.
+    const searchStr = userInput.toLowerCase().replace(/ /g, '_');
+    const dbCategory = materials[category];
 
     if (!dbCategory) return null;
+    if (dbCategory[searchStr]) return searchStr; // התאמה ישירה
 
-    // 1. ניסיון למצוא התאמה ישירה למפתח (למשל "pearl_300")
-    if (dbCategory[searchStr]) return searchStr;
-
-    // 2. חיפוש חכם: רץ על כל הפריטים ב-DB ובודק אם השם מכיל את הקלט
-    const foundKey = Object.keys(dbCategory).find(key => {
+    // חיפוש חכם (Partial Match)
+    return Object.keys(dbCategory).find(key => {
         const item = dbCategory[key];
-        // בדיקה: האם המפתח או השם (בעברית/אנגלית) מכילים את מה שהמשתמש ביקש?
         return key.includes(searchStr) || 
                (item.name && item.name.toLowerCase().includes(searchStr)) ||
-               searchStr.includes(key.split('_')[0]); // למשל "pearl" בתוך "pearl_300"
-    });
-
-    return foundKey || null;
+               searchStr.includes(key.split('_')[0]);
+    }) || null;
 };
 
 const calculate_custom_job = (currentCart = [], newItem) => {
-    console.log("\n--- START GENERIC CALCULATION (V7) ---"); 
-    console.log("Input:", JSON.stringify(newItem));
+    console.log("\n--- START CALCULATION (V7) ---"); 
 
-    // 1. זיהוי מוצר גנרי
+    // 1. זיהוי מוצר
     const productKey = Object.keys(products || {}).find(k => newItem.product_name.toLowerCase().includes(k)) || 'flyer';
     const productDef = products ? products[productKey] : null;
     
-    // 2. זיהוי נייר דינמי (Generic Lookup)
+    // 2. זיהוי נייר (כולל ברירות מחדל)
     let paperKey = findBestMatchInDB(newItem.paper_type, 'papers');
 
-    // מנגנון ברירות מחדל (Smart Defaults) - רק אם לא נמצאה התאמה
     if (!paperKey) {
         if (newItem.product_name.toLowerCase().includes('card')) paperKey = 'chromo_300';
         else if (newItem.product_name.toLowerCase().includes('flyer')) paperKey = 'chromo_135';
-        else if (newItem.product_name.toLowerCase().includes('invitation')) paperKey = 'pearl_300'; // ברירת מחדל יוקרתית
+        else if (newItem.product_name.toLowerCase().includes('invitation')) paperKey = 'pearl_300';
         else paperKey = 'offset_80';
-        console.log(`Smart Default applied: ${paperKey}`);
-    } else {
-        console.log(`Database Match found: ${paperKey}`);
+        console.log(`🤖 Smart Default Applied: ${paperKey}`);
     }
     
-    // שליפת האובייקט המלא מה-DB
-    const paperObj = materials.papers[paperKey] || 
-                     materials.papers['chromo_300'] || 
+    const paperObj = (materials.papers && materials.papers[paperKey]) || 
                      { cost_sheet: 0.1, name: "Standard Paper" };
                      
     const machine = (materials.machine_specs && materials.machine_specs[productDef?.engine || 'digital']) ||
                     { click_color: 0.5, setup_cost: 20, name: "Digital Press" };
 
-    // 3. חישוב כמויות (Imposition Logic)
+    // 3. חישוב טכני (Imposition)
     const qty = parseInt(newItem.qty) || 100;
-    
-    // חישוב Ups (כמה נכנסים בגיליון) - ברירת מחדל 1 אם לא ידוע
     let ups = 1;
     if (productKey === 'bc') ups = 24; 
     else if (productKey === 'flyer') ups = 4;
     else if (productKey === 'invitation') ups = 2;
-    else if (productKey === 'sticker') ups = 6;
 
     const sheetsRequired = Math.ceil(qty / ups);
     const wasteSheets = Math.ceil(sheetsRequired * 0.05) + 15;
     const totalSheets = sheetsRequired + wasteSheets;
 
-    // 4. חישוב גימורים דינמי
+    // 4. חישוב עלויות (Breakdown)
     let finishingCost = 0;
-    let finishingName = "None";
-    
     if (newItem.finishing) {
-        // חיפוש הגימור ב-DB
         const finishKey = findBestMatchInDB(newItem.finishing, 'finishing');
-        if (finishKey) {
+        if (finishKey && materials.finishing[finishKey]) {
             const fItem = materials.finishing[finishKey];
-            finishingName = fItem.name;
-            // לוגיקה: אם יש מחיר להרצה (run) או מחיר לצד (cost_side)
             if (fItem.run) finishingCost = fItem.run * qty;
-            else if (fItem.cost_side) finishingCost = fItem.cost_side * qty; // פשטנו את החישוב לצורך הדוגמה
-            else finishingCost = qty * 0.1; // Fallback
-            
-            // הוספת עלות Setup לגימור אם יש
+            else if (fItem.cost_side) finishingCost = fItem.cost_side * qty;
             if (fItem.setup) finishingCost += fItem.setup;
         } else {
-            // אם הלקוח ביקש משהו שלא ב-DB, לוקחים הערכה גסה
-            finishingCost = qty * 0.2; 
-            finishingName = "General Finishing";
+            finishingCost = qty * 0.2; // Fallback estimate
         }
     }
 
-    // 5. סיכום עלויות
     const costComponents = {
         paper: Number((totalSheets * (paperObj.cost_sheet || 0.1)).toFixed(2)),
         print: Number((totalSheets * (machine.click_color || 0.5)).toFixed(2)),
@@ -114,7 +89,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
 
     const totalItemCost = Object.values(costComponents).reduce((a, b) => a + b, 0);
     
-    // תמחור ומרווחים
+    // תמחור
     let margin = 2.5;
     if (qty > 1000) margin = 1.8;
     if (qty > 5000) margin = 1.5;
@@ -123,16 +98,16 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     const itemProfit = priceToClient - totalItemCost;
     const itemMargin = priceToClient > 0 ? ((itemProfit / priceToClient) * 100).toFixed(0) : 0;
 
-    // 6. בניית הוראות ייצור
+    // 5. הוראות למפעיל
     const productionInstructions = {
         machine: machine.name,
         material: `${paperObj.name} (SRA3)`,
-        setupInfo: `Imposition: ${ups} up | Finish: ${finishingName}`,
+        setupInfo: `Imposition: ${ups} up`,
         quantityToPrint: totalSheets,
         notes: `Net Qty: ${qty}`
     };
 
-    // 7. עדכון עגלה
+    // 6. ניהול עגלה
     let updatedCart = [...currentCart];
     const existingIndex = updatedCart.findIndex(item => 
         item.product_name.toLowerCase().trim() === newItem.product_name.toLowerCase().trim()
@@ -141,7 +116,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     const processedItem = {
         product_name: newItem.product_name,
         qty: qty,
-        description: newItem.description || `${paperObj.name} + ${finishingName}`,
+        description: newItem.description || `${paperObj.name}`,
         client_price: priceToClient,
         cost: Number(totalItemCost.toFixed(2)),
         breakdown: costComponents,
@@ -156,7 +131,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
         updatedCart.push(processedItem);
     }
 
-    // 8. סיכום עסקה גלובלי
+    // 7. חישוב גלובלי (Dashboard)
     const total_deal_stats = updatedCart.reduce((acc, item) => {
         acc.totalPrice += item.client_price;
         acc.totalCost += (item.cost || 0);
@@ -171,8 +146,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     total_deal_stats.profit_margin = globalMargin;
     total_deal_stats.profitPercent = globalMargin;
 
-    console.log(`GLOBAL STATS: Price=${total_deal_stats.totalPrice} | Margin=${globalMargin}%`);
-    console.log("--- END CALCULATION ---");
+    console.log(`💰 Stats: Price=${total_deal_stats.totalPrice} | Margin=${globalMargin}%`);
 
     return { 
         updatedCart, 

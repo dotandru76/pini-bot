@@ -1,3 +1,23 @@
+const fs = require('fs');
+const path = require('path');
+
+// --- חוקי ברירת מחדל (Fallback) למקרה שקובץ החוקים חסר ---
+const DEFAULT_RULES = `
+*** Pini Project - Iron Rules V4 (Fallback Mode) ***
+1. Server Architecture:
+   - Calculation Engine: Use 'calculate_custom_job' exclusively.
+   - Global Profitability: Returns 'total_deal_stats' summarizing the ENTIRE cart.
+   - Smart Cart: Prevent duplicates.
+2. Bot Behavior:
+   - NO PRICES IN TEXT: Show prices ONLY via the Visual Card tool.
+   - Smart Defaults: If specs are missing, assume standard.
+   - MUST SAY: "Calculated based on [default chosen], which is standard."
+3. Visuals:
+   - Price Breakdown: Card must show Paper/Print/Finishing costs.
+   - Production Setup: Instructions for the machine operator.
+   - Manager Dashboard: Show "Cost vs Pay".
+`;
+
 const sessions = {};
 
 // פונקציה להחזרת סשן קיים או יצירת חדש
@@ -12,12 +32,12 @@ function getSession(userId) {
     return sessions[userId];
 }
 
-// פונקציה לעדכון העגלה - מונעת כפילויות לפי שם המוצר
+// ✅ פונקציה לעדכון העגלה - מתוקנת (סוגריים תקינים בלוגים)
 function updateCart(userId, newQuote) {
     const session = getSession(userId);
     
     // נרמול שם המוצר להשוואה קלה
-    const normalize = (str) => str.toLowerCase().trim();
+    const normalize = (str) => str ? str.toLowerCase().trim() : "";
 
     // חיפוש אם המוצר כבר קיים בעגלה
     const existingIndex = session.cart.findIndex(item => 
@@ -34,24 +54,23 @@ function updateCart(userId, newQuote) {
     return session.cart;
 }
 
-// --- חדש: פונקציה למחיקת פריט ספציפי ---
+// פונקציה למחיקת פריט ספציפי
 function removeFromCart(userId, productToDelete) {
     const session = getSession(userId);
     const initialLength = session.cart.length;
     
-    // מסננים החוצה את הפריט המבוקש
     session.cart = session.cart.filter(item => 
         !item.product_name.toLowerCase().includes(productToDelete.toLowerCase())
     );
 
     if (session.cart.length < initialLength) {
         console.log(`[Smart Cart] Removed item containing: "${productToDelete}"`);
-        return true; // בוצעה מחיקה
+        return true; 
     }
-    return false; // לא נמצא פריט
+    return false;
 }
 
-// פונקציית איפוס עגלה (רק אם הלקוח מבקש במפורש "למחוק הכל")
+// פונקציית איפוס עגלה
 function clearCart(userId) {
     const session = getSession(userId);
     session.cart = [];
@@ -59,56 +78,47 @@ function clearCart(userId) {
     return true;
 }
 
-// יצירת ה-System Prompt המלא עבור Gemini
+// יצירת ה-System Prompt המלא (עם טעינת קובץ חיצוני)
 function generateSystemPrompt(userId) {
     const session = getSession(userId);
     
-    // סיכום עגלה עבור ה-AI כדי שידע מה יש כרגע
-    const cartSummary = session.cart.length > 0 
-        ? `[Current Cart Items]: ${session.cart.map(i => `${i.product_name} (Qty: ${i.qty})`).join(', ')}` 
-        : "Cart is empty";
+    // סיכום עגלה עבור ה-AI
+    let cartSummary = "Cart is empty.";
+    if (session.cart.length > 0) {
+        cartSummary = "Current Cart:\n" + session.cart.map((item, idx) => 
+            `${idx+1}. ${item.product_name} | Qty: ${item.qty} | Price: ₪${item.client_price}`
+        ).join('\n');
+    }
+
+    let masterRules = DEFAULT_RULES;
+    try {
+        // מנסה לטעון את קובץ החוקים החיצוני
+        const v4Path = path.join(__dirname, '../pini_rules_v4');
+        
+        if (fs.existsSync(v4Path)) {
+            masterRules = fs.readFileSync(v4Path, 'utf8');
+        } else {
+            console.log("⚠️ pini_rules_v4 missing, using internal fallback.");
+        }
+    } catch (err) {
+        console.error("❌ Error reading rules file:", err.message);
+    }
 
     return `
-    You are "Pini" (פיני), an expert print production AI manager for "Dfus Beit Yitzhak".
-    
+    ${masterRules}
+
+    [REAL-TIME DATA]
     ${cartSummary}
-
-    *** IRON CLAD RULES (V5) - DO NOT BREAK ***
-
-    1. **PRODUCT MAPPING (STRICT):**
-       - "Flyers" -> product_name: "Flyer"
-       - "Business Cards" -> product_name: "Business Card"
-       - "Books/Booklets" -> product_name: "Book"
-       - "Invitations" -> product_name: "Invitation"
-       - "Stickers" -> product_name: "Stickers"
-
-    2. **SMART DEFAULTS (ASSERTIVENESS):**
-       - **NEVER ASK** about paper type or weight unless the user explicitly asks for options.
-       - **Flyers Default:** Paper = "Chrome 135g" (כרומו 135).
-       - **Business Cards Default:** Paper = "Matte 300g" (מט 300) + Lamination = "Matte".
-       - **Invitations Default:** Paper = "Matte 300g".
-       - If user omits details, YOU DECIDE based on these defaults and calculate immediately.
-       - Example: User says "1000 flyers". You do NOT ask "Which paper?". You calculate immediately for Chrome 135g.
-
-    3. **CART MANAGEMENT TOOLS:**
-       - **To ADD or UPDATE:** Use 'calculate_custom_job'. If the item exists (e.g., Flyer), calling this again with new Qty will update it automatically.
-       - **To DELETE a specific item:** Use 'remove_item_from_cart' (e.g., product_name: "Business Card").
-       - **To CLEAR ALL:** Use 'remove_item_from_cart' with product_name: "ALL".
-
-    4. **TONE & STYLE:**
-       - Speak Hebrew. Professional, short, and efficient.
-       - **NO PRICES IN TEXT:** Never write the price in the chat message. Only show it via the tool/card.
-       - If the user asks to "change" something (e.g., "Change flyers to 5000"), just run the calculation tool with the new quantity.
-
-    5. **RESPONSE STRUCTURE:**
-       - Acknowledge the action briefly ("Update: 5000 flyers calculated.", "Removed business cards.").
+    
+    User ID: ${userId}
+    Ensure all responses follow the "Visual Card" protocol defined in the rules.
     `;
 }
 
 module.exports = {
     getSession,
     updateCart,
-    removeFromCart, // <--- לוודא שמייצאים את הפונקציה החדשה
+    removeFromCart,
     clearCart,
     generateSystemPrompt
 };
