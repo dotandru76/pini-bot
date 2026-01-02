@@ -1,10 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-// ייבוא הפונקציה החדשה removeFromCart
-const { getSession, updateCart, removeFromCart, clearCart, generateSystemPrompt } = require('./services/sessionManager');
+// שינוי 1: ייבוא המנוע החדש
+const { calculate_custom_job } = require('./services/calculation'); 
+const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require('./services/sessionManager');
 const { generateQuotePDF } = require('./services/pdfService');
 
 dotenv.config();
@@ -16,66 +16,37 @@ app.use(express.static('public'));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// --- כלי 1: חישוב והוספה/עדכון ---
+// הגדרת הכלי ל-Gemini
 const calculateJobTool = {
     name: "calculate_custom_job",
-    description: "Calculate price and ADD or UPDATE an item in the cart.",
+    description: "Calculate price, update cart, and return breakdown & profit stats.",
     parameters: {
         type: "OBJECT",
         properties: {
-            product_name: { type: "STRING", description: "Product name (Flyer, Business Card, Book, Invitation)" },
-            description: { type: "STRING", description: "Specs (default to standard if missing)" },
+            product_name: { type: "STRING", description: "Product name (Flyer, Business Card)" },
             qty: { type: "NUMBER", description: "Quantity" },
-            paper_type: { type: "STRING", description: "Paper (default: chrome_135 for flyers, matte_300 for cards)" },
-            print_sides: { type: "STRING", description: "simplex or duplex" },
-            finishing: { type: "STRING", description: "Finishing (Lamination, Folding)" }
+            paper_type: { type: "STRING", description: "Optional: paper type key from DB" },
+            print_sides: { type: "STRING", description: "1 or 2" },
+            finishing: { type: "STRING", description: "Finishing options" }
         },
         required: ["product_name", "qty"]
     }
 };
 
-// --- כלי 2 (חדש): מחיקת פריט ---
 const deleteItemTool = {
     name: "remove_item_from_cart",
-    description: "Remove a specific item from the cart (or 'ALL' to clear cart)",
+    description: "Remove item or clear cart",
     parameters: {
         type: "OBJECT",
-        properties: {
-            product_name: { type: "STRING", description: "The product name to remove (e.g., 'Business Card')" }
-        },
+        properties: { product_name: { type: "STRING" } },
         required: ["product_name"]
     }
 };
 
 const model = genAI.getGenerativeModel({
     model: "gemini-2.0-flash",
-    // הוספנו את הכלי החדש לרשימה
     tools: [{ functionDeclarations: [calculateJobTool, deleteItemTool] }]
 });
-
-// לוגיקת מחירים (אותה לוגיקה שעבדה קודם)
-function calculatePrice(args) {
-    let basePrice = 0;
-    if (args.product_name === 'Business Card') basePrice = 0.4;
-    else if (args.product_name === 'Invitation') basePrice = 1.5;
-    else if (args.product_name === 'Book') basePrice = 15;
-    else if (args.product_name === 'Stickers') basePrice = 0.5;
-    else basePrice = 0.5;
-
-    if (args.finishing && args.finishing.includes('Fold')) basePrice += 0.5;
-    
-    let total = basePrice * args.qty;
-    if (args.qty > 1000) total *= 0.8; 
-
-    return {
-        ...args,
-        client_price: Math.ceil(total),
-        profit_margin: 30,
-        manager_log: [`חישוב: ${args.product_name}, כמות ${args.qty}, מחיר ${Math.ceil(total)}`]
-    };
-}
-
-// --- Routes ---
 
 app.post('/api/chat', async (req, res) => {
     try {
@@ -88,7 +59,6 @@ app.post('/api/chat', async (req, res) => {
         const chat = model.startChat({
             history: [
                 { role: "user", parts: [{ text: systemPrompt }] },
-                { role: "model", parts: [{ text: "System initialized. Ready for print jobs." }] },
                 ...session.history
             ]
         });
@@ -99,67 +69,60 @@ app.post('/api/chat', async (req, res) => {
 
         let finalResponseText = "";
         let quotes = [];
+        let dashboardStats = null;
         
-        // --- טיפול בכלים (Tools) ---
         if (functionCalls && functionCalls.length > 0) {
-            console.log(`🛠️ Triggered ${functionCalls.length} tools`);
             const functionResponses = [];
             
             for (const call of functionCalls) {
-                // מקרה 1: חישוב / עדכון
                 if (call.name === 'calculate_custom_job') {
-                    const args = call.args;
-                    console.log(`🖩 Calc/Update: ${args.product_name}`);
-                    const calculation = calculatePrice(args);
-                    updateCart(userId, calculation); // מעדכן את הזיכרון
-                    quotes.push(calculation); // שולח ללקוח להצגה
+                    // שינוי 2: שימוש במנוע החדש
+                    const calculationResult = calculate_custom_job(session.cart, call.args);
                     
+                    // עדכון הזיכרון בשרת
+                    session.cart = calculationResult.updatedCart;
+                    
+                    // נתונים לתגובה
+                    quotes.push(calculationResult.lastAdded);
+                    dashboardStats = calculationResult.total_deal_stats;
+
                     functionResponses.push({
                         functionResponse: {
                             name: 'calculate_custom_job',
-                            response: { result: "Updated", price: calculation.client_price }
+                            response: { 
+                                result: "Success", 
+                                price: calculationResult.lastAdded.client_price,
+                                stats: calculationResult.total_deal_stats 
+                            }
                         }
                     });
                 }
-                
-                // מקרה 2: מחיקה (החדש!)
                 else if (call.name === 'remove_item_from_cart') {
+                    // לוגיקת מחיקה
                     const prodName = call.args.product_name;
-                    console.log(`🗑️ Delete Request: ${prodName}`);
-                    
                     if (prodName === 'ALL') {
                         clearCart(userId);
-                        functionResponses.push({
-                            functionResponse: { name: 'remove_item_from_cart', response: { result: "Cart Cleared" } }
-                        });
+                        functionResponses.push({ functionResponse: { name: 'remove_item_from_cart', response: { result: "Cart Cleared" } } });
                     } else {
                         const success = removeFromCart(userId, prodName);
-                        functionResponses.push({
-                            functionResponse: { 
-                                name: 'remove_item_from_cart', 
-                                response: { result: success ? "Item Removed" : "Item Not Found" } 
-                            }
-                        });
+                        functionResponses.push({ functionResponse: { name: 'remove_item_from_cart', response: { result: success ? "Removed" : "Not Found" } } });
                     }
                 }
             }
-
             const finalStep = await chat.sendMessage(functionResponses);
             finalResponseText = finalStep.response.text();
-            
         } else {
             finalResponseText = response.text();
         }
 
-        // שמירת היסטוריה
         session.history.push({ role: 'user', parts: [{ text: message }] });
         session.history.push({ role: 'model', parts: [{ text: finalResponseText }] });
 
-        // שליחת תשובה ללקוח עם העגלה המעודכנת
         res.json({
             content: finalResponseText,
-            quotes: quotes,
-            fullCart: session.cart // שולחים את המצב העדכני ביותר של העגלה
+            quotes: quotes, 
+            cart: session.cart, 
+            dashboard: dashboardStats // שליחת נתוני המנהל לצד לקוח
         });
 
     } catch (error) {
@@ -168,6 +131,7 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
+// מסלול PDF נשאר ללא שינוי
 app.post('/api/pdf', async (req, res) => {
     try {
         const cart = req.body;
