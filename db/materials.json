@@ -1,0 +1,77 @@
+{
+  "machine_specs": {
+    "digital": {
+      "name": "HP Indigo 7K",
+      "sheet_size_cm": [32, 45],
+      "click_color": 0.35,
+      "click_bw": 0.06,
+      "setup_cost": 20.00,
+      "min_price": 50.00
+    },
+    "wide": {
+      "name": "Roland SolJet",
+      "ink_cost_sqm": 15.00,
+      "setup_cost": 40.00,
+      "lamination_sqm": 25.00
+    }
+  },
+  "papers": {
+    "offset_80": { "name": "נטול עץ 80 גרם (נייר מדפסת רגיל)", "cost_sheet": 0.08, "type": "uncoated" },
+    "offset_90": { "name": "נטול עץ 90 גרם (פרימיום לניירת)", "cost_sheet": 0.10, "type": "uncoated" },
+    "offset_120": { "name": "נטול עץ 120 גרם (יוקרתי)", "cost_sheet": 0.18, "type": "uncoated" },
+    "offset_250": { "name": "נטול עץ 250 גרם (קרטון לגלויות)", "cost_sheet": 0.35, "type": "uncoated" },
+    "offset_300": { "name": "נטול עץ 300 גרם (כרטיס טבעי)", "cost_sheet": 0.45, "type": "uncoated" },
+    
+    "chromo_135": { "name": "כרומו 135 גרם (פלייר דק - הפצה המונית)", "cost_sheet": 0.15, "type": "coated" },
+    "chromo_170": { "name": "כרומו 170 גרם (פלייר יציב - פרוספקט)", "cost_sheet": 0.22, "type": "coated" },
+    "chromo_250": { "name": "כרומו 250 גרם (רך)", "cost_sheet": 0.30, "type": "coated" },
+    "chromo_300": { "name": "כרומו 300 גרם (סטנדרט לכרטיסים)", "cost_sheet": 0.45, "type": "coated" },
+    "chromo_350": { "name": "כרומו 350 גרם (קשיח ומומלץ)", "cost_sheet": 0.55, "type": "coated" },
+    
+    "recycled_300": { "name": "נייר ממוחזר 300 גרם (אקולוגי)", "cost_sheet": 0.60, "type": "eco" },
+    "texture_300": { "name": "נייר טקסטורה פשתן (יוקרתי)", "cost_sheet": 0.80, "type": "premium" },
+    "pearl_300": { "name": "נייר פנינה מנצנץ", "cost_sheet": 1.50, "type": "premium" },
+
+    "sticker_paper": { "name": "מדבקת כרומו (נייר)", "cost_sheet": 1.20, "type": "sticker" },
+    "sticker_pvc": { "name": "מדבקת ויניל (פלסטיק עמיד)", "cost_sheet": 2.50, "type": "sticker" },
+    
+    "check_sec": { "name": "נייר בטחוני (צ'קים)", "cost_sheet": 0.40, "type": "security" },
+    "env_standard": { "name": "מעטפה לבנה סטנדרט", "cost_sheet": 0.15, "type": "envelope" },
+    "env_fancy": { "name": "מעטפה איכותית/צבעונית", "cost_sheet": 0.60, "type": "envelope" }
+  },
+  "wide_media": {
+    "kappa_5": { "name": "קאפה 5 מ\"מ", "cost_sqm": 45.00 },
+    "kappa_10": { "name": "קאפה 10 מ\"מ", "cost_sqm": 70.00 },
+    "canvas": { "name": "בד קנבס כותנה איכותי", "cost_sqm": 55.00 },
+    "rollup_film": { "name": "פוליפרופילן רולאפ (לא מתקפל)", "cost_sqm": 25.00 },
+    "vinyl_sticker": { "name": "ויניל להדבקה (לקירות/חלונות)", "cost_sqm": 20.00 },
+    "pvc_banner": { "name": "שמשונית (PVC)", "cost_sqm": 15.00 },
+    "paper_matte": { "name": "נייר פוסטר מט", "cost_sqm": 18.00 },
+    "paper_photo": { "name": "נייר פוטו מבריק", "cost_sqm": 22.00 }
+  },
+  "finishing": {
+    "lami_matte": { "name": "למינציה מט", "cost_side": 0.20 },
+    "lami_gloss": { "name": "למינציה מבריקה", "cost_side": 0.20 },
+    "lami_silk": { "name": "למינציה משי (מגע קטיפה)", "cost_side": 0.80 },
+    
+    "scodix": { "name": "לקה סלקטיבית (הבלטה מבריקה)", "setup": 150.00, "run": 0.40 },
+    "foil_gold": { "name": "הטבעת זהב", "setup": 250.00, "run": 0.50 },
+    "foil_silver": { "name": "הטבעת כסף", "setup": 250.00, "run": 0.50 },
+    
+    "round_corners": { "name": "פינות עגולות", "setup": 20.00 },
+    "creasing": { "name": "ביג (סימון לקיפול)", "setup": 30.00 },
+    "perforation": { "name": "פרפורציה (קו תלישה)", "setup": 40.00, "run": 0.05 },
+    
+    "fold_simple": { "name": "קיפול אמצע", "setup": 40.00, "run": 0.05 },
+    "fold_tri": { "name": "קיפול C (פרוספקט)", "setup": 45.00, "run": 0.06 },
+    "fold_z": { "name": "קיפול Z (אקורדיון)", "setup": 45.00, "run": 0.06 },
+
+    "folder_glue": { "name": "הדבקת כיס פולדר", "run": 1.50 },
+    "staple_bind": { "name": "כריכת סיכות", "run": 2.00 },
+    "perfect_bind": { "name": "כריכה בחום (ספר)", "run": 4.50 },
+    "spiral_bind": { "name": "כריכת ספירלה", "run": 3.50 },
+    
+    "wood_frame": { "name": "מתיחה על מסגרת עץ", "cost_meter": 25.00 },
+    "micr": { "name": "פס מגנטי MICR", "run": 0.15 }
+  }
+}

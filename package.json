@@ -1,0 +1,17 @@
+{
+  "name": "pini_system",
+  "version": "1.0.0",
+  "description": "Pini Print Bot System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "pdfkit": "^0.17.2",
+    "puppeteer": "^24.34.0"
+  }
+}

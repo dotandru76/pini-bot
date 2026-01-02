@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>פיני - דפוס בית יצחק</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Heebo', sans-serif; height: 100vh; display: flex; overflow: hidden; background-color: #d1d7db; }
+
+        /* דשבורד מנהל */
+        .manager-panel { width: 350px; background-color: #202c33; color: #e9edef; padding: 20px; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #374045; box-shadow: 2px 0 5px rgba(0,0,0,0.3); z-index: 100; }
+        .manager-header { font-size: 1.1em; font-weight: bold; border-bottom: 1px solid #8696a0; padding-bottom: 10px; color: #00a884; margin-bottom: 5px; }
+        .stats-row { display: flex; gap: 10px; }
+        .stat-box { background: #111b21; padding: 15px; border-radius: 10px; text-align: center; flex: 1; border: 1px solid #374045; }
+        .stat-label { font-size: 0.8em; color: #8696a0; display: block; margin-top: 5px; }
+        .stat-value { font-size: 1.4em; font-weight: bold; color: #e9edef; }
+        .stat-value.profit { color: #00a884; }
+        .log-box { background: #111b21; padding: 15px; border-radius: 10px; flex: 1; overflow-y: auto; font-size: 0.85em; font-family: monospace; border: 1px solid #374045; color: #d1d7db; }
+        .log-item { margin-bottom: 8px; border-bottom: 1px dashed #374045; padding-bottom: 8px; line-height: 1.4; }
+        .cart-preview { background: #2a3942; padding: 10px; border-radius: 8px; max-height: 150px; overflow-y: auto; }
+        .cart-item-row { display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px; border-bottom: 1px solid #374045; padding-bottom: 2px; }
+
+        /* צ'אט */
+        .chat-container { flex: 1; display: flex; flex-direction: column; background-color: #efe7dd; background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png"); background-repeat: repeat; position: relative; }
+        .chat-header { background-color: #008069; color: white; padding: 10px 16px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 10; }
+        .avatar { width: 40px; height: 40px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .chat-box { flex: 1; overflow-y: auto; padding: 20px 5%; display: flex; flex-direction: column; gap: 8px; }
+        .message { max-width: 75%; padding: 8px 12px; border-radius: 8px; position: relative; font-size: 15px; line-height: 1.4; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
+        .bot-msg { align-self: flex-start; background: #ffffff; border-radius: 0 10px 10px 10px; }
+        .user-msg { align-self: flex-end; background: #dcf8c6; border-radius: 10px 0 10px 10px; }
+
+        /* כרטיס הצעה */
+        .quote-card { background: #ffffff; border-top: 4px solid #008069; padding: 15px; border-radius: 8px; min-width: 280px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 5px; }
+        .card-header { font-weight: bold; color: #008069; font-size: 1.1em; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; margin-bottom: 10px; }
+        .spec-row { display: flex; margin-bottom: 6px; font-size: 14px; color: #333; align-items: baseline; }
+        .spec-icon { width: 20px; text-align: center; margin-left: 8px; }
+        .spec-label { font-weight: bold; color: #555; margin-left: 5px; }
+        .total-section { margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; display: flex; justify-content: space-between; align-items: center; }
+        .total-price { font-size: 1.4em; font-weight: bold; color: #111; }
+        .action-btn { display: block; width: 100%; text-align: center; background-color: #f0f2f5; color: #008069; text-decoration: none; padding: 10px; border-radius: 5px; margin-top: 10px; font-weight: bold; border: 1px solid #e0e0e0; transition: 0.2s; cursor: pointer; }
+        .action-btn:hover { background-color: #e6e6e6; }
+        .action-btn.primary { background-color: #008069; color: white; border: none; }
+        .action-btn.primary:hover { background-color: #006d59; }
+
+        .chips-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
+        .chip { background: #fff; border: 1px solid #e0e0e0; color: #54656f; padding: 8px 16px; border-radius: 24px; cursor: pointer; font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: 0.2s; }
+        .chip:hover { background: #f0f2f5; border-color: #008069; color: #008069; }
+
+        .input-area { background: #f0f2f5; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+        input { flex: 1; padding: 12px 20px; border-radius: 24px; border: none; outline: none; font-size: 16px; background: white; }
+        button.send-btn { background: #008069; color: white; border: none; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        button.send-btn:hover { background: #006d59; }
+    </style>
+</head>
+<body>
+
+    <div class="manager-panel">
+        <div class="manager-header">📊 דשבורד ייצור</div>
+        <div class="stats-row">
+            <div class="stat-box"><span class="stat-value" id="disp-price">₪0</span><span class="stat-label">הצעה אחרונה</span></div>
+            <div class="stat-box"><span class="stat-value profit" id="disp-profit">0%</span><span class="stat-label">רווח</span></div>
+        </div>
+        <div class="manager-header" style="margin-top: 10px;">🛒 סל קניות</div>
+        <div class="cart-preview" id="cart-list"><div style="text-align:center; color:#8696a0;">ריק</div></div>
+        <div class="manager-header" style="margin-top: 10px;">📝 פקודת עבודה</div>
+        <div class="log-box" id="manager-log"><div style="color:#8696a0; text-align:center;">ממתין...</div></div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-header">
+            <div class="avatar">🤖</div>
+            <div><div style="font-weight: bold;">פיני - דפוס בית יצחק</div><div style="font-size: 13px; opacity: 0.9;">מחובר</div></div>
+        </div>
+        <div id="chat" class="chat-box"></div>
+        <div class="input-area">
+            <input type="text" id="msg" placeholder="הקלד הודעה..." onkeypress="handleEnter(event)">
+            <button class="send-btn" onclick="send()">➤</button>
+        </div>
+    </div>
+
+<script>
+    let userId = localStorage.getItem('pini_uid_v4') || 'user_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('pini_uid_v4', userId);
+    let chatHistory = [];
+    let currentCart = []; 
+
+    function addMsg(text, type) {
+        if (!text) return;
+        const div = document.createElement('div');
+        div.className = `message ${type}-msg`;
+        div.innerHTML = text.replace(/\n/g, '<br>');
+        document.getElementById('chat').appendChild(div);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+        chatHistory.push({ role: type === 'user' ? 'user' : 'bot', content: text });
+    }
+
+    function addQuoteCard(quote) {
+        const card = document.createElement('div');
+        card.className = 'quote-card bot-msg';
+        card.style.alignSelf = 'flex-start';
+        
+        let specsHtml = '';
+        if (quote.display_specs) {
+            quote.display_specs.forEach(spec => {
+                let icon = '🔹';
+                if(spec.label.includes('גודל')) icon = '📏';
+                if(spec.label.includes('נייר')) icon = '📄';
+                if(spec.label.includes('כמות')) icon = '📦';
+                specsHtml += `<div class="spec-row"><span class="spec-icon">${icon}</span><span class="spec-label">${spec.label}:</span><span style="margin-right:5px;">${spec.value}</span></div>`;
+            });
+        }
+        specsHtml += `<div class="spec-row"><span class="spec-icon">📦</span><span class="spec-label">כמות:</span><span style="margin-right:5px;">${quote.qty} יח'</span></div>`;
+
+        card.innerHTML = `
+            <div class="card-header">💌 פריט: ${quote.product_name}</div>
+            ${specsHtml}
+            <div class="total-section"><span>סה"כ לפריט:</span><span class="total-price">₪${quote.client_price}</span></div>
+            <div style="text-align:center; margin-top:5px; font-size:0.8em; color:#888;">הפריט נוסף לסל</div>
+        `;
+        document.getElementById('chat').appendChild(card);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+        updateManagerDashboard(quote);
+    }
+
+    function addCartSummaryButton() {
+        if (currentCart.length === 0) return;
+        
+        const btnDiv = document.createElement('div');
+        btnDiv.className = 'bot-msg';
+        btnDiv.style.background = 'transparent';
+        btnDiv.style.boxShadow = 'none';
+        btnDiv.style.padding = '0';
+        btnDiv.style.marginTop = '10px';
+        btnDiv.innerHTML = `
+            <button class="action-btn primary" onclick="downloadPdf()">
+                📄 הורד הצעת מחיר מרוכזת (${currentCart.length} פריטים)
+            </button>
+        `;
+        document.getElementById('chat').appendChild(btnDiv);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+    }
+
+    function updateManagerDashboard(latestQuote) {
+        document.getElementById('disp-price').innerText = `₪${latestQuote.client_price}`;
+        document.getElementById('disp-profit').innerText = `${latestQuote.profit_margin}%`;
+        const logBox = document.getElementById('manager-log');
+        latestQuote.manager_log.forEach(log => {
+            const item = document.createElement('div');
+            item.className = 'log-item';
+            item.innerText = log;
+            logBox.appendChild(item);
+        });
+        const cartList = document.getElementById('cart-list');
+        cartList.innerHTML = '';
+        currentCart.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'cart-item-row';
+            row.innerHTML = `<span>${idx+1}. ${item.product_name}</span><span style="font-weight:bold;">₪${item.client_price}</span>`;
+            cartList.appendChild(row);
+        });
+    }
+
+    function downloadPdf() {
+        if (currentCart.length === 0) return;
+        // שימוש בכתובת יחסית כדי שיעבוד ב-Render
+        fetch('/api/pdf', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(currentCart)
+        }).then(r => r.blob()).then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'full_quote.pdf'; a.click();
+        });
+    }
+
+    function addButtons(buttons) {
+        const container = document.createElement('div');
+        container.className = 'chips-container';
+        buttons.forEach(txt => {
+            const btn = document.createElement('button');
+            btn.className = 'chip';
+            btn.innerText = txt;
+            btn.onclick = () => { document.getElementById('msg').value = txt; send(); container.remove(); };
+            container.appendChild(btn);
+        });
+        document.getElementById('chat').appendChild(container);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
+    }
+
+    function handleEnter(e) { if(e.key === 'Enter') send(); }
+
+    async function send() {
+        const input = document.getElementById('msg');
+        const text = input.value.trim();
+        if (!text) return;
+        addMsg(text, 'user');
+        input.value = '';
+
+        try {
+            // שימוש בכתובת יחסית כדי שיעבוד ב-Render
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, history: chatHistory, userId: userId })
+            });
+            const data = await res.json();
+
+            if (data.content) addMsg(data.content, 'bot');
+            if (data.uiData && data.uiData.buttons) addButtons(data.uiData.buttons);
+
+            if (data.fullCart) currentCart = data.fullCart;
+            
+            if (data.quotes && data.quotes.length > 0) {
+                data.quotes.forEach(quote => {
+                    addQuoteCard(quote);
+                });
+                addCartSummaryButton();
+            }
+
+        } catch (e) { console.error(e); addMsg("⚠️ שגיאה בתקשורת", 'bot'); }
+    }
+</script>
+</body>
+</html>

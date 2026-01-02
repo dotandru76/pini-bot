@@ -1,0 +1,77 @@
+{
+  "bc": {
+    "title": "כרטיסי ביקור",
+    "engine": "sheet_fed",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "250" }, { "value": "500" }, { "value": "1000" }] },
+      { "key": "paper", "text": "סוג נייר", "options": [{ "value": "chromo_300" }, { "value": "matte_300" }] },
+      { "key": "sides", "text": "הדפסה", "options": [{ "value": "1" }, { "value": "2" }] },
+      { "key": "extras", "text": "השבחות", "options": [{ "value": "lami_matte" }, { "value": "lami_gloss" }, { "value": "round_corners" }, { "value": "none" }] }
+    ]
+  },
+  "flyer": {
+    "title": "פליירים",
+    "engine": "sheet_fed",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "1000" }, { "value": "2500" }, { "value": "5000" }] },
+      { "key": "size", "text": "גודל", "options": [{ "value": "A5" }, { "value": "A6" }] },
+      { "key": "paper", "text": "נייר", "options": [{ "value": "chromo_135" }, { "value": "chromo_170" }] },
+      { "key": "fold", "text": "קיפול", "options": [{ "value": "none" }, { "value": "fold_simple" }, { "value": "fold_tri" }] }
+    ]
+  },
+  "rollup": {
+    "title": "רולאפ",
+    "engine": "wide_format",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "1" }, { "value": "2" }, { "value": "5" }] },
+      { "key": "size", "text": "גודל", "options": [{ "value": "85x200" }, { "value": "100x200" }] }
+    ]
+  },
+  "invitation": {
+    "title": "הזמנות לאירועים",
+    "engine": "sheet_fed",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "200" }, { "value": "400" }, { "value": "600" }] },
+      { "key": "size", "text": "גודל", "options": [{ "value": "A5" }, { "value": "13x18" }] },
+      { "key": "paper", "text": "סוג נייר", "options": [{ "value": "pearl_300" }, { "value": "texture_300" }, { "value": "chromo_350" }] },
+      { "key": "fold", "text": "קיפול", "options": [{ "value": "none" }, { "value": "fold_simple" }] }, 
+      { "key": "extras", "text": "תוספות", "options": [{ "value": "foil_gold" }, { "value": "scodix" }, { "value": "none" }] }
+    ]
+  },
+  "envelope": {
+    "title": "מעטפות ממותגות",
+    "engine": "sheet_fed",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "500" }, { "value": "1000" }] },
+      { "key": "size", "text": "גודל", "options": [{ "value": "11x23" }, { "value": "16x23" }] },
+      { "key": "paper", "text": "סוג מעטפה", "options": [{ "value": "env_standard" }, { "value": "env_fancy" }] }
+    ]
+  },
+  "canvas": {
+    "title": "הדפסה על קנבס",
+    "engine": "wide_format",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "1" }, { "value": "3" }] },
+      { "key": "size", "text": "גודל (ס\"מ)", "options": [{ "value": "50x70" }, { "value": "70x100" }, { "value": "100x100" }] },
+      { "key": "frame", "text": "מסגרת", "options": [{ "value": "wood_frame" }, { "value": "none" }] }
+    ]
+  },
+  "folder": {
+    "title": "פולדרים",
+    "engine": "sheet_fed",
+    "questions": [
+      { "key": "qty", "text": "כמות", "options": [{ "value": "100" }, { "value": "500" }] },
+      { "key": "pocket", "text": "כיס", "options": [{ "value": "pocket_glue" }, { "value": "none" }] },
+      { "key": "extras", "text": "גימור", "options": [{ "value": "lami_matte" }, { "value": "lami_gloss" }] }
+    ]
+  },
+  "sticker": {
+    "title": "מדבקות",
+    "engine": "wide_format",
+    "questions": [
+      { "key": "qty", "text": "כמות מ\"ר", "options": [{ "value": "1" }, { "value": "5" }, { "value": "10" }] },
+      { "key": "material", "text": "חומר", "options": [{ "value": "vinyl_sticker" }, { "value": "sticker_paper" }] },
+      { "key": "cut", "text": "חיתוך צורני", "options": [{ "value": "yes" }, { "value": "no" }] }
+    ]
+  }
+}
