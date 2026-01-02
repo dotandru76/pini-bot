@@ -164,8 +164,9 @@
 
     function downloadPdf() {
         if (currentCart.length === 0) return;
-        // שימוש בכתובת יחסית כדי שיעבוד ב-Render
-        fetch('/api/pdf', {
+        
+        // --- עדכון: כתובת ישירה לשרת ב-Hugging Face ---
+        fetch('https://dotandru-pini-print-bot.hf.space/api/pdf', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(currentCart)
@@ -173,6 +174,9 @@
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = 'full_quote.pdf'; a.click();
+        }).catch(err => {
+            console.error("PDF Error:", err);
+            addMsg("⚠️ אירעה שגיאה ביצירת ה-PDF", 'bot');
         });
     }
 
@@ -200,8 +204,8 @@
         input.value = '';
 
         try {
-            // שימוש בכתובת יחסית כדי שיעבוד ב-Render
-            const res = await fetch('/api/chat', {
+            // --- עדכון: כתובת ישירה לשרת ב-Hugging Face ---
+            const res = await fetch('https://dotandru-pini-print-bot.hf.space/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text, history: chatHistory, userId: userId })
@@ -220,7 +224,7 @@
                 addCartSummaryButton();
             }
 
-        } catch (e) { console.error(e); addMsg("⚠️ שגיאה בתקשורת", 'bot'); }
+        } catch (e) { console.error(e); addMsg("⚠️ שגיאה בתקשורת עם השרת", 'bot'); }
     }
 </script>
 </body>
