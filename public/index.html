@@ -64,7 +64,7 @@
         </div>
         <div class="manager-header" style="margin-top: 10px;">🛒 סל קניות</div>
         <div class="cart-preview" id="cart-list"><div style="text-align:center; color:#8696a0;">ריק</div></div>
-        <div class="manager-header" style="margin-top: 10px;">📝 פקודת עבודה</div>
+        <div class="manager-header" style="margin-top: 10px;">📋 פקודת עבודה</div>
         <div class="log-box" id="manager-log"><div style="color:#8696a0; text-align:center;">ממתין...</div></div>
     </div>
 
@@ -102,15 +102,13 @@
         card.style.alignSelf = 'flex-start';
         
         let specsHtml = '';
-        if (quote.display_specs) {
-            quote.display_specs.forEach(spec => {
-                let icon = '🔹';
-                if(spec.label.includes('גודל')) icon = '📏';
-                if(spec.label.includes('נייר')) icon = '📄';
-                if(spec.label.includes('כמות')) icon = '📦';
-                specsHtml += `<div class="spec-row"><span class="spec-icon">${icon}</span><span class="spec-label">${spec.label}:</span><span style="margin-right:5px;">${spec.value}</span></div>`;
-            });
+        
+        // הצגת תיאור (נייר + גימור)
+        if (quote.description) {
+            specsHtml += `<div class="spec-row"><span class="spec-icon">📄</span><span class="spec-label">מפרט:</span><span style="margin-right:5px;">${quote.description}</span></div>`;
         }
+        
+        // הצגת כמות
         specsHtml += `<div class="spec-row"><span class="spec-icon">📦</span><span class="spec-label">כמות:</span><span style="margin-right:5px;">${quote.qty} יח'</span></div>`;
 
         card.innerHTML = `
@@ -121,7 +119,73 @@
         `;
         document.getElementById('chat').appendChild(card);
         document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
-        updateManagerDashboard(quote);
+    }
+
+    function updateDashboard(dashboard, latestQuote) {
+        // עדכון סטטיסטיקות כלליות
+        if (dashboard) {
+            document.getElementById('disp-price').innerText = `₪${dashboard.totalPrice}`;
+            document.getElementById('disp-profit').innerText = `${dashboard.profit_margin}%`;
+        } else if (latestQuote) {
+            document.getElementById('disp-price').innerText = `₪${latestQuote.client_price}`;
+            document.getElementById('disp-profit').innerText = `${latestQuote.profit_margin}%`;
+        }
+        
+        // עדכון פקודת עבודה (Production Log)
+        if (latestQuote && latestQuote.instructions) {
+            const logBox = document.getElementById('manager-log');
+            // נקה את ה"ממתין..." בפעם הראשונה
+            if (logBox.querySelector('div[style*="text-align:center"]')) {
+                logBox.innerHTML = '';
+            }
+            
+            const inst = latestQuote.instructions;
+            const logItem = document.createElement('div');
+            logItem.className = 'log-item';
+            logItem.innerHTML = `
+                <strong>${latestQuote.product_name}</strong><br>
+                🖨️ ${inst.machine || 'דיגיטלי'}<br>
+                📄 ${inst.material || ''}<br>
+                📊 ${inst.setupInfo || ''}<br>
+                🔢 גיליונות: ${inst.quantityToPrint || '?'}
+            `;
+            logBox.appendChild(logItem);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+        
+        // עדכון סל קניות
+        updateCartDisplay();
+    }
+
+    function updateCartDisplay() {
+        const cartList = document.getElementById('cart-list');
+        
+        if (currentCart.length === 0) {
+            cartList.innerHTML = '<div style="text-align:center; color:#8696a0;">ריק</div>';
+            return;
+        }
+        
+        cartList.innerHTML = '';
+        let total = 0;
+        
+        currentCart.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'cart-item-row';
+            row.innerHTML = `<span>${idx+1}. ${item.product_name} (${item.qty})</span><span style="font-weight:bold;">₪${item.client_price}</span>`;
+            cartList.appendChild(row);
+            total += item.client_price;
+        });
+        
+        // שורת סיכום
+        if (currentCart.length > 1) {
+            const totalRow = document.createElement('div');
+            totalRow.className = 'cart-item-row';
+            totalRow.style.borderTop = '1px solid #00a884';
+            totalRow.style.paddingTop = '5px';
+            totalRow.style.marginTop = '5px';
+            totalRow.innerHTML = `<span><strong>סה"כ:</strong></span><span style="font-weight:bold; color:#00a884;">₪${total}</span>`;
+            cartList.appendChild(totalRow);
+        }
     }
 
     function addCartSummaryButton() {
@@ -142,40 +206,28 @@
         document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
     }
 
-    function updateManagerDashboard(latestQuote) {
-        document.getElementById('disp-price').innerText = `₪${latestQuote.client_price}`;
-        document.getElementById('disp-profit').innerText = `${latestQuote.profit_margin}%`;
-        const logBox = document.getElementById('manager-log');
-        latestQuote.manager_log.forEach(log => {
-            const item = document.createElement('div');
-            item.className = 'log-item';
-            item.innerText = log;
-            logBox.appendChild(item);
-        });
-        const cartList = document.getElementById('cart-list');
-        cartList.innerHTML = '';
-        currentCart.forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'cart-item-row';
-            row.innerHTML = `<span>${idx+1}. ${item.product_name}</span><span style="font-weight:bold;">₪${item.client_price}</span>`;
-            cartList.appendChild(row);
-        });
-    }
-
     function downloadPdf() {
         if (currentCart.length === 0) return;
-        // חיבור ישיר לשרת Hugging Face
+        
+        addMsg("⏳ מכין PDF...", 'bot');
+        
         fetch('https://dotandru-pini-print-bot.hf.space/api/pdf', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(currentCart)
-        }).then(r => r.blob()).then(blob => {
+        }).then(r => {
+            if (!r.ok) throw new Error('PDF generation failed');
+            return r.blob();
+        }).then(blob => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = 'full_quote.pdf'; a.click();
+            a.href = url; 
+            a.download = 'quote_pini.pdf'; 
+            a.click();
+            addMsg("✅ ה-PDF הורד בהצלחה!", 'bot');
         }).catch(err => {
             console.error("PDF Error:", err);
-            addMsg("⚠️ אירעה שגיאה ביצירת ה-PDF", 'bot');
+            addMsg("⚠️ אירעה שגיאה ביצירת ה-PDF. נסה שוב.", 'bot');
         });
     }
 
@@ -203,28 +255,58 @@
         input.value = '';
 
         try {
-            // חיבור ישיר לשרת Hugging Face
             const res = await fetch('https://dotandru-pini-print-bot.hf.space/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: text, history: chatHistory, userId: userId })
             });
-            const data = await res.json();
-
-            if (data.content) addMsg(data.content, 'bot');
-            if (data.uiData && data.uiData.buttons) addButtons(data.uiData.buttons);
-
-            if (data.fullCart) currentCart = data.fullCart;
             
+            if (!res.ok) {
+                throw new Error(`Server returned ${res.status}`);
+            }
+            
+            const data = await res.json();
+            console.log("Server response:", data); // Debug
+
+            // הצגת תשובת הבוט
+            if (data.content) {
+                addMsg(data.content, 'bot');
+            }
+            
+            // עדכון העגלה מהשרת (תיקון: cart במקום fullCart)
+            if (data.cart) {
+                currentCart = data.cart;
+            }
+            
+            // הצגת כרטיסי הצעות מחיר
             if (data.quotes && data.quotes.length > 0) {
                 data.quotes.forEach(quote => {
                     addQuoteCard(quote);
                 });
+                
+                // עדכון הדשבורד עם הנתונים מהשרת
+                const latestQuote = data.quotes[data.quotes.length - 1];
+                updateDashboard(data.dashboard, latestQuote);
+                
+                // כפתור הורדת PDF
                 addCartSummaryButton();
             }
+            
+            // הצגת כפתורי בחירה
+            if (data.uiData && data.uiData.buttons) {
+                addButtons(data.uiData.buttons);
+            }
 
-        } catch (e) { console.error(e); addMsg("⚠️ שגיאה בתקשורת עם השרת", 'bot'); }
+        } catch (e) { 
+            console.error("Fetch error:", e); 
+            addMsg("⚠️ שגיאה בתקשורת עם השרת. נסה שוב.", 'bot'); 
+        }
     }
+    
+    // הודעת פתיחה
+    window.onload = function() {
+        addMsg("שלום! אני פיני 🤖 מדפוס בית יצחק. איך אוכל לעזור לך היום?", 'bot');
+    };
 </script>
 </body>
 </html>
