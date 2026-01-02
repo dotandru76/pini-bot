@@ -13,12 +13,10 @@ try {
     materials = { papers: {}, machine_specs: { digital: { click_color: 0.5, setup_cost: 20 } } };
 }
 
-// שינוי 1: הסרנו את המילה export לפני ה-const
 const calculate_custom_job = (currentCart = [], newItem) => {
     console.log("--- 🖩 V4 Calculation ---"); 
 
     // 1. קביעת ברירות מחדל
-    // הגנה מפני קריסה אם products הוא null
     const productKey = Object.keys(products || {}).find(k => newItem.product_name.toLowerCase().includes(k)) || 'flyer';
     const productDef = products ? products[productKey] : null;
     
@@ -29,7 +27,6 @@ const calculate_custom_job = (currentCart = [], newItem) => {
         else paperKey = 'offset_80';
     }
     
-    // שליפה בטוחה מהמילון
     const paperObj = (materials.papers && materials.papers[paperKey]) || 
                      (materials.papers && materials.papers['chromo_300']) || 
                      { cost_sheet: 0.1, name: "Standard" };
@@ -104,8 +101,10 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     }, { totalPrice: 0, totalCost: 0 });
 
     total_deal_stats.profitAmount = total_deal_stats.totalPrice - total_deal_stats.totalCost;
-    total_deal_stats.profitPercent = total_deal_stats.totalPrice > 0 
-        ? ((total_deal_stats.profitAmount / total_deal_stats.totalPrice) * 100).toFixed(1) 
+    
+    // תיקון קריטי לדשבורד: שיניתי את השם ל-profit_margin כדי שיוצג נכון ב-UI
+    total_deal_stats.profit_margin = total_deal_stats.totalPrice > 0 
+        ? ((total_deal_stats.profitAmount / total_deal_stats.totalPrice) * 100).toFixed(0) 
         : 0;
 
     console.log("💰 Deal Stats:", total_deal_stats);
@@ -117,5 +116,4 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     };
 };
 
-// שינוי 2: ייצוא הפונקציה בפורמט CommonJS
 module.exports = { calculate_custom_job };
