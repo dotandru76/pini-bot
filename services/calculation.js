@@ -1,8 +1,7 @@
-// services/calculation.js
 const fs = require('fs');
 const path = require('path');
 
-// טעינת בסיסי הנתונים עם הגנה
+// טעינת בסיסי הנתונים בצורה בטוחה
 let materials, products;
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
@@ -10,162 +9,179 @@ try {
     console.log("✅ DB Loaded successfully");
 } catch (error) {
     console.error("❌ Error loading DB files:", error.message);
-    // Fallback defaults
-    materials = { 
-        papers: {
-            chromo_135: { cost_sheet: 0.15, name: "כרומו 135 גרם" },
-            chromo_300: { cost_sheet: 0.35, name: "כרומו 300 גרם" },
-            offset_80: { cost_sheet: 0.08, name: "נייר רגיל 80 גרם" },
-            pearl_300: { cost_sheet: 0.50, name: "נייר פנינה 300 גרם" }
-        }, 
-        finishing: {
-            lamination: { run: 0.15, setup: 30, name: "למינציה" },
-            fold: { run: 0.05, setup: 20, name: "קיפול" }
-        }, 
-        machine_specs: { 
-            digital: { click_color: 0.5, setup_cost: 20, name: "דפוס דיגיטלי" } 
-        } 
-    };
-    products = {
-        flyer: { default_paper: "chromo_135", engine: "digital" },
-        bc: { default_paper: "chromo_300", engine: "digital" },
-        invitation: { default_paper: "pearl_300", engine: "digital" }
-    };
+    materials = { papers: {}, wide_media: {}, machine_specs: { digital: {}, wide: {} } };
 }
 
-// מנוע חיפוש גנרי (לנייר וגימורים)
-const findBestMatchInDB = (userInput, category) => {
+// מנוע חיפוש חכם (רץ גם על ניירות וגם על מדיה רחבה)
+const findMaterialMatch = (userInput) => {
     if (!userInput) return null;
     const searchStr = userInput.toLowerCase().replace(/ /g, '_');
-    const dbCategory = materials[category];
-
-    if (!dbCategory) return null;
-    if (dbCategory[searchStr]) return searchStr; // התאמה ישירה
+    
+    // איחוד רשימות לחיפוש
+    const allMaterials = { ...materials.papers, ...(materials.wide_media || {}) };
+    
+    // בדיקה ישירה
+    if (allMaterials[searchStr]) {
+        const isWide = materials.wide_media && materials.wide_media[searchStr];
+        return { key: searchStr, category: isWide ? 'wide' : 'digital' };
+    }
 
     // חיפוש חכם (Partial Match)
-    return Object.keys(dbCategory).find(key => {
-        const item = dbCategory[key];
+    const foundKey = Object.keys(allMaterials).find(key => {
+        const item = allMaterials[key];
         return key.includes(searchStr) || 
-               (item.name && item.name.toLowerCase().includes(searchStr)) ||
-               searchStr.includes(key.split('_')[0]);
-    }) || null;
+               (item.name && item.name.toLowerCase().includes(searchStr));
+    });
+
+    if (foundKey) {
+        const isWide = materials.wide_media && materials.wide_media[foundKey];
+        return { 
+            key: foundKey, 
+            category: isWide ? 'wide' : 'digital' 
+        };
+    }
+    return null;
 };
 
 const calculate_custom_job = (currentCart = [], newItem) => {
-    console.log("\n--- START CALCULATION (V7) ---"); 
+    console.log("\n--- START HYBRID CALCULATION (V8) ---"); 
     console.log(`   Input: ${JSON.stringify(newItem)}`);
 
-    // 1. זיהוי מוצר
-    const productNameLower = (newItem.product_name || "flyer").toLowerCase();
-    let productKey = 'flyer'; // default
+    // 1. זיהוי סוג המוצר (מיפוי עברית/אנגלית)
+    let productKey = 'flyer'; // ברירת מחדל
+    const name = (newItem.product_name || "").toLowerCase();
+
+    if (name.includes('roll') || name.includes('banner') || name.includes('רולאפ') || name.includes('שמשונית')) productKey = 'rollup';
+    else if (name.includes('canvas') || name.includes('קנבס') || name.includes('תמונה')) productKey = 'canvas';
+    else if (name.includes('sticker') || name.includes('מדבק')) productKey = 'sticker';
+    else if (name.includes('card') || name.includes('ביקור')) productKey = 'bc';
+    else if (name.includes('invitation') || name.includes('הזמנ')) productKey = 'invitation';
+    else if (name.includes('folder') || name.includes('פולדר')) productKey = 'folder';
+
+    // 2. זיהוי מנוע דפוס (רחב או דיגיטלי)
+    const userMaterial = findMaterialMatch(newItem.paper_type);
+    let engineType = 'digital'; 
     
-    if (productNameLower.includes('card') || productNameLower.includes('כרטיס') || productNameLower.includes('ביקור')) {
-        productKey = 'bc';
-    } else if (productNameLower.includes('invitation') || productNameLower.includes('הזמנ')) {
-        productKey = 'invitation';
-    } else if (productNameLower.includes('flyer') || productNameLower.includes('פלייר') || productNameLower.includes('חלוקה')) {
-        productKey = 'flyer';
-    }
-    
-    const productDef = products[productKey] || products['flyer'];
-    
-    // 2. זיהוי נייר (כולל ברירות מחדל חכמות)
-    let paperKey = findBestMatchInDB(newItem.paper_type, 'papers');
+    // אם המוצר הוא רולאפ/קנבס או שהמשתמש ביקש חומר של פורמט רחב -> עבור למנוע רחב
+    if (productKey === 'rollup' || productKey === 'canvas') engineType = 'wide';
+    if (userMaterial && userMaterial.category === 'wide') engineType = 'wide';
+
+    // 3. בחירת חומר וברירות מחדל
+    let materialKey = userMaterial ? userMaterial.key : null;
     let usedDefault = false;
 
-    if (!paperKey) {
+    if (!materialKey) {
         usedDefault = true;
-        if (productKey === 'bc') {
-            paperKey = 'chromo_300';
-        } else if (productKey === 'flyer') {
-            paperKey = 'chromo_135';
-        } else if (productKey === 'invitation') {
-            paperKey = 'pearl_300';
-        } else {
-            paperKey = 'offset_80';
-        }
-        console.log(`🤖 Smart Default Applied: ${paperKey}`);
+        if (productKey === 'rollup') materialKey = 'rollup_film';
+        else if (productKey === 'canvas') materialKey = 'canvas_polyester';
+        else if (productKey === 'bc') materialKey = 'chromo_300';
+        else if (productKey === 'invitation') materialKey = 'pearl_300';
+        else materialKey = 'chromo_135';
+        
+        console.log(`🤖 Smart Default Applied: ${materialKey} (${engineType})`);
     } else {
-        console.log(`📄 User selected paper: ${paperKey}`);
+        console.log(`📄 User Selection: ${materialKey} (${engineType})`);
     }
-    
-    const paperObj = (materials.papers && materials.papers[paperKey]) || 
-                     { cost_sheet: 0.15, name: "נייר סטנדרטי" };
-                     
-    const machine = (materials.machine_specs && materials.machine_specs[productDef?.engine || 'digital']) ||
-                    { click_color: 0.5, setup_cost: 20, name: "דפוס דיגיטלי" };
 
-    // 3. חישוב טכני (Imposition)
-    const qty = parseInt(newItem.qty) || 100;
-    let ups = 1;
-    if (productKey === 'bc') ups = 24; 
-    else if (productKey === 'flyer') ups = 4;
-    else if (productKey === 'invitation') ups = 2;
+    // שליפת נתוני חומר ומכונה (עם הגנות)
+    const matData = (materials.papers && materials.papers[materialKey]) || 
+                    (materials.wide_media && materials.wide_media[materialKey]) || 
+                    { cost_sheet: 0.1, cost_sqm: 20, name: "Standard Material" };
+                    
+    const machine = (materials.machine_specs && materials.machine_specs[engineType]) || 
+                    { click_color: 0.5, ink_cost_sqm: 15, setup_cost: 20, name: "Generic Machine" };
 
-    const sheetsRequired = Math.ceil(qty / ups);
-    const wasteSheets = Math.ceil(sheetsRequired * 0.05) + 15;
-    const totalSheets = sheetsRequired + wasteSheets;
+    // 4. חישוב עלויות לפי מנוע
+    const qty = parseInt(newItem.qty) || 1;
+    let costComponents = {};
+    let productionInstructions = {};
 
-    console.log(`   📊 Qty: ${qty} | Ups: ${ups} | Sheets: ${totalSheets} (inc. waste)`);
+    if (engineType === 'wide') {
+        // === מנוע פורמט רחב (מ"ר) ===
+        // מידות ברירת מחדל (במטרים)
+        let width = 1.0, height = 1.0;
+        if (productKey === 'rollup') { width = 0.85; height = 2.0; } // 85x200
+        if (productKey === 'canvas') { width = 0.50; height = 0.70; } // 50x70
 
-    // 4. חישוב עלויות (Breakdown)
-    let finishingCost = 0;
-    let finishingName = "";
-    
+        const areaSqm = width * height * qty;
+        const inkCostSqm = machine.ink_cost_sqm || 15;
+        const mediaCostSqm = matData.cost_sqm || 20;
+
+        costComponents = {
+            material: Number((areaSqm * mediaCostSqm).toFixed(2)),
+            print: Number((areaSqm * inkCostSqm).toFixed(2)),
+            setup: machine.setup_cost || 40,
+            finishing: 0
+        };
+
+        productionInstructions = {
+            machine: machine.name,
+            material: matData.name,
+            setupInfo: `Size: ${Math.round(width*100)}x${Math.round(height*100)} cm | Total: ${areaSqm.toFixed(2)} sqm`,
+            quantityToPrint: qty,
+            notes: "Wide Format Job"
+        };
+
+    } else {
+        // === מנוע דיגיטלי (גיליונות) ===
+        let ups = 1;
+        if (productKey === 'bc') ups = 24;
+        else if (productKey === 'flyer') ups = 4;
+        else if (productKey === 'invitation') ups = 2;
+
+        const sheetsRequired = Math.ceil(qty / ups);
+        const wasteSheets = Math.ceil(sheetsRequired * 0.05) + 15;
+        const totalSheets = sheetsRequired + wasteSheets;
+
+        costComponents = {
+            paper: Number((totalSheets * (matData.cost_sheet || 0.1)).toFixed(2)),
+            print: Number((totalSheets * (machine.click_color || 0.5)).toFixed(2)),
+            setup: machine.setup_cost || 20,
+            finishing: 0
+        };
+
+        productionInstructions = {
+            machine: machine.name,
+            material: `${matData.name} (SRA3)`,
+            setupInfo: `Imposition: ${ups} up`,
+            quantityToPrint: totalSheets,
+            notes: `Net Qty: ${qty}`
+        };
+    }
+
+    // 5. חישוב גימורים (משותף)
     if (newItem.finishing) {
-        const finishKey = findBestMatchInDB(newItem.finishing, 'finishing');
-        if (finishKey && materials.finishing[finishKey]) {
+        const finishKey = Object.keys(materials.finishing || {}).find(k => 
+            newItem.finishing.toLowerCase().includes(k) || materials.finishing[k].name.includes(newItem.finishing)
+        );
+
+        if (finishKey) {
             const fItem = materials.finishing[finishKey];
-            finishingName = fItem.name || finishKey;
-            if (fItem.run) finishingCost = fItem.run * qty;
-            else if (fItem.cost_side) finishingCost = fItem.cost_side * qty;
-            if (fItem.setup) finishingCost += fItem.setup;
-            console.log(`   🔧 Finishing: ${finishingName} = ₪${finishingCost.toFixed(2)}`);
+            let fCost = 0;
+            if (fItem.run) fCost = fItem.run * qty;
+            else if (fItem.setup) fCost = fItem.setup;
+            else if (fItem.cost_side) fCost = fItem.cost_side * qty;
+            
+            costComponents.finishing = Number(fCost.toFixed(2));
         } else {
-            finishingCost = qty * 0.2; // Fallback estimate
-            finishingName = newItem.finishing;
+            // הערכה גסה אם הגימור לא מוכר
+            costComponents.finishing = Number((qty * 0.5).toFixed(2)); 
         }
     }
-
-    const costComponents = {
-        paper: Number((totalSheets * (paperObj.cost_sheet || 0.15)).toFixed(2)),
-        print: Number((totalSheets * (machine.click_color || 0.5)).toFixed(2)),
-        setup: machine.setup_cost || 20,
-        finishing: Number(finishingCost.toFixed(2))
-    };
 
     const totalItemCost = Object.values(costComponents).reduce((a, b) => a + b, 0);
     
-    // תמחור דינמי לפי כמות
-    let margin = 2.5;
+    // 6. תמחור ללקוח
+    let margin = 2.5; 
+    if (engineType === 'wide') margin = 2.2; // רווח אופייני לפורמט רחב
     if (qty > 1000) margin = 1.8;
     if (qty > 5000) margin = 1.5;
-    
+
     const priceToClient = Math.ceil(totalItemCost * margin);
     const itemProfit = priceToClient - totalItemCost;
     const itemMargin = priceToClient > 0 ? ((itemProfit / priceToClient) * 100).toFixed(0) : 0;
 
-    console.log(`   💵 Cost: ₪${totalItemCost.toFixed(2)} | Price: ₪${priceToClient} | Margin: ${itemMargin}%`);
-
-    // 5. הוראות למפעיל (Production)
-    const productionInstructions = {
-        machine: machine.name || "דפוס דיגיטלי",
-        material: `${paperObj.name} (SRA3)`,
-        setupInfo: `אימפוזיציה: ${ups} יחידות בגיליון`,
-        quantityToPrint: totalSheets,
-        notes: `כמות נטו: ${qty} יח'`
-    };
-
-    // 6. בניית תיאור המוצר
-    let description = paperObj.name || "נייר סטנדרטי";
-    if (finishingName) {
-        description += ` + ${finishingName}`;
-    }
-    if (usedDefault) {
-        description += " (ברירת מחדל)";
-    }
-
-    // 7. ניהול עגלה (Smart Cart - מניעת כפילויות)
+    // 7. עדכון עגלה (Smart Cart)
     let updatedCart = [...currentCart];
     const existingIndex = updatedCart.findIndex(item => 
         item.product_name.toLowerCase().trim() === newItem.product_name.toLowerCase().trim()
@@ -174,7 +190,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     const processedItem = {
         product_name: newItem.product_name,
         qty: qty,
-        description: description,
+        description: `${matData.name} ${usedDefault ? '(Default)' : ''}`,
         client_price: priceToClient,
         cost: Number(totalItemCost.toFixed(2)),
         breakdown: costComponents,
@@ -184,36 +200,30 @@ const calculate_custom_job = (currentCart = [], newItem) => {
     };
 
     if (existingIndex > -1) {
-        console.log(`   🔄 Updating existing cart item: ${newItem.product_name}`);
+        console.log(`   🔄 Updating: ${newItem.product_name}`);
         updatedCart[existingIndex] = processedItem;
     } else {
-        console.log(`   ➕ Adding new item to cart: ${newItem.product_name}`);
+        console.log(`   ➕ Adding: ${newItem.product_name}`);
         updatedCart.push(processedItem);
     }
 
-    // 8. חישוב גלובלי (Dashboard Stats)
+    // 8. סיכום גלובלי (Dashboard)
     const total_deal_stats = updatedCart.reduce((acc, item) => {
         acc.totalPrice += item.client_price;
         acc.totalCost += (item.cost || 0);
         return acc;
     }, { totalPrice: 0, totalCost: 0 });
 
-    total_deal_stats.profitAmount = total_deal_stats.totalPrice - total_deal_stats.totalCost;
     const globalMargin = total_deal_stats.totalPrice > 0 
-        ? ((total_deal_stats.profitAmount / total_deal_stats.totalPrice) * 100).toFixed(0) 
+        ? (((total_deal_stats.totalPrice - total_deal_stats.totalCost) / total_deal_stats.totalPrice) * 100).toFixed(0) 
         : 0;
 
     total_deal_stats.profit_margin = globalMargin;
     total_deal_stats.profitPercent = globalMargin;
 
-    console.log(`💰 Deal Stats: Total=₪${total_deal_stats.totalPrice} | Cost=₪${total_deal_stats.totalCost.toFixed(2)} | Margin=${globalMargin}%`);
-    console.log("--- END CALCULATION ---\n");
+    console.log(`💰 Stats: Total=₪${total_deal_stats.totalPrice} | Margin=${globalMargin}%`);
 
-    return { 
-        updatedCart, 
-        total_deal_stats, 
-        lastAdded: processedItem 
-    };
+    return { updatedCart, total_deal_stats, lastAdded: processedItem };
 };
 
 module.exports = { calculate_custom_job };

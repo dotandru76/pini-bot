@@ -9,7 +9,7 @@
       "min_price": 50.00
     },
     "wide": {
-      "name": "Roland SolJet",
+      "name": "Roland SolJet (EcoSolvent)",
       "ink_cost_sqm": 15.00,
       "setup_cost": 40.00,
       "lamination_sqm": 25.00
@@ -40,16 +40,20 @@
     "env_fancy": { "name": "מעטפה איכותית/צבעונית", "cost_sheet": 0.60, "type": "envelope" }
   },
   "wide_media": {
+    "rollup_film": { "name": "פילם לרולאפ (לא מתקפל)", "cost_sqm": 25.00 },
+    "canvas": { "name": "בד קנבס כותנה איכותי", "cost_sqm": 55.00 },
+    "canvas_polyester": { "name": "קנבס פוליאסטר (סטנדרט)", "cost_sqm": 35.00 },
+    "vinyl_sticker": { "name": "ויניל להדבקה (לקירות/חלונות)", "cost_sqm": 20.00 },
+    "vinyl_gloss": { "name": "מדבקת ויניל מבריקה", "cost_sqm": 18.00 },
+    "pvc_banner": { "name": "שמשונית (PVC)", "cost_sqm": 15.00 },
+    "shimshonit": { "name": "שמשונית (PVC) באנר", "cost_sqm": 15.00 },
     "kappa_5": { "name": "קאפה 5 מ\"מ", "cost_sqm": 45.00 },
     "kappa_10": { "name": "קאפה 10 מ\"מ", "cost_sqm": 70.00 },
-    "canvas": { "name": "בד קנבס כותנה איכותי", "cost_sqm": 55.00 },
-    "rollup_film": { "name": "פוליפרופילן רולאפ (לא מתקפל)", "cost_sqm": 25.00 },
-    "vinyl_sticker": { "name": "ויניל להדבקה (לקירות/חלונות)", "cost_sqm": 20.00 },
-    "pvc_banner": { "name": "שמשונית (PVC)", "cost_sqm": 15.00 },
     "paper_matte": { "name": "נייר פוסטר מט", "cost_sqm": 18.00 },
     "paper_photo": { "name": "נייר פוטו מבריק", "cost_sqm": 22.00 }
   },
   "finishing": {
+    "lamination": { "name": "למינציה כללית", "run": 0.20, "setup": 30.00 },
     "lami_matte": { "name": "למינציה מט", "cost_side": 0.20 },
     "lami_gloss": { "name": "למינציה מבריקה", "cost_side": 0.20 },
     "lami_silk": { "name": "למינציה משי (מגע קטיפה)", "cost_side": 0.80 },
