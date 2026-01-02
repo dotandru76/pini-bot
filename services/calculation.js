@@ -13,10 +13,12 @@ try {
     materials = { papers: {}, machine_specs: { digital: { click_color: 0.5, setup_cost: 20 } } };
 }
 
-export const calculate_custom_job = (currentCart = [], newItem) => {
+// שינוי 1: הסרנו את המילה export לפני ה-const
+const calculate_custom_job = (currentCart = [], newItem) => {
     console.log("--- 🖩 V4 Calculation ---"); 
 
     // 1. קביעת ברירות מחדל
+    // הגנה מפני קריסה אם products הוא null
     const productKey = Object.keys(products || {}).find(k => newItem.product_name.toLowerCase().includes(k)) || 'flyer';
     const productDef = products ? products[productKey] : null;
     
@@ -27,8 +29,13 @@ export const calculate_custom_job = (currentCart = [], newItem) => {
         else paperKey = 'offset_80';
     }
     
-    const paperObj = materials.papers[paperKey] || materials.papers['chromo_300'] || { cost_sheet: 0.1, name: "Standard" };
-    const machine = materials.machine_specs[productDef?.engine || 'digital'];
+    // שליפה בטוחה מהמילון
+    const paperObj = (materials.papers && materials.papers[paperKey]) || 
+                     (materials.papers && materials.papers['chromo_300']) || 
+                     { cost_sheet: 0.1, name: "Standard" };
+                     
+    const machine = (materials.machine_specs && materials.machine_specs[productDef?.engine || 'digital']) ||
+                    { click_color: 0.5, setup_cost: 20, name: "Generic Digital" };
 
     // 2. חישוב עלויות
     const qty = parseInt(newItem.qty) || 100;
@@ -43,8 +50,8 @@ export const calculate_custom_job = (currentCart = [], newItem) => {
     const totalSheets = sheetsRequired + wasteSheets;
 
     const costComponents = {
-        paper: Number((totalSheets * paperObj.cost_sheet).toFixed(2)),
-        print: Number((totalSheets * machine.click_color).toFixed(2)),
+        paper: Number((totalSheets * (paperObj.cost_sheet || 0.1)).toFixed(2)),
+        print: Number((totalSheets * (machine.click_color || 0.5)).toFixed(2)),
         setup: machine.setup_cost || 20,
         finishing: newItem.finishing ? (qty * 0.2) : 0
     };
@@ -109,3 +116,6 @@ export const calculate_custom_job = (currentCart = [], newItem) => {
         lastAdded: processedItem 
     };
 };
+
+// שינוי 2: ייצוא הפונקציה בפורמט CommonJS
+module.exports = { calculate_custom_job };
