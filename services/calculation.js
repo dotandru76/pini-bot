@@ -1,3 +1,4 @@
+// services/calculation.js
 const fs = require('fs');
 const path = require('path');
 
@@ -9,7 +10,6 @@ try {
     console.log("✅ DB Loaded successfully");
 } catch (error) {
     console.error("❌ Error loading DB files:", error.message);
-    // Minimal Fallback to prevent crash
     materials = { papers: {}, finishing: {}, machine_specs: { digital: { click_color: 0.5, setup_cost: 20 } } };
 }
 
