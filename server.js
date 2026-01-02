@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // ייבוא המנועים והשירותים
-const { calculate_custom_job } = require('./services/calculation'); // המנוע החכם החדש (V7)
+const { calculate_custom_job } = require('./services/calculation'); // המנוע ההיברידי V8
 const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require('./services/sessionManager');
 const { generateQuotePDF } = require('./services/pdfService');
 
@@ -24,20 +24,21 @@ app.use(express.static('public'));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// הגדרת הכלים ל-Gemini
+// --- הגדרת הכלים ל-Gemini (החלק המתוקן) ---
 const calculateJobTool = {
     name: "calculate_custom_job",
-    description: "Calculate price for print jobs. Use smart defaults if specs are missing. ALWAYS use this tool when user asks for a price quote.",
+    description: "Calculate OR Update price. Use this for ANY change: Quantity, Material, Finishing, or New Item. Do not answer price questions without calling this.",
     parameters: {
         type: "OBJECT",
         properties: {
-            product_name: { type: "STRING", description: "Product type: Flyer, Business Card, Invitation, Poster, etc." },
+            product_name: { type: "STRING", description: "Product type: Flyer, Business Card, Rollup, Canvas, etc." },
             qty: { type: "NUMBER", description: "Quantity requested" },
-            paper_type: { type: "STRING", description: "Optional: Paper type (chromo_135, chromo_300, pearl_300, matte_300, offset_80)" },
-            finishing: { type: "STRING", description: "Optional: Finishing (lamination, fold, round_corners)" },
-            description: { type: "STRING", description: "Any extra details from the user" }
+            // הרחבנו את התיאור כדי שיבין שזה המקום לשנות חומרים (כותנה, ויניל וכו')
+            paper_type: { type: "STRING", description: "Material type. Examples: 'chromo', 'matte', 'cotton canvas', 'vinyl', 'sticker', 'pearl', 'wood frame'." },
+            finishing: { type: "STRING", description: "Optional: Finishing (lamination, fold, gold foil)" },
+            description: { type: "STRING", description: "Extra details" }
         },
-        required: ["product_name", "qty"]
+        required: ["product_name"] 
     }
 };
 
@@ -67,7 +68,7 @@ app.post('/api/chat', async (req, res) => {
 
         const session = getSession(userId);
         
-        // טעינת הפרומפט הדינמי (שקורא את pini_rules_v4)
+        // טעינת הפרומפט הדינמי (שקורא את pini_rules_v6)
         const systemPrompt = generateSystemPrompt(userId);
 
         const chat = model.startChat({
@@ -95,14 +96,13 @@ app.post('/api/chat', async (req, res) => {
                 console.log(`   📋 Args: ${JSON.stringify(call.args)}`);
                 
                 if (call.name === 'calculate_custom_job') {
-                    // הפעלת מנוע החישוב החכם (V7 Generic)
+                    // הפעלת מנוע החישוב החכם (V8)
                     const calcResult = calculate_custom_job(session.cart, call.args);
                     
                     session.cart = calcResult.updatedCart;
                     quotes.push(calcResult.lastAdded);
                     dashboardStats = calcResult.total_deal_stats;
 
-                    // פורמט תשובה מפורט יותר ל-Gemini
                     functionResponses.push({
                         functionResponse: {
                             name: 'calculate_custom_job',
@@ -111,9 +111,8 @@ app.post('/api/chat', async (req, res) => {
                                 product: calcResult.lastAdded.product_name,
                                 quantity: calcResult.lastAdded.qty,
                                 price: calcResult.lastAdded.client_price,
-                                profit_margin: calcResult.lastAdded.profit_margin + "%",
-                                paper_used: calcResult.lastAdded.description,
-                                message: `הפריט נוסף לסל בהצלחה. המחיר הוא ${calcResult.lastAdded.client_price} ש"ח.`
+                                description: calcResult.lastAdded.description,
+                                message: `הפריט עודכן/נוסף. מחיר: ${calcResult.lastAdded.client_price} ש"ח.`
                             }
                         }
                     });
@@ -149,28 +148,19 @@ app.post('/api/chat', async (req, res) => {
             try {
                 const finalStep = await chat.sendMessage(functionResponses);
                 finalResponseText = finalStep.response.text();
-                console.log(`📥 Gemini responded: "${finalResponseText.substring(0, 80)}..."`);
             } catch (geminiError) {
                 console.error(`❌ Gemini error on function response:`, geminiError.message);
-                // Fallback - יצירת תשובה ידנית אם Gemini נכשל
-                if (quotes.length > 0) {
-                    finalResponseText = `המחיר הוא ${quotes[0].client_price} ש"ח.`;
-                } else {
-                    finalResponseText = "הפעולה בוצעה בהצלחה.";
-                }
+                finalResponseText = "הפעולה בוצעה, אך הייתה בעיה בניסוח התשובה הסופית. העגלה מעודכנת.";
             }
         } else {
             finalResponseText = response.text();
-            console.log(`📥 Gemini responded (no function): "${finalResponseText.substring(0, 80)}..."`);
         }
 
-        // ניהול היסטוריה מקוצר (שמירת 20 הודעות אחרונות בלבד)
+        // ניהול היסטוריה
         session.history.push({ role: 'user', parts: [{ text: message }] });
         session.history.push({ role: 'model', parts: [{ text: finalResponseText }] });
         if (session.history.length > 20) session.history = session.history.slice(-20);
 
-        console.log(`✅ Response sent to client\n`);
-        
         res.json({
             content: finalResponseText,
             quotes: quotes, 
@@ -180,12 +170,11 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error("❌ Server Error:", error.message);
-        console.error(error.stack);
-        res.status(500).json({ error: "Internal Server Error", details: error.message });
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
 
-// PDF Endpoint (Puppeteer based)
+// PDF Endpoint
 app.post('/api/pdf', async (req, res) => {
     try {
         const cart = req.body;
@@ -203,13 +192,7 @@ app.post('/api/pdf', async (req, res) => {
     }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
 const PORT = process.env.PORT || 7860;
 app.listen(PORT, () => {
-    console.log(`\n===== Application Startup at ${new Date().toISOString().replace('T', ' ').substring(0, 19)} =====`);
     console.log(`🚀 Pini Print Server running on port ${PORT}`);
 });
