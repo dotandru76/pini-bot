@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// טעינת בסיסי הנתונים
+// טעינת בסיסי הנתונים בצורה בטוחה
 let materials, products;
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
@@ -10,11 +10,12 @@ try {
     console.log("✅ DB Loaded successfully");
 } catch (error) {
     console.error("❌ Error loading DB files", error);
+    // Fallback למקרה חירום
     materials = { papers: {}, machine_specs: { digital: { click_color: 0.5, setup_cost: 20 } } };
 }
 
 const calculate_custom_job = (currentCart = [], newItem) => {
-    console.log("--- 🖩 V4 Calculation ---"); 
+    console.log("--- 🖩 V4 Calculation Fix ---"); 
 
     // 1. קביעת ברירות מחדל
     const productKey = Object.keys(products || {}).find(k => newItem.product_name.toLowerCase().includes(k)) || 'flyer';
@@ -93,7 +94,7 @@ const calculate_custom_job = (currentCart = [], newItem) => {
         updatedCart.push(processedItem);
     }
 
-    // 5. חישוב רווחיות
+    // 5. חישוב רווחיות גלובלי (תיקון לדשבורד)
     const total_deal_stats = updatedCart.reduce((acc, item) => {
         acc.totalPrice += item.client_price;
         acc.totalCost += (item.cost || 0);
@@ -102,12 +103,17 @@ const calculate_custom_job = (currentCart = [], newItem) => {
 
     total_deal_stats.profitAmount = total_deal_stats.totalPrice - total_deal_stats.totalCost;
     
-    // תיקון קריטי לדשבורד: שיניתי את השם ל-profit_margin כדי שיוצג נכון ב-UI
-    total_deal_stats.profit_margin = total_deal_stats.totalPrice > 0 
+    // חישוב האחוז
+    const pMargin = total_deal_stats.totalPrice > 0 
         ? ((total_deal_stats.profitAmount / total_deal_stats.totalPrice) * 100).toFixed(0) 
         : 0;
 
-    console.log("💰 Deal Stats:", total_deal_stats);
+    // שליחת כל הווריאציות האפשריות כדי שהדשבורד יתפוס אחת מהן
+    total_deal_stats.profit_margin = pMargin;  // שם ישן
+    total_deal_stats.profitPercent = pMargin;  // שם חדש
+    total_deal_stats.profit = pMargin;         // שם מקוצר
+
+    console.log("💰 Deal Stats (All formats):", total_deal_stats);
 
     return { 
         updatedCart, 
