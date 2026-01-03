@@ -243,6 +243,22 @@ async function handleDirectly(classification, session, userId) {
             content = buildResponse('design_question', {});
             quickReplies = buildQuickReplies('design_options');
             break;
+        
+        // === ברכה ===
+        case 'greeting':
+            content = buildResponse('greeting', {});
+            break;
+            
+        // === שליחת הצעת מחיר ===
+        case 'send_quote':
+            if (session.cart.length === 0) {
+                content = `העגלה ריקה. קודם נוסיף מוצרים ואז אשלח הצעה 📝`;
+            } else {
+                const total = session.cart.reduce((sum, i) => sum + i.client_price, 0);
+                content = `מכין לך הצעת מחיר ל-${session.cart.length} פריטים בסך ₪${total.toLocaleString()}. רגע אחד... 📄`;
+                // TODO: trigger PDF generation
+            }
+            break;
             
         default:
             // Fallback - לא אמור לקרות

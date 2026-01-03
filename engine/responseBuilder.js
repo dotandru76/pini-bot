@@ -93,10 +93,17 @@ const TEMPLATES = {
     
     // ברכת פתיחה
     greeting: () => {
+        const hour = new Date().getHours();
+        let timeGreeting = 'שלום';
+        if (hour >= 5 && hour < 12) timeGreeting = 'בוקר טוב';
+        else if (hour >= 12 && hour < 17) timeGreeting = 'צהריים טובים';
+        else if (hour >= 17 && hour < 21) timeGreeting = 'ערב טוב';
+        else timeGreeting = 'לילה טוב';
+        
         const greetings = [
-            `היי! 👋 אני פיני מדפוס בית יצחק. מה נדפיס היום?`,
-            `שלום! אשמח לעזור עם הצעת מחיר. מה צריך?`,
-            `אהלן! מה אפשר לתמחר עבורך?`
+            `${timeGreeting}! 👋 אני פיני מדפוס בית יצחק. מה נדפיס היום?`,
+            `${timeGreeting}! אשמח לעזור עם הצעת מחיר לדפוס. מה צריך?`,
+            `היי! 😊 אני כאן לעזור. ספר לי מה אתה מחפש`
         ];
         return greetings[Math.floor(Math.random() * greetings.length)];
     },
