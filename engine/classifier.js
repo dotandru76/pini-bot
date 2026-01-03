@@ -132,7 +132,8 @@ const ACTION_KEYWORDS = {
         'מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'תראה עגלה',
         'סיכום', 'סה"כ', 'כמה יוצא', 'מה המחיר הכולל',
         'מה הזמנתי', 'מה ביקשתי', 'מה יש לי בעגלה',
-        'הראה לי את העגלה', 'מה בהזמנה', 'מה יש בהזמנה'
+        'הראה לי את העגלה', 'מה בהזמנה', 'מה יש בהזמנה',
+        'כמה זה עולה', 'כמה עולה', 'מה המחיר', 'מה העלות'
     ],
     design: [
         'עיצוב', 'קובץ', 'pdf', 'לוגו', 'תמונה',
@@ -146,7 +147,7 @@ const ACTION_KEYWORDS = {
         'הצעת מחיר בבקשה', 'הצעה בבקשה',
         'אפשר הצעה', 'אפשר הצעת', 'תפיק הצעה', 'הפק הצעה',
         'תכין הצעה', 'תכין הצעת', 'תעשה הצעה', 'תעשה הצעת',
-        'לשלוח הצעה', 'לייצר הצעה'
+        'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה'
     ],
     greeting: [
         'שלום', 'היי', 'הי', 'אהלן', 'מה קורה', 'מה נשמע',
@@ -241,7 +242,7 @@ function classifyMessage(message, context = {}) {
         };
     }
     
-    // שאילתת סטטוס
+    // שאילתת סטטוס - כולל "כמה זה עולה"
     if (matchesAny(text, ACTION_KEYWORDS.status)) {
         console.log(`   ✅ Action: STATUS`);
         return {
@@ -260,14 +261,30 @@ function classifyMessage(message, context = {}) {
     // חילוץ מוצר
     const product = findProductInText(text);
     
-    // עדכון כמות (יש מספר, אין מוצר חדש, יש עגלה)
-    if (quantity && !product && cart.length > 0 && matchesAny(text, ACTION_KEYWORDS.update)) {
-        // מנסה להבין איזה מוצר לעדכן
-        const productToUpdate = findProductInText(text, cart) || cart[cart.length - 1]?.product_name;
-        console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
+    // === חדש: טיפול במספר בלבד (עדכון כמות) ===
+    // אם יש רק מספר ויש עגלה, זה כנראה עדכון
+    if (quantity && !product && cart.length > 0) {
+        const lastItem = cart[cart.length - 1];
+        console.log(`   ✅ Action: UPDATE QTY - ${lastItem?.product_name} → ${quantity}`);
         return {
             action: 'update_qty',
             confidence: 0.85,
+            needsLLM: false,
+            data: {
+                product: lastItem?.product_name,
+                qty: quantity,
+                inferred: true
+            }
+        };
+    }
+    
+    // עדכון כמות עם מילת פעולה
+    if (quantity && matchesAny(text, ACTION_KEYWORDS.update)) {
+        const productToUpdate = findProductInText(text, cart) || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
+        console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
+        return {
+            action: 'update_qty',
+            confidence: 0.90,
             needsLLM: false,
             data: {
                 product: productToUpdate,
@@ -308,23 +325,6 @@ function classifyMessage(message, context = {}) {
             data: {
                 product,
                 missing: 'qty'
-            }
-        };
-    }
-    
-    // יש כמות בלי מוצר - ייתכן עדכון
-    if (quantity && !product && cart.length > 0) {
-        // אם יש רק מספר, כנראה רוצה לעדכן את הפריט האחרון
-        const lastItem = cart[cart.length - 1];
-        console.log(`   ⚠️ Action: Possible UPDATE - ${quantity} (last item: ${lastItem?.product_name})`);
-        return {
-            action: 'update_qty',
-            confidence: 0.70,
-            needsLLM: false,
-            data: {
-                product: lastItem?.product_name,
-                qty: quantity,
-                inferred: true
             }
         };
     }
@@ -411,13 +411,14 @@ function extractQuantity(text) {
         }
     }
     
-    // תבניות מספרים
+    // תבניות מספרים - חיפוש גדול יותר קודם
     const patterns = [
-        /(\d{1,3}(?:,\d{3})+)/, // 1,000 or 10,000
+        /(\d{1,3}(?:,\d{3})+)/, // 1,000 or 10,000 or 100,000,000
         /(\d+)\s*(?:יחידות|יח'|יח|פריטים|עותקים|קלפים)/,
         /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר)/,
         /(?:כמות|qty|כמות של)\s*:?\s*(\d+)/i,
-        /(\d+)/  // מספר כללי
+        /ל[- ]?(\d+)/,  // "ל-500" or "ל 500"
+        /(\d+)/  // מספר כללי - בסוף
     ];
     
     for (const pattern of patterns) {
@@ -425,8 +426,8 @@ function extractQuantity(text) {
         if (match) {
             // נקה פסיקים והמר למספר
             const num = parseInt(match[1].replace(/,/g, ''));
-            // בדיקת סבירות (לא פחות מ-1, לא יותר מ-1,000,000)
-            if (num >= 1 && num <= 1000000) {
+            // בדיקת סבירות - עד 100 מיליון
+            if (num >= 1 && num <= 100000000) {
                 return num;
             }
         }
