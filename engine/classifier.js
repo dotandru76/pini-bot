@@ -120,7 +120,8 @@ const ACTION_KEYWORDS = {
     remove: [
         'תמחק', 'מחק', 'תוריד', 'הורד', 'הסר', 'תסיר', 
         'תבטל', 'בטל', 'הוצא', 'תוציא', 'תוריד מהעגלה',
-        'לא צריך', 'לא רוצה', 'בלי ה', 'לא רוצה את ה'
+        'לא צריך', 'לא רוצה', 'בלי ה', 'לא רוצה את ה',
+        'וותר', 'ויתור', 'תוותר', 'ויתרתי', 'לוותר'
     ],
     clear: [
         'נקה עגלה', 'רוקן עגלה', 'נקה הכל', 'מחק הכל',
@@ -153,7 +154,8 @@ const ACTION_KEYWORDS = {
         'הצעת מחיר בבקשה', 'הצעה בבקשה',
         'אפשר הצעה', 'אפשר הצעת', 'תפיק הצעה', 'הפק הצעה',
         'תכין הצעה', 'תכין הצעת', 'תעשה הצעה', 'תעשה הצעת',
-        'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה'
+        'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה',
+        'זהו תשלח', 'זהו שלח', 'סיימתי תשלח', 'סיימתי שלח'
     ],
     greeting: [
         'שלום', 'היי', 'הי', 'אהלן', 'מה קורה', 'מה נשמע',
@@ -210,15 +212,18 @@ const FINISHING_KEYWORDS = {
 /**
  * פונקציה ראשית: סיווג הודעה
  * @param {string} message - הודעת המשתמש
- * @param {object} context - הקשר (עגלה נוכחית, היסטוריה)
+ * @param {object} context - הקשר (עגלה נוכחית, היסטוריה, pendingProduct)
  * @returns {object} - תוצאת הסיווג
  */
 function classifyMessage(message, context = {}) {
     const text = message.toLowerCase().trim();
     const cart = context.cart || [];
+    const pendingProduct = context.pendingProduct || null; // מוצר שממתין לכמות
     
     console.log(`\n🔍 [Classifier] Analyzing: "${message}"`);
-    
+    if (pendingProduct) {
+        console.log(`   📌 Pending product: ${pendingProduct}`);
+    }
     // === שלב 1: בדיקת פעולות מיוחדות ===
     
     // ניקוי עגלה
@@ -267,21 +272,38 @@ function classifyMessage(message, context = {}) {
     // חילוץ מוצר
     const product = findProductInText(text);
     
-    // === חדש: טיפול במספר בלבד (עדכון כמות) ===
-    // אם יש רק מספר ויש עגלה, זה כנראה עדכון
-    if (quantity && !product && cart.length > 0) {
-        const lastItem = cart[cart.length - 1];
-        console.log(`   ✅ Action: UPDATE QTY - ${lastItem?.product_name} → ${quantity}`);
-        return {
-            action: 'update_qty',
-            confidence: 0.85,
-            needsLLM: false,
-            data: {
-                product: lastItem?.product_name,
-                qty: quantity,
-                inferred: true
-            }
-        };
+    // === חדש: טיפול במספר בלבד (עדכון כמות או השלמת quote_incomplete) ===
+    if (quantity && !product) {
+        // אם יש מוצר ממתין (מ-quote_incomplete קודם) - השלם אותו
+        if (pendingProduct) {
+            console.log(`   ✅ Action: QUOTE (completing pending) - ${pendingProduct} × ${quantity}`);
+            return {
+                action: 'quote',
+                confidence: 0.90,
+                needsLLM: false,
+                data: {
+                    product: pendingProduct,
+                    qty: quantity,
+                    fromPending: true
+                }
+            };
+        }
+        
+        // אחרת, אם יש עגלה - עדכן את הפריט האחרון
+        if (cart.length > 0) {
+            const lastItem = cart[cart.length - 1];
+            console.log(`   ✅ Action: UPDATE QTY - ${lastItem?.product_name} → ${quantity}`);
+            return {
+                action: 'update_qty',
+                confidence: 0.85,
+                needsLLM: false,
+                data: {
+                    product: lastItem?.product_name,
+                    qty: quantity,
+                    inferred: true
+                }
+            };
+        }
     }
     
     // עדכון כמות עם מילת פעולה
@@ -321,7 +343,7 @@ function classifyMessage(message, context = {}) {
         };
     }
     
-    // יש מוצר בלי כמות - נשאל
+    // יש מוצר בלי כמות - נשאל (ונשמור כ-pending)
     if (product && !quantity) {
         console.log(`   ⚠️ Action: QUOTE (missing qty) - ${product}`);
         return {
@@ -394,7 +416,7 @@ function matchesAny(text, keywords) {
  * חילוץ מספר מהטקסט
  */
 function extractQuantity(text) {
-    // מילים למספרים בעברית
+    // מילים למספרים בעברית - רק כשהן מתארות כמות
     const hebrewNumbers = {
         'אחד': 1, 'אחת': 1, 'יחיד': 1, 'יחידה': 1,
         'שניים': 2, 'שתיים': 2, 'שני': 2, 'זוג': 2,
@@ -410,9 +432,27 @@ function extractQuantity(text) {
         'אלף': 1000
     };
     
+    // מילים שמכילות מספרים אבל לא מייצגות כמות
+    // "שנייה" = second (time), "ראשון/שלישי" = ordinals
+    const excludePatterns = [
+        /מחשבה שנייה/,    // "במחשבה שנייה" = on second thought
+        /פעם שנייה/,      // "פעם שנייה" = second time
+        /שנייה אחת/,      // "שנייה אחת" = one second
+        /רגע שני/,        // למקרה שיש
+    ];
+    
+    // בדוק אם יש תבניות להדרה
+    for (const pattern of excludePatterns) {
+        if (pattern.test(text)) {
+            text = text.replace(pattern, '');
+        }
+    }
+    
     // קודם בדוק מילים בעברית
     for (const [word, num] of Object.entries(hebrewNumbers)) {
-        if (text.includes(word)) {
+        // בדוק שזו מילה עצמאית ולא חלק ממילה אחרת
+        const regex = new RegExp(`(^|\\s)${word}(\\s|$)`);
+        if (regex.test(text)) {
             return num;
         }
     }
@@ -421,10 +461,11 @@ function extractQuantity(text) {
     const patterns = [
         /(\d{1,3}(?:,\d{3})+)/, // 1,000 or 10,000 or 100,000,000
         /(\d+)\s*(?:יחידות|יח'|יח|פריטים|עותקים|קלפים)/,
-        /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר)/,
+        /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר|רולאפ|באנר)/,
         /(?:כמות|qty|כמות של)\s*:?\s*(\d+)/i,
         /ל[- ]?(\d+)/,  // "ל-500" or "ל 500"
-        /(\d+)/  // מספר כללי - בסוף
+        /^(\d+)$/,      // רק מספר
+        /(\d+)/         // מספר כללי - בסוף
     ];
     
     for (const pattern of patterns) {

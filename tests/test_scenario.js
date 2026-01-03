@@ -6,8 +6,8 @@
  * להרצה: node test_scenario.js
  */
 
-const { classifyMessage } = require('./classifier');
-const { buildResponse, buildQuickReplies } = require('./responseBuilder');
+const { classifyMessage } = require('../engine/classifier');
+const { buildResponse, buildQuickReplies } = require('../engine/responseBuilder');
 
 // צבעים
 const GREEN = '\x1b[32m';
