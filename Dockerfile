@@ -1,5 +1,6 @@
 FROM node:18-slim
 
+
 # התקנת ספריות שכרום חייב כדי לרוץ על לינוקס (בשביל ה-PDF)
 RUN apt-get update \
     && apt-get install -y wget gnupg \
@@ -20,8 +21,9 @@ RUN npm install
 # העתקת שאר הקבצים
 COPY . .
 
-# חשיפת הפורט
-EXPOSE 3000
+# הגדרת פורט 7860 (סטנדרט של Hugging Face)
+ENV PORT=7860
+EXPOSE 7860
 
 # הרצת השרת
 CMD [ "node", "server.js" ]

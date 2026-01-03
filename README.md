@@ -1,7 +1,18 @@
 # Pini Bot Engine V3 - Server Heavy, LLM Light
 
 ## 📁 מבנה הקבצים
+---
+title: Pini Print Bot
+emoji: 🖨️
+colorFrom: green
+colorTo: blue
+sdk: docker
+pinned: false
+app_port: 7860
+---
 
+# Pini Bot Engine V3 - Server Heavy, LLM Light
+... (שאר הטקסט שלך ממשיך מכאן)
 ```
 pini-bot/
 ├── server.js                    ← שרת ראשי V3
