@@ -2,7 +2,7 @@
  * Message Classifier - Pini Print Bot
  * ====================================
  * מסווג הודעות ללא LLM - חוסך 80% מהקריאות ל-Gemini
- * גרסה מתוקנת V3.7: מילון מורחב ("Fat Dictionary") + Safety Valve
+ * גרסה מתוקנת V3.8: כולל סינון מידות, A4 והגנה מפני עדכונים יתומים
  */
 
 // === מילות מפתח למוצרים ===
@@ -173,6 +173,15 @@ function classifyMessage(message, context = {}) {
         return { action: 'design_check', confidence: 0.85, needsLLM: false, data: {} };
     }
 
+    // 6. זיהוי שאלות טכניות (אם אין כמות)
+    const isQuestion = text.includes('?') || 
+                       matchesAny(text, ['למה', 'איך', 'האם', 'תגיד', 'מתי', 'אפשר', 'מה ההבדל']);
+                       
+    if (isQuestion && !quantity) {
+        console.log(`   🤖 Technical question detected -> LLM`);
+        return { action: 'chat', confidence: 0.8, needsLLM: true, data: {} };
+    }
+
     // === קבלת החלטות לפי מוצר וכמות ===
     
     // A. עדכון כמות / הוספה
@@ -190,6 +199,13 @@ function classifyMessage(message, context = {}) {
             return { action: 'quote', confidence: 0.90, needsLLM: false, data: { product: pendingProduct, qty: quantity, fromPending: true } };
         }
 
+        // === תיקון הגנה מפני עדכון "יתום" ===
+        // אם אין מוצר מפורש, ואין עגלה לעדכן, ואין הקשר - זה כנראה סתם מספרים
+        if (cart.length === 0 && !contextProduct) {
+             console.log(`   🤖 Orphan quantity detected (no product context) -> LLM`);
+             return { action: 'chat', confidence: 0.6, needsLLM: true, data: {} };
+        }
+
         // עדכון פריט קיים
         const productToUpdate = contextProduct || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
         console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
@@ -198,17 +214,16 @@ function classifyMessage(message, context = {}) {
     
     // B. מוצר ללא כמות (ויש מוצר מפורש)
     if (product && !quantity) {
-        // אם זה סתם "פליירים" או "צריך פליירים"
         console.log(`   ⚠️ Action: QUOTE (missing qty) - ${product}`);
         return { action: 'quote_incomplete', confidence: 0.80, needsLLM: false, data: { product, missing: 'qty' } };
     }
     
-    // 6. ברכה (רק אם קצר)
+    // 7. ברכה (רק אם קצר)
     if (matchesAny(text, ACTION_KEYWORDS.greeting) && text.length < 20) {
         return { action: 'greeting', confidence: 0.90, needsLLM: false, data: {} };
     }
     
-    // 7. ברירת מחדל -> LLM
+    // 8. ברירת מחדל -> LLM
     console.log(`   🤖 Action: CHAT (needs LLM)`);
     return { action: 'chat', confidence: 0.50, needsLLM: true, data: { detectedProduct: product, detectedQty: quantity } };
 }
@@ -231,6 +246,12 @@ function countUniqueProducts(text) {
 function extractQuantity(text) {
     // 1. ניקוי טלפונים אגרסיבי
     let cleanText = text.replace(/05\d[- ]?\d{7}/g, '').replace(/05\d{8}/g, '').replace(/\+972\d+/g, '');
+    
+    // === תיקון חדש: ניקוי מידות, גדלי נייר ומשקלים ===
+    // מסיר: "170 גרם", "85 סמ", "200 מטר", "A4", "A5", "B2"
+    cleanText = cleanText.replace(/\b\d+\s*(?:גרם|גר'|g|gr|ס"מ|סמ|cm|mm|מטר|m)\b/gi, ''); 
+    cleanText = cleanText.replace(/\b[a-zA-Z][2-6]\b/g, ''); // מסיר A3, A4, A5, B2
+    // ==========================================================
     
     // 2. ניקוי ביטויים מטעים
     const excludePatterns = [/מחשבה שנייה/, /פעם שנייה/, /שנייה אחת/, /רגע שני/];
