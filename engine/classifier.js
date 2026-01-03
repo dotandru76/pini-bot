@@ -22,6 +22,12 @@ const PRODUCT_KEYWORDS = {
     'ביזנס קארד': 'bc',
     'business card': 'bc',
     
+    // כרטיסי הושבה (place cards)
+    'כרטיסי הושבה': 'place_card',
+    'כרטיס הושבה': 'place_card',
+    'הושבה': 'place_card',
+    'place card': 'place_card',
+    
     // פליירים
     'פלייר': 'flyer',
     'פליירים': 'flyer',

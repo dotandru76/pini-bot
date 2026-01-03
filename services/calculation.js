@@ -43,6 +43,7 @@ try {
 // === טבלת אימפוזיציה מוכנה ===
 const IMPOSITION_LOOKUP = {
     'bc': { ups: 24, sheetSize: 'SRA3', defaultPaper: 'chromo_300' },
+    'place_card': { ups: 16, sheetSize: 'SRA3', defaultPaper: 'chromo_300' }, // כרטיסי הושבה - קצת יותר גדולים
     'flyer': { ups: 4, sheetSize: 'SRA3', defaultPaper: 'chromo_135' },
     'invitation': { ups: 4, sheetSize: 'SRA3', defaultPaper: 'pearl_300' },
     'sticker': { ups: 6, sheetSize: 'SRA3', defaultPaper: 'sticker_paper' },
@@ -57,6 +58,8 @@ const WIDE_FORMAT_PRODUCTS = ['rollup', 'canvas', 'banner', 'poster_large', 'sig
 const PRODUCT_MAP = {
     // כרטיסים
     'כרטיס': 'bc', 'כרטיסים': 'bc', 'כרטיסי ביקור': 'bc', 'ביזנס': 'bc',
+    // כרטיסי הושבה
+    'הושבה': 'place_card', 'כרטיסי הושבה': 'place_card',
     // פליירים
     'פלייר': 'flyer', 'פליירים': 'flyer', 'פלאייר': 'flyer', 'עלון': 'flyer',
     // הזמנות
