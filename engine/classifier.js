@@ -2,7 +2,7 @@
  * Message Classifier - Pini Print Bot
  * ====================================
  * מסווג הודעות ללא LLM - חוסך 80% מהקריאות ל-Gemini
- * גרסה מתוקנת: הגנה מטלפונים, עדיפות לפעולות, החלפת מוצרים חכמה
+ * גרסה מתוקנת: הגנה מטלפונים, עדיפות לפעולות, תיקון באג "לוגו"
  */
 
 // === מילות מפתח למוצרים ===
@@ -120,7 +120,7 @@ const ACTION_KEYWORDS = {
         'נקה עגלה', 'רוקן עגלה', 'נקה הכל', 'מחק הכל',
         'התחל מחדש', 'התחלה מחדש', 'אפס עגלה', 'עגלה חדשה',
         'תרוקן', 'תנקה הכל', 'עזוב הכל', 'נתחיל מחדש',
-        'תתחיל מחדש', 'מההתחלה', 'תאפס'
+        'תתחיל מחדש', 'מההתחלה', 'תאפס', 'עזוב הכל'
     ],
     update: [
         'שנה ל', 'תשנה ל', 'עדכן ל', 'תעדכן ל', 
@@ -151,7 +151,7 @@ const ACTION_KEYWORDS = {
         'תכין הצעה', 'תכין הצעת', 'תעשה הצעה', 'תעשה הצעת',
         'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה',
         'זהו תשלח', 'זהו שלח', 'סיימתי תשלח', 'סיימתי שלח',
-        'שלח הזמנה', 'בצע הזמנה', 'סגור הזמנה', 'תארוז לי', // הוספנו מילות סגירה
+        'שלח הזמנה', 'בצע הזמנה', 'סגור הזמנה', 'תארוז לי',
         'תזמין'
     ],
     greeting: [
@@ -231,7 +231,6 @@ function classifyMessage(message, context = {}) {
     }
     
     // 2. בקשת שליחת הצעה/סגירת הזמנה (לפני שמזהים "הזמנה" כמוצר)
-    // זה פותר את הבאג ש"שלח הזמנה" מזוהה כמוצר הזמנה
     if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
         console.log(`   ✅ Action: SEND QUOTE (PDF/Order)`);
         return { action: 'send_quote', confidence: 0.95, needsLLM: false, data: {} };
@@ -239,7 +238,7 @@ function classifyMessage(message, context = {}) {
     
     // 3. הסרת פריט
     if (matchesAny(text, ACTION_KEYWORDS.remove)) {
-        const productToRemove = findProductInText(text, cart); // בהסרה דווקא עדיף לחפש בעגלה
+        const productToRemove = findProductInText(text, cart);
         console.log(`   ✅ Action: REMOVE - ${productToRemove || 'unknown'}`);
         return {
             action: 'remove',
@@ -255,10 +254,14 @@ function classifyMessage(message, context = {}) {
         return { action: 'status', confidence: 0.95, needsLLM: false, data: {} };
     }
     
-    // 5. בדיקת עיצוב
+    // 5. בדיקת עיצוב (תיקון באג: מוודא שאין גימורים כמו "לכה" באותו משפט)
+    const finishings = findFinishingInText(text);
     if (matchesAny(text, ACTION_KEYWORDS.design)) {
-        console.log(`   ✅ Action: DESIGN CHECK`);
-        return { action: 'design_check', confidence: 0.85, needsLLM: false, data: {} };
+        // אם מצאנו גם גימורים במשפט (למשל "לכה על הלוגו"), זה לא בהכרח שאלה על קובץ
+        if (finishings.length === 0) {
+            console.log(`   ✅ Action: DESIGN CHECK`);
+            return { action: 'design_check', confidence: 0.85, needsLLM: false, data: {} };
+        }
     }
 
     // === שלב 2: ניתוח מוצרים וכמויות ===
@@ -266,21 +269,15 @@ function classifyMessage(message, context = {}) {
     // חילוץ מספר (כמות) - כולל הגנה מטלפונים!
     const quantity = extractQuantity(text);
     
-    // חילוץ מוצר
-    // תיקון: מחפשים קודם מוצר חדש בטקסט (ללא הקשר לעגלה)
-    // זה מאפשר החלפת נושא: "עזוב פליירים תביא רולאפ"
+    // חילוץ מוצר (חדש עדיף על ישן)
     const explicitProduct = findProductInText(text, []); 
-    // וגם בודקים עם הקשר לעגלה (למקרה של "תעלה את הכמות ל-500")
     const contextProduct = findProductInText(text, cart);
-    
-    // המוצר הנבחר הוא המפורש אם קיים, אחרת מההקשר
     const product = explicitProduct || contextProduct;
     
     // === שלב 3: החלטה על הפעולה ===
     
     // מקרה א': יש מספר אבל אין מוצר מפורש
     if (quantity && !explicitProduct) {
-        // אם יש מוצר ממתין (מ-quote_incomplete קודם)
         if (pendingProduct) {
             console.log(`   ✅ Action: QUOTE (completing pending) - ${pendingProduct} × ${quantity}`);
             return {
@@ -291,7 +288,6 @@ function classifyMessage(message, context = {}) {
             };
         }
         
-        // אם יש עגלה - עדכון הפריט האחרון או המותאם מההקשר
         if (cart.length > 0) {
             const productToUpdate = contextProduct || cart[cart.length - 1]?.product_name;
             console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
@@ -304,7 +300,7 @@ function classifyMessage(message, context = {}) {
         }
     }
     
-    // מקרה ב': עדכון כמות מפורש ("שנה ל-500")
+    // מקרה ב': עדכון כמות מפורש ("שנה ל-500", "תעלה ל...")
     if (quantity && matchesAny(text, ACTION_KEYWORDS.update)) {
         const productToUpdate = product || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
         console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
@@ -319,14 +315,13 @@ function classifyMessage(message, context = {}) {
     // מקרה ג': הצעת מחיר חדשה (יש מוצר וכמות)
     if (product && quantity) {
         const material = findMaterialInText(text);
-        const finishing = findFinishingInText(text);
         
         console.log(`   ✅ Action: QUOTE - ${product} × ${quantity}`);
         return {
             action: 'quote',
             confidence: 0.95,
             needsLLM: false,
-            data: { product, qty: quantity, material, finishing }
+            data: { product, qty: quantity, material, finishing: finishings }
         };
     }
     
@@ -364,12 +359,8 @@ function matchesAny(text, keywords) {
     return keywords.some(kw => text.includes(kw));
 }
 
-/**
- * חילוץ מספר מהטקסט - גרסה חכמה המנקה מספרי טלפון
- */
 function extractQuantity(text) {
     // 1. הגנה: ניקוי מספרי טלפון (05X-XXXXXXX או רצפים ארוכים)
-    // זה מונע מ-052 להפוך ל-52 יחידות
     let cleanText = text.replace(/05\d[- ]?\d{7}/g, ''); // מסיר 05X-XXXXXXX
     cleanText = cleanText.replace(/05\d{8}/g, '');       // מסיר 05XXXXXXXX
     cleanText = cleanText.replace(/\+972\d+/g, '');      // מסיר +972...
@@ -386,7 +377,6 @@ function extractQuantity(text) {
         'מאה': 100, 'מאתיים': 200, 'חמש מאות': 500, 'אלף': 1000
     };
     
-    // מילים להחרגה
     const excludePatterns = [/מחשבה שנייה/, /פעם שנייה/, /שנייה אחת/, /רגע שני/];
     for (const pattern of excludePatterns) {
         if (pattern.test(cleanText)) {
@@ -394,21 +384,19 @@ function extractQuantity(text) {
         }
     }
     
-    // בדיקת מילים בעברית
     for (const [word, num] of Object.entries(hebrewNumbers)) {
         const regex = new RegExp(`(^|\\s)${word}(\\s|$)`);
         if (regex.test(cleanText)) return num;
     }
     
-    // תבניות מספרים (על הטקסט הנקי)
     const patterns = [
-        /(\d{1,3}(?:,\d{3})+)/, // 1,000
+        /(\d{1,3}(?:,\d{3})+)/, 
         /(\d+)\s*(?:יחידות|יח'|יח|פריטים|עותקים|קלפים)/,
         /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר|רולאפ|באנר)/,
         /(?:כמות|qty|כמות של)\s*:?\s*(\d+)/i,
-        /ל[- ]?(\d+)/,  // "ל-500"
-        /^(\d+)$/,      // רק מספר
-        /(\d+)/         // מספר כללי
+        /ל[- ]?(\d+)/,
+        /^(\d+)$/,
+        /(\d+)/
     ];
     
     for (const pattern of patterns) {
@@ -422,13 +410,9 @@ function extractQuantity(text) {
     return null;
 }
 
-/**
- * מציאת מוצר בטקסט
- */
 function findProductInText(text, cart = []) {
     const lowerText = text.toLowerCase();
     
-    // אם נשלח עגלה - בודק בה קודם
     if (cart && cart.length > 0) {
         for (const item of cart) {
             const itemName = item.product_name?.toLowerCase() || '';
@@ -440,7 +424,6 @@ function findProductInText(text, cart = []) {
         }
     }
     
-    // בדיקת מילות מפתח (ממוין לפי אורך)
     const sortedKeywords = Object.keys(PRODUCT_KEYWORDS)
         .sort((a, b) => b.length - a.length);
     

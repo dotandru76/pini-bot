@@ -3,8 +3,7 @@
  * ===========================
  * ארכיטקטורה: Server-Heavy, LLM-Light
  * + ניהול לקוחות + דשבורד משופר
- * 
- * הזרימה:
+ * * הזרימה:
  * 1. זיהוי/יצירת לקוח (לפי טלפון)
  * 2. Classifier מזהה כוונה
  * 3. טיפול ישיר או LLM
@@ -173,6 +172,8 @@ app.post('/api/chat', async (req, res) => {
         if (session.history.length > 20) session.history = session.history.slice(-20);
         
         // === שלב 8: יצירת דשבורד ===
+        // אם הטיפול הישיר החזיר נתונים לדשבורד (כמו במחיקה), נשתמש בהם
+        // אחרת נחשב מחדש
         const dashboard = generateDashboard(session, session.customerPhone);
         
         // === שלב 9: לוגים ===
@@ -312,13 +313,27 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             }
             break;
             
-        // === הסרת פריט ===
+        // === הסרת פריט (מתוקן) ===
         case 'remove':
             if (data.product) {
                 const success = removeFromCart(userId, data.product);
-                content = success 
-                    ? buildResponse('item_removed', { productName: data.product })
-                    : buildResponse('item_not_found', { productName: data.product, cart: session.cart });
+                
+                if (success) {
+                    content = buildResponse('item_removed', { productName: data.product });
+                    
+                    // תיקון: חישוב מחדש של סטטיסטיקות העגלה מיד אחרי המחיקה
+                    // כדי לוודא שהמספרים בדשבורד מתאפסים
+                    const newTotal = session.cart.reduce((sum, i) => sum + i.client_price, 0);
+                    const newCost = session.cart.reduce((sum, i) => sum + i.cost, 0);
+                    
+                    dashboardStats = {
+                        totalPrice: newTotal,
+                        totalCost: newCost,
+                        profit_margin: newTotal > 0 ? Math.round(((newTotal - newCost) / newTotal) * 100) : 0
+                    };
+                } else {
+                    content = buildResponse('item_not_found', { productName: data.product, cart: session.cart });
+                }
             } else {
                 content = `איזה פריט להסיר?\n${session.cart.map((i, idx) => `${idx + 1}. ${i.product_name}`).join('\n')}`;
             }
