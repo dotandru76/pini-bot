@@ -2,15 +2,7 @@
  * Message Classifier - Pini Print Bot
  * ====================================
  * מסווג הודעות ללא LLM - חוסך 80% מהקריאות ל-Gemini
- * 
- * Actions:
- *   - quote: בקשה להצעת מחיר (יש מוצר + כמות)
- *   - update_qty: שינוי כמות (יש מספר + הקשר לעגלה)
- *   - remove: הסרת פריט
- *   - clear: ניקוי עגלה
- *   - status: שאלה על מצב העגלה
- *   - design_check: שאלה לגבי עיצוב
- *   - chat: שיחה חופשית (צריך LLM)
+ * גרסה מתוקנת: הגנה מטלפונים, עדיפות לפעולות, החלפת מוצרים חכמה
  */
 
 // === מילות מפתח למוצרים ===
@@ -121,7 +113,8 @@ const ACTION_KEYWORDS = {
         'תמחק', 'מחק', 'תוריד', 'הורד', 'הסר', 'תסיר', 
         'תבטל', 'בטל', 'הוצא', 'תוציא', 'תוריד מהעגלה',
         'לא צריך', 'לא רוצה', 'בלי ה', 'לא רוצה את ה',
-        'וותר', 'ויתור', 'תוותר', 'ויתרתי', 'לוותר'
+        'וותר', 'ויתור', 'תוותר', 'ויתרתי', 'לוותר',
+        'עזוב', 'עזוב את'
     ],
     clear: [
         'נקה עגלה', 'רוקן עגלה', 'נקה הכל', 'מחק הכל',
@@ -133,14 +126,16 @@ const ACTION_KEYWORDS = {
         'שנה ל', 'תשנה ל', 'עדכן ל', 'תעדכן ל', 
         'במקום', 'תחליף ל', 'החלף ל',
         'תעלה ל', 'תוריד ל', 'תגדיל ל', 'תקטין ל',
-        'תעלה את הכמות', 'תוריד את הכמות'
+        'תעלה את הכמות', 'תוריד את הכמות',
+        'רק ל', 'בעצם'
     ],
     status: [
         'מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'תראה עגלה',
         'סיכום', 'סה"כ', 'כמה יוצא', 'מה המחיר הכולל',
         'מה הזמנתי', 'מה ביקשתי', 'מה יש לי בעגלה',
         'הראה לי את העגלה', 'מה בהזמנה', 'מה יש בהזמנה',
-        'כמה זה עולה', 'כמה עולה', 'מה המחיר', 'מה העלות'
+        'כמה זה עולה', 'כמה עולה', 'מה המחיר', 'מה העלות',
+        'מה המצב', 'דשבורד'
     ],
     design: [
         'עיצוב', 'קובץ', 'pdf', 'לוגו', 'תמונה',
@@ -155,7 +150,9 @@ const ACTION_KEYWORDS = {
         'אפשר הצעה', 'אפשר הצעת', 'תפיק הצעה', 'הפק הצעה',
         'תכין הצעה', 'תכין הצעת', 'תעשה הצעה', 'תעשה הצעת',
         'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה',
-        'זהו תשלח', 'זהו שלח', 'סיימתי תשלח', 'סיימתי שלח'
+        'זהו תשלח', 'זהו שלח', 'סיימתי תשלח', 'סיימתי שלח',
+        'שלח הזמנה', 'בצע הזמנה', 'סגור הזמנה', 'תארוז לי', // הוספנו מילות סגירה
+        'תזמין'
     ],
     greeting: [
         'שלום', 'היי', 'הי', 'אהלן', 'מה קורה', 'מה נשמע',
@@ -163,7 +160,7 @@ const ACTION_KEYWORDS = {
     ]
 };
 
-// === מילות חומרים (לזיהוי בהקשר) ===
+// === מילות חומרים ===
 const MATERIAL_KEYWORDS = {
     // ניירות
     'כרומו': 'chromo',
@@ -218,205 +215,166 @@ const FINISHING_KEYWORDS = {
 function classifyMessage(message, context = {}) {
     const text = message.toLowerCase().trim();
     const cart = context.cart || [];
-    const pendingProduct = context.pendingProduct || null; // מוצר שממתין לכמות
+    const pendingProduct = context.pendingProduct || null;
     
     console.log(`\n🔍 [Classifier] Analyzing: "${message}"`);
     if (pendingProduct) {
         console.log(`   📌 Pending product: ${pendingProduct}`);
     }
-    // === שלב 1: בדיקת פעולות מיוחדות ===
+
+    // === שלב 1: בדיקת פעולות מיוחדות (עדיפות עליונה) ===
     
-    // ניקוי עגלה
+    // 1. ניקוי עגלה
     if (matchesAny(text, ACTION_KEYWORDS.clear)) {
         console.log(`   ✅ Action: CLEAR CART`);
-        return {
-            action: 'clear',
-            confidence: 0.95,
-            needsLLM: false,
-            data: {}
-        };
+        return { action: 'clear', confidence: 0.95, needsLLM: false, data: {} };
     }
     
-    // הסרת פריט
-    const removeMatch = matchesAny(text, ACTION_KEYWORDS.remove);
-    if (removeMatch) {
-        const productToRemove = findProductInText(text, cart);
+    // 2. בקשת שליחת הצעה/סגירת הזמנה (לפני שמזהים "הזמנה" כמוצר)
+    // זה פותר את הבאג ש"שלח הזמנה" מזוהה כמוצר הזמנה
+    if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
+        console.log(`   ✅ Action: SEND QUOTE (PDF/Order)`);
+        return { action: 'send_quote', confidence: 0.95, needsLLM: false, data: {} };
+    }
+    
+    // 3. הסרת פריט
+    if (matchesAny(text, ACTION_KEYWORDS.remove)) {
+        const productToRemove = findProductInText(text, cart); // בהסרה דווקא עדיף לחפש בעגלה
         console.log(`   ✅ Action: REMOVE - ${productToRemove || 'unknown'}`);
         return {
             action: 'remove',
             confidence: productToRemove ? 0.90 : 0.70,
-            needsLLM: !productToRemove, // אם לא מצאנו מוצר ספציפי, נשאל את ה-LLM
-            data: { 
-                product: productToRemove,
-                rawText: text
-            }
+            needsLLM: !productToRemove,
+            data: { product: productToRemove, rawText: text }
         };
     }
     
-    // שאילתת סטטוס - כולל "כמה זה עולה"
+    // 4. שאילתת סטטוס
     if (matchesAny(text, ACTION_KEYWORDS.status)) {
         console.log(`   ✅ Action: STATUS`);
-        return {
-            action: 'status',
-            confidence: 0.95,
-            needsLLM: false,
-            data: {}
-        };
+        return { action: 'status', confidence: 0.95, needsLLM: false, data: {} };
     }
     
-    // === שלב 2: בדיקת בקשת הצעת מחיר ===
+    // 5. בדיקת עיצוב
+    if (matchesAny(text, ACTION_KEYWORDS.design)) {
+        console.log(`   ✅ Action: DESIGN CHECK`);
+        return { action: 'design_check', confidence: 0.85, needsLLM: false, data: {} };
+    }
+
+    // === שלב 2: ניתוח מוצרים וכמויות ===
     
-    // חילוץ מספר (כמות)
+    // חילוץ מספר (כמות) - כולל הגנה מטלפונים!
     const quantity = extractQuantity(text);
     
     // חילוץ מוצר
-    const product = findProductInText(text);
+    // תיקון: מחפשים קודם מוצר חדש בטקסט (ללא הקשר לעגלה)
+    // זה מאפשר החלפת נושא: "עזוב פליירים תביא רולאפ"
+    const explicitProduct = findProductInText(text, []); 
+    // וגם בודקים עם הקשר לעגלה (למקרה של "תעלה את הכמות ל-500")
+    const contextProduct = findProductInText(text, cart);
     
-    // === חדש: טיפול במספר בלבד (עדכון כמות או השלמת quote_incomplete) ===
-    if (quantity && !product) {
-        // אם יש מוצר ממתין (מ-quote_incomplete קודם) - השלם אותו
+    // המוצר הנבחר הוא המפורש אם קיים, אחרת מההקשר
+    const product = explicitProduct || contextProduct;
+    
+    // === שלב 3: החלטה על הפעולה ===
+    
+    // מקרה א': יש מספר אבל אין מוצר מפורש
+    if (quantity && !explicitProduct) {
+        // אם יש מוצר ממתין (מ-quote_incomplete קודם)
         if (pendingProduct) {
             console.log(`   ✅ Action: QUOTE (completing pending) - ${pendingProduct} × ${quantity}`);
             return {
                 action: 'quote',
                 confidence: 0.90,
                 needsLLM: false,
-                data: {
-                    product: pendingProduct,
-                    qty: quantity,
-                    fromPending: true
-                }
+                data: { product: pendingProduct, qty: quantity, fromPending: true }
             };
         }
         
-        // אחרת, אם יש עגלה - עדכן את הפריט האחרון
+        // אם יש עגלה - עדכון הפריט האחרון או המותאם מההקשר
         if (cart.length > 0) {
-            const lastItem = cart[cart.length - 1];
-            console.log(`   ✅ Action: UPDATE QTY - ${lastItem?.product_name} → ${quantity}`);
+            const productToUpdate = contextProduct || cart[cart.length - 1]?.product_name;
+            console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
             return {
                 action: 'update_qty',
                 confidence: 0.85,
                 needsLLM: false,
-                data: {
-                    product: lastItem?.product_name,
-                    qty: quantity,
-                    inferred: true
-                }
+                data: { product: productToUpdate, qty: quantity, inferred: true }
             };
         }
     }
     
-    // עדכון כמות עם מילת פעולה
+    // מקרה ב': עדכון כמות מפורש ("שנה ל-500")
     if (quantity && matchesAny(text, ACTION_KEYWORDS.update)) {
-        const productToUpdate = findProductInText(text, cart) || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
+        const productToUpdate = product || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
         console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
         return {
             action: 'update_qty',
             confidence: 0.90,
             needsLLM: false,
-            data: {
-                product: productToUpdate,
-                qty: quantity
-            }
+            data: { product: productToUpdate, qty: quantity }
         };
     }
     
-    // הצעת מחיר חדשה (יש מוצר וכמות)
+    // מקרה ג': הצעת מחיר חדשה (יש מוצר וכמות)
     if (product && quantity) {
         const material = findMaterialInText(text);
         const finishing = findFinishingInText(text);
         
         console.log(`   ✅ Action: QUOTE - ${product} × ${quantity}`);
-        if (material) console.log(`      Material: ${material}`);
-        if (finishing.length) console.log(`      Finishing: ${finishing.join(', ')}`);
-        
         return {
             action: 'quote',
             confidence: 0.95,
             needsLLM: false,
-            data: {
-                product,
-                qty: quantity,
-                material,
-                finishing
-            }
+            data: { product, qty: quantity, material, finishing }
         };
     }
     
-    // יש מוצר בלי כמות - נשאל (ונשמור כ-pending)
+    // מקרה ד': יש מוצר בלי כמות - נשאל
     if (product && !quantity) {
         console.log(`   ⚠️ Action: QUOTE (missing qty) - ${product}`);
         return {
             action: 'quote_incomplete',
             confidence: 0.80,
             needsLLM: false,
-            data: {
-                product,
-                missing: 'qty'
-            }
+            data: { product, missing: 'qty' }
         };
     }
     
-    // === שלב 3: בקשת שליחת הצעה ===
-    if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
-        console.log(`   ✅ Action: SEND QUOTE (PDF)`);
-        return {
-            action: 'send_quote',
-            confidence: 0.90,
-            needsLLM: false,
-            data: {}
-        };
-    }
+    // === שלב 4: בדיקות אחרונות ===
     
-    // === שלב 3.5: שאלות עיצוב ===
-    if (matchesAny(text, ACTION_KEYWORDS.design)) {
-        console.log(`   ✅ Action: DESIGN CHECK`);
-        return {
-            action: 'design_check',
-            confidence: 0.85,
-            needsLLM: false,
-            data: {}
-        };
-    }
-    
-    // === שלב 3.6: ברכות ===
+    // ברכה
     if (matchesAny(text, ACTION_KEYWORDS.greeting) && text.length < 20) {
-        console.log(`   ✅ Action: GREETING`);
-        return {
-            action: 'greeting',
-            confidence: 0.90,
-            needsLLM: false,
-            data: {}
-        };
+        return { action: 'greeting', confidence: 0.90, needsLLM: false, data: {} };
     }
     
-    // === שלב 4: ברירת מחדל - צריך LLM ===
+    // ברירת מחדל - LLM
     console.log(`   🤖 Action: CHAT (needs LLM)`);
     return {
         action: 'chat',
         confidence: 0.50,
         needsLLM: true,
-        data: {
-            detectedProduct: product,
-            detectedQty: quantity
-        }
+        data: { detectedProduct: product, detectedQty: quantity }
     };
 }
 
 // === פונקציות עזר ===
 
-/**
- * בודק אם הטקסט מכיל אחת מהמילים ברשימה
- */
 function matchesAny(text, keywords) {
     return keywords.some(kw => text.includes(kw));
 }
 
 /**
- * חילוץ מספר מהטקסט
+ * חילוץ מספר מהטקסט - גרסה חכמה המנקה מספרי טלפון
  */
 function extractQuantity(text) {
-    // מילים למספרים בעברית - רק כשהן מתארות כמות
+    // 1. הגנה: ניקוי מספרי טלפון (05X-XXXXXXX או רצפים ארוכים)
+    // זה מונע מ-052 להפוך ל-52 יחידות
+    let cleanText = text.replace(/05\d[- ]?\d{7}/g, ''); // מסיר 05X-XXXXXXX
+    cleanText = cleanText.replace(/05\d{8}/g, '');       // מסיר 05XXXXXXXX
+    cleanText = cleanText.replace(/\+972\d+/g, '');      // מסיר +972...
+
+    // 2. מילים למספרים בעברית
     const hebrewNumbers = {
         'אחד': 1, 'אחת': 1, 'יחיד': 1, 'יחידה': 1,
         'שניים': 2, 'שתיים': 2, 'שני': 2, 'זוג': 2,
@@ -424,59 +382,40 @@ function extractQuantity(text) {
         'ארבעה': 4, 'ארבע': 4,
         'חמישה': 5, 'חמש': 5,
         'עשר': 10, 'עשרה': 10,
-        'עשרים': 20,
-        'חמישים': 50,
-        'מאה': 100,
-        'מאתיים': 200,
-        'חמש מאות': 500,
-        'אלף': 1000
+        'עשרים': 20, 'חמישים': 50,
+        'מאה': 100, 'מאתיים': 200, 'חמש מאות': 500, 'אלף': 1000
     };
     
-    // מילים שמכילות מספרים אבל לא מייצגות כמות
-    // "שנייה" = second (time), "ראשון/שלישי" = ordinals
-    const excludePatterns = [
-        /מחשבה שנייה/,    // "במחשבה שנייה" = on second thought
-        /פעם שנייה/,      // "פעם שנייה" = second time
-        /שנייה אחת/,      // "שנייה אחת" = one second
-        /רגע שני/,        // למקרה שיש
-    ];
-    
-    // בדוק אם יש תבניות להדרה
+    // מילים להחרגה
+    const excludePatterns = [/מחשבה שנייה/, /פעם שנייה/, /שנייה אחת/, /רגע שני/];
     for (const pattern of excludePatterns) {
-        if (pattern.test(text)) {
-            text = text.replace(pattern, '');
+        if (pattern.test(cleanText)) {
+            cleanText = cleanText.replace(pattern, '');
         }
     }
     
-    // קודם בדוק מילים בעברית
+    // בדיקת מילים בעברית
     for (const [word, num] of Object.entries(hebrewNumbers)) {
-        // בדוק שזו מילה עצמאית ולא חלק ממילה אחרת
         const regex = new RegExp(`(^|\\s)${word}(\\s|$)`);
-        if (regex.test(text)) {
-            return num;
-        }
+        if (regex.test(cleanText)) return num;
     }
     
-    // תבניות מספרים - חיפוש גדול יותר קודם
+    // תבניות מספרים (על הטקסט הנקי)
     const patterns = [
-        /(\d{1,3}(?:,\d{3})+)/, // 1,000 or 10,000 or 100,000,000
+        /(\d{1,3}(?:,\d{3})+)/, // 1,000
         /(\d+)\s*(?:יחידות|יח'|יח|פריטים|עותקים|קלפים)/,
         /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר|רולאפ|באנר)/,
         /(?:כמות|qty|כמות של)\s*:?\s*(\d+)/i,
-        /ל[- ]?(\d+)/,  // "ל-500" or "ל 500"
+        /ל[- ]?(\d+)/,  // "ל-500"
         /^(\d+)$/,      // רק מספר
-        /(\d+)/         // מספר כללי - בסוף
+        /(\d+)/         // מספר כללי
     ];
     
     for (const pattern of patterns) {
-        const match = text.match(pattern);
+        const match = cleanText.match(pattern);
         if (match) {
-            // נקה פסיקים והמר למספר
             const num = parseInt(match[1].replace(/,/g, ''));
-            // בדיקת סבירות - עד 100 מיליון
-            if (num >= 1 && num <= 100000000) {
-                return num;
-            }
+            if (num >= 1 && num <= 100000000) return num;
         }
     }
     
@@ -489,18 +428,19 @@ function extractQuantity(text) {
 function findProductInText(text, cart = []) {
     const lowerText = text.toLowerCase();
     
-    // קודם בודק מוצרים בעגלה (לזיהוי "תמחק את הפליירים")
-    for (const item of cart) {
-        const itemName = item.product_name?.toLowerCase() || '';
-        if (lowerText.includes(itemName) || 
-            lowerText.includes(itemName.replace(/ים$/, '')) || // צורת יחיד
-            lowerText.includes(itemName.replace(/ות$/, 'ה'))) { // צורת יחיד נקבה
-            return item.product_name;
+    // אם נשלח עגלה - בודק בה קודם
+    if (cart && cart.length > 0) {
+        for (const item of cart) {
+            const itemName = item.product_name?.toLowerCase() || '';
+            if (lowerText.includes(itemName) || 
+                lowerText.includes(itemName.replace(/ים$/, '')) || 
+                lowerText.includes(itemName.replace(/ות$/, 'ה'))) { 
+                return item.product_name;
+            }
         }
     }
     
-    // אחרי זה בודק מילות מפתח
-    // ממיין לפי אורך יורד כדי לתפוס "כרטיס ביקור" לפני "כרטיס"
+    // בדיקת מילות מפתח (ממוין לפי אורך)
     const sortedKeywords = Object.keys(PRODUCT_KEYWORDS)
         .sort((a, b) => b.length - a.length);
     
@@ -513,55 +453,30 @@ function findProductInText(text, cart = []) {
     return null;
 }
 
-/**
- * מציאת חומר בטקסט
- */
 function findMaterialInText(text) {
     const lowerText = text.toLowerCase();
-    
     for (const [keyword, value] of Object.entries(MATERIAL_KEYWORDS)) {
-        if (lowerText.includes(keyword)) {
-            return value;
-        }
+        if (lowerText.includes(keyword)) return value;
     }
-    
     return null;
 }
 
-/**
- * מציאת גימורים בטקסט (יכול להיות יותר מאחד)
- */
 function findFinishingInText(text) {
     const lowerText = text.toLowerCase();
     const found = [];
-    
     for (const [keyword, value] of Object.entries(FINISHING_KEYWORDS)) {
-        if (lowerText.includes(keyword)) {
-            found.push(value);
-        }
+        if (lowerText.includes(keyword)) found.push(value);
     }
-    
     return found;
 }
 
-/**
- * קבלת שם מוצר בעברית
- */
 function getProductHebrewName(productKey) {
     const names = {
-        'bc': 'כרטיסי ביקור',
-        'flyer': 'פליירים',
-        'invitation': 'הזמנות',
-        'rollup': 'רולאפ',
-        'banner': 'שמשונית',
-        'canvas': 'קנבס',
-        'sticker': 'מדבקות',
-        'booklet': 'חוברת',
-        'brochure': 'פרוספקט',
-        'folder': 'פולדר',
-        'poster': 'פוסטר',
-        'letterhead': 'נייר מכתבים',
-        'envelope': 'מעטפות'
+        'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'invitation': 'הזמנות',
+        'rollup': 'רולאפ', 'banner': 'שמשונית', 'canvas': 'קנבס',
+        'sticker': 'מדבקות', 'booklet': 'חוברת', 'brochure': 'פרוספקט',
+        'folder': 'פולדר', 'poster': 'פוסטר',
+        'letterhead': 'נייר מכתבים', 'envelope': 'מעטפות'
     };
     return names[productKey] || productKey;
 }
