@@ -304,34 +304,91 @@ async function handleDirectly(classification, session, userId, customer, mood) {
 }
 
 // ============================================================
-// LLM HANDLER (עם טיפול משופר בשגיאות)
+// SMART LLM HANDLER - עם בקרת שרת
 // ============================================================
+const { 
+    detectTaskType, 
+    buildPrompt, 
+    validateResponse, 
+    fixResponse,
+    TASK_TYPES 
+} = require('./engine/smartLLM');
+
 async function handleWithLLM(message, session, userId, customer) {
-    // בניית system prompt
-    let systemPrompt;
-    try {
-        systemPrompt = generateSystemPrompt(userId);
-    } catch (e) {
-        systemPrompt = getDefaultSystemPrompt();
+    // שלב 1: זיהוי סוג המשימה
+    const taskType = detectTaskType(message, {
+        hasQuote: session.cart.length > 0,
+        pendingProduct: session.pendingProduct
+    });
+    
+    console.log(`   📋 Task Type: ${taskType}`);
+    
+    // שלב 2: בניית context מינימלי
+    const contextData = {
+        userMessage: message,
+        customer: customer,
+        cart: session.cart,
+        pendingProduct: session.pendingProduct
+    };
+    
+    // הוספת מידע ספציפי לפי סוג המשימה
+    if (taskType === TASK_TYPES.RECOMMEND) {
+        // זיהוי אירוע
+        const occasions = {
+            'חתונה': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
+            'בר מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
+            'ברית': ['הזמנות', 'כרטיסי תודה', 'מדבקות'],
+            'תערוכה': ['רולאפים', 'פליירים', 'כרטיסי ביקור', 'פוסטרים', 'באנרים'],
+            'עסק': ['כרטיסי ביקור', 'פליירים', 'ניירת משרדית', 'שלטים']
+        };
+        
+        for (const [occasion, products] of Object.entries(occasions)) {
+            if (message.includes(occasion)) {
+                contextData.occasion = occasion;
+                contextData.suggestions = products;
+                break;
+            }
+        }
     }
     
-    // ניקוי היסטוריה לפני שליחה ל-API
-    const cleanHistory = sanitizeHistory(session.history);
+    if (taskType === TASK_TYPES.EXPLAIN) {
+        // הוספת מידע על מוצר אם רלוונטי
+        const productInfo = getProductInfo(message);
+        if (productInfo) {
+            contextData.productInfo = productInfo;
+        }
+    }
     
-    // בניית היסטוריה ל-Gemini
-    const chatHistory = [
-        { role: "user", parts: [{ text: systemPrompt }] },
-        { role: "model", parts: [{ text: "הבנתי! אני פיני, הבוט של דפוס בית יצחק. אשמח לעזור ללקוחות שלנו. 😊" }] },
-        ...cleanHistory.slice(-6) // רק 6 הודעות אחרונות
-    ];
+    // שלב 3: בניית prompt קצר
+    const prompt = buildPrompt(taskType, contextData);
+    console.log(`   📊 Tokens: ~${prompt.estimatedTokens}`);
     
+    // שלב 4: קריאה ל-LLM
     try {
+        const chatHistory = [
+            { role: "user", parts: [{ text: prompt.system + "\n\n" + prompt.context }] },
+            { role: "model", parts: [{ text: "הבנתי, אענה בקצרה ובהתאם להנחיות." }] }
+        ];
+        
+        // הוספת היסטוריה קצרה (רק 4 הודעות אחרונות)
+        const recentHistory = sanitizeHistory(session.history).slice(-4);
+        chatHistory.push(...recentHistory);
+        
         const chat = model.startChat({ history: chatHistory });
         const result = await chat.sendMessage(message);
-        const responseText = result.response.text();
+        let responseText = result.response.text();
         
         if (!responseText || responseText.trim().length === 0) {
             throw new Error('Empty response from LLM');
+        }
+        
+        // שלב 5: אימות התשובה
+        const validation = validateResponse(responseText, taskType, contextData);
+        
+        if (!validation.isValid) {
+            console.log(`   ⚠️ Validation issues: ${validation.issues.join(', ')}`);
+            responseText = fixResponse(responseText, validation.corrections, contextData);
+            console.log(`   ✅ Response fixed`);
         }
         
         const quickReplies = buildQuickReplies('chat');
@@ -347,6 +404,36 @@ async function handleWithLLM(message, session, userId, customer) {
             quickReplies: buildQuickReplies('greeting') 
         };
     }
+}
+
+// מידע על מוצרים לשאלות
+function getProductInfo(message) {
+    const productInfoMap = {
+        'הזמנות': `סוגי הזמנות: חתונה, בר/בת מצווה, ברית, אירועים.
+אופציות נייר: כרומו מבריק, נייר כותנה, נייר פנינה.
+גימורים: למינציה, הבלטה, פויל זהב/כסף.
+גדלים נפוצים: 14x14, 15x15, 21x10 ס"מ.`,
+        
+        'פליירים': `גדלים: A4, A5, A6, DL.
+נייר: 135 גרם (דק), 170 גרם (סטנדרט), 250 גרם (עבה).
+הדפסה: חד או דו-צדדי, צבעוני או שחור-לבן.
+גימורים: למינציה מט/מבריק.`,
+        
+        'כרטיסי ביקור': `גודל סטנדרטי: 9x5 ס"מ.
+נייר: 350 גרם כרומו, כותנה, פנינה.
+גימורים: למינציה, פינות עגולות, הבלטה, פויל.`,
+        
+        'רולאפ': `גדלים: 85x200, 100x200, 120x200 ס"מ.
+כולל: מתקן אלומיניום + הדפסה + תיק נשיאה.
+חומר: ויניל איכותי 440 גרם.`
+    };
+    
+    for (const [product, info] of Object.entries(productInfoMap)) {
+        if (message.includes(product)) {
+            return info;
+        }
+    }
+    return null;
 }
 
 // תשובה חלופית כשה-LLM נכשל
@@ -370,14 +457,7 @@ function generateFallbackResponse(message) {
     // ברירת מחדל
     return "אני פיני מדפוס בית יצחק! 🖨️ איך אפשר לעזור לך היום? אפשר להזמין הדפסות, לקבל הצעת מחיר או לשאול שאלות.";
 }
-
-// System prompt ברירת מחדל
-function getDefaultSystemPrompt() {
-    return `אתה פיני, נציג שירות לקוחות של דפוס בית יצחק.
-תפקידך: לעזור ללקוחות להזמין הדפסות ולקבל הצעות מחיר.
-סגנון: ידידותי, מקצועי, ישראלי. תשובות קצרות וברורות.
-מוצרים: פליירים, כרטיסי ביקור, הזמנות, רולאפים, מדבקות, חוברות, פוסטרים.
-חשוב: אל תמציא מחירים! תמיד תבקש פרטים (כמות, גודל, סוג נייר) לפני הצעת מחיר.`;
+    return "אני פיני מדפוס בית יצחק! 🖨️ איך אפשר לעזור לך היום? אפשר להזמין הדפסות, לקבל הצעת מחיר או לשאול שאלות.";
 }
 
 // ============================================================
