@@ -274,6 +274,26 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             content = buildResponse('design_check');
             quickReplies = buildQuickReplies('design_check');
             break;
+        
+        case 'catalog':
+            content = buildResponse('catalog', ctx);
+            quickReplies = []; // לא צריך כפתורים - הלקוח יכתוב מה הוא רוצה
+            break;
+        
+        case 'faq':
+            content = buildResponse('faq', ctx);
+            quickReplies = buildQuickReplies('faq');
+            break;
+        
+        case 'contact':
+            content = buildResponse('contact', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+        
+        case 'order_status':
+            content = buildResponse('order_status', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
             
         default:
             content = "לא הבנתי בדיוק, אפשר לנסח אחרת? 🤔";

@@ -227,6 +227,86 @@ function classifyMessage(message, context = {}) {
     if (pendingProduct) {
         console.log(`   📌 Pending product: ${pendingProduct}`);
     }
+    
+    // === שלב 0: Quick Replies - זיהוי כפתורים שאנחנו שולחים ===
+    // חייב להיות לפני הכל כדי למנוע זיהוי שגוי (קטלוג ≠ booklet, סטטוס הזמנה ≠ invitation)
+    
+    // קטלוג מוצרים
+    if (text.includes('קטלוג מוצרים') || 
+        text.includes('מה יש לכם') || 
+        text.includes('מה אפשר להזמין') ||
+        text.includes('מה אתם מציעים') ||
+        text.includes('מה המוצרים') ||
+        text.includes('רשימת מוצרים') ||
+        text.includes('תפריט') ||
+        (text.includes('מה יש') && text.length < 15 && !text.includes('עגלה') && !text.includes('הזמנה'))) {
+        console.log(`   ✅ Action: CATALOG`);
+        return {
+            action: 'catalog',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // שאלות ותשובות / FAQ
+    if (text.includes('שאלות ותשובות') || 
+        text.includes('שאלות נפוצות') ||
+        text.includes('faq')) {
+        console.log(`   ✅ Action: FAQ`);
+        return {
+            action: 'faq',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // צור קשר
+    if (text.includes('צור קשר') || 
+        text.includes('פרטי התקשרות') ||
+        text.includes('איך יוצרים קשר') ||
+        text.includes('טלפון שלכם') ||
+        text.includes('הכתובת שלכם') ||
+        text.includes('איפה אתם')) {
+        console.log(`   ✅ Action: CONTACT`);
+        return {
+            action: 'contact',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // סטטוס הזמנה (לא להתבלבל עם "הזמנות" = invitation!)
+    if (text.includes('סטטוס הזמנה') || 
+        text.includes('סטטוס ההזמנה') ||
+        text.includes('מעקב הזמנה') ||
+        text.includes('איפה ההזמנה') ||
+        text.includes('מה קורה עם ההזמנה')) {
+        console.log(`   ✅ Action: ORDER_STATUS`);
+        return {
+            action: 'order_status',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // "מה שלומך" ודומים - נימוסים
+    if (text.includes('מה שלומך') || 
+        text.includes('מה נשמע') ||
+        text.includes('איך אתה') ||
+        text.includes('מה קורה')) {
+        console.log(`   ✅ Action: GREETING (how are you)`);
+        return {
+            action: 'greeting',
+            confidence: 0.90,
+            needsLLM: false,
+            data: { type: 'how_are_you' }
+        };
+    }
+    
     // === שלב 1: בדיקת פעולות מיוחדות ===
     
     // ניקוי עגלה

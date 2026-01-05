@@ -1,126 +1,390 @@
 /**
- * Response Builder V3.1 - Pini Print Bot (Fixed)
- * ==============================================
- * כולל תיקון לתבנית 'chat' החסרה
+ * Response Builder V2 - Pini Print Bot
+ * =====================================
+ * תגובות עם אישיות + מכירה חכמה
  */
 
 const { 
-    detectMood,
-    handlePriceObjection,
+    humanize, 
+    generateSmartRecommendation,
     generateEmpatheticResponse,
-    getProductHebrew, // הוספתי ייבוא חסר אם היה
+    detectMood,
+    getProductHebrew,
+    handlePriceObjection,
     PINI_PERSONALITY
 } = require('./personalityEngine');
 
-const { generateQuickReplies } = require('./menuGenerator');
-const { generateDashboard } = require('./dashboardManager');
-
 // === בחירת ביטוי אקראי ===
 function pick(category) {
-    if (!PINI_PERSONALITY || !PINI_PERSONALITY.expressions) return '';
     const options = PINI_PERSONALITY.expressions[category];
-    return options && options.length > 0 ? options[Math.floor(Math.random() * options.length)] : '';
+    if (!options || options.length === 0) return '';
+    return options[Math.floor(Math.random() * options.length)];
 }
 
-// === תבניות תגובה ===
+// === תבניות תגובה משופרות ===
 const RESPONSE_TEMPLATES = {
     
-    // === ✅ התיקון החשוב: תבנית כללית לצ'אט (LLM) ===
-    chat: (context) => {
-        // מחזיר פשוט את הטקסט שג'מיני יצר
-        return context.llmResponse || "לא הבנתי, תוכל לחזור על זה?";
-    },
-
     // === ברכות ===
     greeting: (context = {}) => {
         const hour = new Date().getHours();
-        const timeGreeting = hour < 12 ? 'בוקר טוב! ☀️' : (hour < 18 ? 'צהריים טובים!' : 'ערב טוב! 🌙');
-        const name = context.customer?.name ? ` ${context.customer.name}` : '';
-        return `היי${name}! ${timeGreeting} פיני פה מדפוס בית יצחק. מה נדפיס היום?`;
+        let timeGreeting = '';
+        
+        if (hour >= 5 && hour < 12) timeGreeting = 'בוקר טוב! ☀️';
+        else if (hour >= 12 && hour < 17) timeGreeting = 'צהריים טובים!';
+        else if (hour >= 17 && hour < 21) timeGreeting = 'ערב טוב!';
+        else timeGreeting = 'לילה טוב! 🌙';
+        
+        const greetings = [
+            `${timeGreeting} פיני פה מדפוס בית יצחק. מה נדפיס?`,
+            `היי! ${timeGreeting} איך אפשר לעזור?`,
+            `שלום! פיני מבית יצחק. במה אוכל לשרת?`
+        ];
+        
+        // אם יש לקוח מוכר
+        if (context.customer?.name) {
+            return `היי ${context.customer.name}! ${timeGreeting} שמח לראות אותך שוב 😊`;
+        }
+        
+        return greetings[Math.floor(Math.random() * greetings.length)];
     },
     
     // === הצעת מחיר חדשה ===
     quote_added: (context) => {
         const { item, recommendation } = context;
-        let response = `${pick('excitement') || 'מעולה!'} ${item.qty.toLocaleString()} ${item.product_name} ב-₪${item.client_price.toLocaleString()}`;
+        const productName = item.product_name;
+        const qty = item.qty.toLocaleString();
+        const price = item.client_price.toLocaleString();
         
-        if (item.description && !item.isDefaultUsed) response += `\n📝 ${item.description}`;
-        else if (item.isDefaultUsed) response += `\n💡 (חישבתי לפי סטנדרט: ${item.description})`;
+        // תגובה בסיסית
+        let response = `${pick('excitement')} ${qty} ${productName} ב-₪${price}`;
         
-        if (recommendation) response += `\n\n${recommendation.message}`;
-        return response + `\n\n${pick('closing') || 'איך נתקדם?'}`;
+        // הוסף פירוט אם יש
+        if (item.description && !item.isDefaultUsed) {
+            response += `\n📝 ${item.description}`;
+        } else if (item.isDefaultUsed) {
+            response += `\n💡 (על ${item.description} - אפשר לשנות)`;
+        }
+        
+        // הוסף המלצה חכמה
+        if (recommendation) {
+            response += `\n\n${recommendation.message}`;
+        }
+        
+        // הוסף סגירה
+        response += `\n\n${pick('closing')}`;
+        
+        return response;
     },
     
     // === עדכון כמות ===
     quote_updated: (context) => {
-        const { item, oldQty } = context;
+        const { item, oldQty, recommendation } = context;
         const direction = item.qty > oldQty ? 'הגדלתי' : 'הקטנתי';
-        return `${pick('empathy') || 'אין בעיה,'} ${direction} ל-${item.qty.toLocaleString()} יחידות.\n💰 מחיר מעודכן: ₪${item.client_price.toLocaleString()}`;
+        
+        let response = `${pick('empathy')} ${direction} ל-${item.qty.toLocaleString()} יחידות.\n`;
+        response += `💰 מחיר מעודכן: ₪${item.client_price.toLocaleString()}`;
+        
+        // אם הקטין - אולי להציע לחשוב שוב?
+        if (item.qty < oldQty && item.qty < 500) {
+            response += `\n\n💡 טיפ: ב-500 יחידות המחיר ליחידה יורד משמעותית`;
+        }
+        
+        // המלצה
+        if (recommendation) {
+            response += `\n\n${recommendation.message}`;
+        }
+        
+        return response;
     },
     
     // === סטטוס עגלה ===
     cart_status: (context) => {
-        const { cart } = context;
-        if (!cart || cart.length === 0) return `העגלה ריקה 🛒\nמה תרצה להזמין?`;
+        const { cart, customer } = context;
+        
+        if (!cart || cart.length === 0) {
+            return `העגלה ריקה 🛒\n\nמה תרצה להזמין? כרטיסי ביקור? פליירים? הזמנות?`;
+        }
         
         let response = `📋 **ההזמנה שלך:**\n\n`;
         let total = 0;
+        
         cart.forEach((item, i) => {
             response += `${i + 1}. ${item.product_name} (${item.qty.toLocaleString()}) - ₪${item.client_price.toLocaleString()}\n`;
             total += item.client_price;
         });
-        return response + `\n💰 **סה"כ: ₪${total.toLocaleString()}**\n\nלשלוח הצעה מסודרת?`;
+        
+        response += `\n💰 **סה"כ: ₪${total.toLocaleString()}**`;
+        
+        // אם לקוח VIP - רמוז להנחה
+        if (customer?.isVIP) {
+            response += `\n\n⭐ כלקוח VIP, יש לך הנחה קבועה על ההזמנה`;
+        }
+        
+        // הצע לשלוח הצעה
+        if (cart.length > 0) {
+            response += `\n\nרוצה שאשלח הצעת מחיר רשמית?`;
+        }
+        
+        return response;
     },
     
     // === הסרת פריט ===
-    item_removed: (context) => `הסרתי את ה${context.productName} 👍`,
+    item_removed: (context) => {
+        const { productName } = context;
+        const responses = [
+            `הסרתי את ה${productName} 👍`,
+            `בסדר, בלי ה${productName}`,
+            `${productName} - הוסר מההזמנה`
+        ];
+        return responses[Math.floor(Math.random() * responses.length)];
+    },
     
     // === פריט לא נמצא ===
-    item_not_found: (context) => `לא מצאתי "${context.productName}" בעגלה 🤔`,
+    item_not_found: (context) => {
+        const { productName, cart } = context;
+        let response = `לא מצאתי "${productName}" בעגלה 🤔`;
+        
+        if (cart && cart.length > 0) {
+            response += `\n\nיש לי: ${cart.map(i => i.product_name).join(', ')}`;
+        }
+        
+        return response;
+    },
     
     // === ניקוי עגלה ===
-    cart_cleared: () => "סבבה, רוקנתי את העגלה. מתחילים מחדש! 🔄",
+    cart_cleared: () => {
+        const responses = [
+            "סבבה, מתחילים מחדש 🔄",
+            "אוקיי, ריקנתי הכל. מה נעשה?",
+            "עגלה ריקה! בוא נתחיל מהתחלה"
+        ];
+        return responses[Math.floor(Math.random() * responses.length)];
+    },
     
-    // === שאלת כמות ===
+    // === שאלת כמות (quote_incomplete) ===
     ask_quantity: (context) => {
-        const product = context.product || 'מוצר';
-        return `${product} - מעולה! 👍\nכמה יחידות להכין?`;
+        const { product } = context;
+        const productHeb = getProductHebrew(product);
+        
+        const responses = [
+            `${productHeb} - מעולה! 👍\n\nכמה יחידות?`,
+            `אחלה! כמה ${productHeb} צריך?`,
+            `${productHeb}, סבבה. מה הכמות?`
+        ];
+        
+        // הוסף כמויות נפוצות כהצעה
+        let response = responses[Math.floor(Math.random() * responses.length)];
+        
+        const commonQtys = {
+            'bc': [100, 250, 500, 1000],
+            'flyer': [500, 1000, 2500, 5000],
+            'invitation': [100, 200, 300, 500],
+            'sticker': [100, 500, 1000, 2000]
+        };
+        
+        const qtys = commonQtys[product];
+        if (qtys) {
+            response += `\n\n💡 הכי נפוץ: ${qtys.join(' / ')}`;
+        }
+        
+        return response;
     },
     
     // === שאלת עיצוב ===
-    design_check: () => `מעולה שיש עיצוב! 🎨\n\nרק לוודא:\n✅ רזולוציה 300 DPI\n✅ פורמט PDF\n✅ צבעים CMYK\n✅ בליד (גלישה) 2-3 מ"מ\n\nשלח לי ואני אבדוק שזה תקין לדפוס! 👍`,
+    design_check: (context) => {
+        const responses = [
+            `מעולה שיש עיצוב! 🎨\n\nכמה דברים לוודא:\n✅ רזולוציה 300 DPI\n✅ פורמט PDF\n✅ צבעים CMYK\n\nאפשר לשלוח לי לבדיקה חינם!`,
+            `יופי! בדוק שהקובץ ב-300 DPI ו-CMYK.\n\nשלח לי ואני אבדוק שהכל תקין 👍`,
+            `אחלה! 🎨 תשלח את הקובץ ואני אוודא שמוכן להדפסה.`
+        ];
+        return responses[Math.floor(Math.random() * responses.length)];
+    },
+    
+    // === שאלת עיצוב - צריך עיצוב ===
+    needs_design: (context) => {
+        return `אין בעיה! יש לנו מעצבת מעולה 🎨\n\nהעיצוב עולה ₪150-350 תלוי במורכבות.\nזה כולל 2 סבבי תיקונים.\n\nרוצה שאתאם שיחה?`;
+    },
     
     // === שליחת הצעה ===
     send_quote: (context) => {
-        if (!context.cart || context.cart.length === 0) return `אין פריטים בעגלה עדיין 😅`;
-        return `מכין לך הצעת מחיר רשמית... 📄\n\n💰 סה"כ: ₪${context.total.toLocaleString()}\n\nהקובץ יישלח מיד!`;
+        const { cart, total } = context;
+        
+        if (!cart || cart.length === 0) {
+            return `אין פריטים בעגלה עדיין 😅\n\nמה תרצה להוסיף?`;
+        }
+        
+        return `מכין לך הצעת מחיר רשמית... 📄\n\n💰 סה"כ: ₪${total?.toLocaleString() || '---'}\n\nההצעה תהיה מוכנה תיכף!`;
     },
+    
+    // === תגובה למחיר יקר ===
+    price_objection: (context) => {
+        const strategies = handlePriceObjection(
+            context.price, 
+            context.product, 
+            context.quantity, 
+            context
+        );
+        
+        // בחר אסטרטגיה (העדפה להנחה אם אפשר, אחרת הסבר ערך)
+        const strategy = strategies.find(s => s.type === 'discount') || strategies[0];
+        
+        return generateEmpatheticResponse('expensive') + '\n\n' + strategy.response;
+    },
+    
+    // === מדבקות - צריך פרטים ===
+    sticker_details: (context) => {
+        const { qty } = context;
+        
+        return `אחלה, ${qty?.toLocaleString() || ''} מדבקות! 🏷️
 
-    price_objection: (context) => "אני מבין, האיכות אצלנו היא ללא פשרות, אבל בוא נראה אם אפשר להתאים משהו לתקציב."
+כדי לתת מחיר מדויק, צריך לדעת:
+
+📐 **גודל?** (למשל: 5×5 ס"מ, 7×10 ס"מ)
+⭕ **צורה?** עגול / מרובע / צורני מיוחד
+📦 **חומר?** נייר / ויניל עמיד / שקוף
+
+מה יהיה?`;
+    },
+    
+    // === קטלוג מוצרים ===
+    catalog: (context) => {
+        return `🖨️ מה נדפיס היום?
+
+🖼️ כרטיסי ביקור
+📄 פליירים ועלונים
+💒 הזמנות לאירועים
+🎪 רולאפים ושילוט
+🏷️ מדבקות
+📚 חוברות וקטלוגים
+
+💬 כתוב מה אתה צריך ואני אחזיר הצעה!`;
+    },
+    
+    // === שאלות ותשובות ===
+    faq: (context) => {
+        return `❓ שאלות נפוצות:
+
+⏱️ זמני הכנה?
+רוב העבודות מוכנות תוך 3-5 ימי עסקים.
+דחוף? יש אפשרות להדפסה תוך 24 שעות.
+
+🚚 משלוחים?
+שליח עד הבית או איסוף עצמי.
+משלוח חינם בהזמנות מעל ₪300.
+
+💳 תשלום?
+אשראי, ביט, העברה בנקאית.
+עסקים - אפשר חשבונית +30.
+
+🎨 עיצוב?
+אין לך קובץ? יש לנו מעצבת מעולה!
+יש לך קובץ? תשלח ואבדוק שמוכן להדפסה.
+
+💬 עוד שאלות? שאל אותי!`;
+    },
+    
+    // === צור קשר ===
+    contact: (context) => {
+        return `📞 איך ליצור קשר?
+
+📱 טלפון: 03-XXXXXXX
+💬 וואטסאפ: זה אני! תכתוב והנה אני עונה 😊
+📍 כתובת: רחוב הדפוס XX, תל אביב
+🕐 שעות פעילות: א'-ה' 08:00-18:00
+
+💬 מה תרצה לדעת?`;
+    },
+    
+    // === סטטוס הזמנה ===
+    order_status: (context) => {
+        return `📦 בדיקת סטטוס הזמנה
+
+מה מספר ההזמנה שלך?
+(קיבלת אותו ב-SMS או במייל)
+
+💡 אם אין לך מספר - תן לי שם או טלפון ואחפש.`;
+    }
 };
 
+
+// === בניית תגובה ===
 function buildResponse(type, context = {}) {
     const template = RESPONSE_TEMPLATES[type];
-    if (!template) {
-        console.warn(`[ResponseBuilder] Unknown template: ${type} - Fallback to chat`);
-        return context.llmResponse || 'איך אפשר לעזור?';
-    }
-    const text = typeof template === 'function' ? template(context) : template;
     
-    // יצירת Metadata ו-Quick Replies
-    const currentProduct = context.classification?.data?.product || (context.cart?.length > 0 ? context.cart[context.cart.length-1].product_name : null);
-    const quickReplies = generateQuickReplies({ action: type }, currentProduct);
-    const dashboard = generateDashboard(context.session || { cart: context.cart, id: 'temp' }, context.customer?.phone);
-
-    return {
-        text,
-        meta: { 
-            intent: type,
-            quick_replies: quickReplies
-        },
-        cart: context.cart || [],
-        dashboard
-    };
+    if (!template) {
+        console.warn(`[ResponseBuilder] Unknown template: ${type}`);
+        return 'איך אפשר לעזור?';
+    }
+    
+    // הפעל את התבנית
+    let response = typeof template === 'function' ? template(context) : template;
+    
+    // זהה מצב רוח והתאם
+    if (context.userMessage) {
+        const mood = detectMood(context.userMessage);
+        if (mood === 'price_sensitive' && type !== 'price_objection') {
+            // אל תציע upsell ללקוח רגיש למחיר
+            response = response.replace(/💡.*הנחה.*\n?/g, '');
+        }
+    }
+    
+    return response;
 }
 
-module.exports = { buildResponse, buildQuickReplies: generateQuickReplies };
+// === בניית Quick Replies ===
+function buildQuickReplies(type, context = {}) {
+    const replies = {
+        greeting: [
+            { text: 'כרטיסי ביקור', value: 'כרטיסי ביקור' },
+            { text: 'פליירים', value: 'פליירים' },
+            { text: 'הזמנות לאירוע', value: 'הזמנות' },
+            { text: 'משהו אחר', value: 'מה עוד יש לכם?' }
+        ],
+        
+        ask_quantity: [
+            { text: '100', value: '100' },
+            { text: '250', value: '250' },
+            { text: '500', value: '500' },
+            { text: '1000', value: '1000' }
+        ],
+        
+        quote_added: [
+            { text: 'עוד משהו', value: 'מה עוד?' },
+            { text: 'שלח הצעה', value: 'שלח הצעת מחיר' },
+            { text: 'שנה כמות', value: 'שנה כמות' }
+        ],
+        
+        cart_status: [
+            { text: 'שלח הצעה', value: 'שלח הצעת מחיר' },
+            { text: 'הוסף פריט', value: 'מה עוד אפשר?' },
+            { text: 'נקה הכל', value: 'נקה עגלה' }
+        ],
+        
+        sticker_details: [
+            { text: 'עגול 5 ס"מ', value: 'מדבקות עגולות 5 ס"מ' },
+            { text: 'מרובע 7×5', value: 'מדבקות מרובעות 7 על 5' },
+            { text: 'אחר', value: 'גודל אחר' }
+        ],
+        
+        design_check: [
+            { text: 'יש לי קובץ', value: 'יש לי קובץ מוכן' },
+            { text: 'צריך עיצוב', value: 'צריך עיצוב' },
+            { text: 'יש מCanva', value: 'יש לי עיצוב מקנבה' }
+        ],
+        
+        faq: [
+            { text: 'הזמנה חדשה', value: 'רוצה להזמין' },
+            { text: 'קטלוג מוצרים', value: 'קטלוג מוצרים' },
+            { text: 'צור קשר', value: 'צור קשר' }
+        ]
+    };
+    
+    return replies[type] || [];
+}
+
+module.exports = {
+    buildResponse,
+    buildQuickReplies,
+    RESPONSE_TEMPLATES,
+    pick
+};
