@@ -14,6 +14,31 @@ const {
     PINI_PERSONALITY
 } = require('./personalityEngine');
 
+// === מיפוי שמות מוצרים לעברית ===
+const PRODUCT_NAMES_HEB = {
+    'bc': 'כרטיסי ביקור',
+    'business_card': 'כרטיסי ביקור',
+    'flyer': 'פליירים',
+    'invitation': 'הזמנות',
+    'place_card': 'כרטיסי הושבה',
+    'sticker': 'מדבקות',
+    'rollup': 'רולאפ',
+    'banner': 'באנר',
+    'poster': 'פוסטר',
+    'booklet': 'חוברת',
+    'brochure': 'ברושור',
+    'folder': 'פולדר',
+    'envelope': 'מעטפות',
+    'letterhead': 'ניירת משרדית',
+    'canvas': 'קנבס'
+};
+
+function getHebrewProductName(name) {
+    if (!name) return 'פריט';
+    const lower = name.toLowerCase();
+    return PRODUCT_NAMES_HEB[lower] || name;
+}
+
 // === בחירת ביטוי אקראי ===
 function pick(category) {
     const options = PINI_PERSONALITY.expressions[category];
@@ -51,7 +76,7 @@ const RESPONSE_TEMPLATES = {
     // === הצעת מחיר חדשה ===
     quote_added: (context) => {
         const { item, recommendation } = context;
-        const productName = item.product_name;
+        const productName = getHebrewProductName(item.product_name);
         const qty = item.qty.toLocaleString();
         const price = item.client_price.toLocaleString();
         
@@ -71,6 +96,25 @@ const RESPONSE_TEMPLATES = {
         }
         
         // הוסף סגירה
+        response += `\n\n${pick('closing')}`;
+        
+        return response;
+    },
+    
+    // === הוספת כמה מוצרים בבת אחת ===
+    multi_quote_added: (context) => {
+        const { items, cart } = context;
+        
+        let response = `${pick('excitement')} הוספתי הכל:\n\n`;
+        
+        items.forEach((item, i) => {
+            const productName = getHebrewProductName(item.product_name);
+            response += `${i + 1}. ${item.qty.toLocaleString()} ${productName} - ₪${item.client_price.toLocaleString()}\n`;
+        });
+        
+        const total = cart.reduce((sum, item) => sum + (item.client_price || 0), 0);
+        response += `\n💰 סה"כ: ₪${total.toLocaleString()}`;
+        
         response += `\n\n${pick('closing')}`;
         
         return response;

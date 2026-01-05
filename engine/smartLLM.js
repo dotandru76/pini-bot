@@ -247,7 +247,7 @@ function detectTaskType(message, context = {}) {
     }
     
     // אירוע/צורך - צריך המלצה
-    const occasions = ['חתונה', 'בר מצווה', 'ברית', 'תערוכה', 'כנס', 'פתיחת עסק', 'אירוע'];
+    const occasions = ['חתונה', 'חתונות', 'בר מצווה', 'בת מצווה', 'ברית', 'תערוכה', 'כנס', 'פתיחת עסק', 'אירוע'];
     if (occasions.some(o => text.includes(o)) && !context.hasQuote) {
         return TASK_TYPES.RECOMMEND;
     }

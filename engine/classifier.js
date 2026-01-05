@@ -349,10 +349,26 @@ function classifyMessage(message, context = {}) {
     
     // === שלב 2: בדיקת בקשת הצעת מחיר ===
     
-    // חילוץ מספר (כמות)
+    // חילוץ כל המוצרים עם כמויות
+    const allProducts = findAllProductsWithQuantities(text);
+    
+    // אם יש יותר ממוצר אחד עם כמויות - multi_quote
+    if (allProducts.length > 1 && allProducts.some(p => p.qty)) {
+        console.log(`   ✅ Action: MULTI_QUOTE - ${allProducts.map(p => `${p.product}×${p.qty || '?'}`).join(', ')}`);
+        return {
+            action: 'multi_quote',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {
+                products: allProducts
+            }
+        };
+    }
+    
+    // חילוץ מספר (כמות) - למקרה של מוצר בודד
     const quantity = extractQuantity(text);
     
-    // חילוץ מוצר
+    // חילוץ מוצר בודד
     const product = findProductInText(text);
     
     // === חדש: טיפול במספר בלבד (עדכון כמות או השלמת quote_incomplete) ===
@@ -614,6 +630,56 @@ function findProductInText(text, cart = []) {
     }
     
     return null;
+}
+
+/**
+ * מציאת כל המוצרים עם כמויות בטקסט
+ * "500 הזמנות ו-400 כרטיסי הושבה" → [{product: 'invitation', qty: 500}, {product: 'place_card', qty: 400}]
+ */
+function findAllProductsWithQuantities(text) {
+    const results = [];
+    const lowerText = text.toLowerCase();
+    
+    // ממיין לפי אורך יורד
+    const sortedKeywords = Object.keys(PRODUCT_KEYWORDS)
+        .sort((a, b) => b.length - a.length);
+    
+    // מחפש תבניות של "מספר + מוצר"
+    for (const keyword of sortedKeywords) {
+        // תבנית: מספר + מוצר (עם או בלי מילים ביניהם)
+        const patterns = [
+            new RegExp(`(\\d+(?:,\\d{3})*)\\s*${keyword}`, 'i'),
+            new RegExp(`(\\d+(?:,\\d{3})*)\\s+(?:יחידות\\s+)?${keyword}`, 'i'),
+        ];
+        
+        for (const pattern of patterns) {
+            const match = lowerText.match(pattern);
+            if (match) {
+                const qty = parseInt(match[1].replace(/,/g, ''));
+                const product = PRODUCT_KEYWORDS[keyword];
+                
+                // בדוק שלא כבר הוספנו את המוצר הזה
+                if (!results.find(r => r.product === product)) {
+                    results.push({ product, qty, keyword });
+                }
+                break;
+            }
+        }
+    }
+    
+    // אם לא מצאנו עם כמויות, חפש מוצרים בלי כמות
+    if (results.length === 0) {
+        for (const keyword of sortedKeywords) {
+            if (lowerText.includes(keyword)) {
+                const product = PRODUCT_KEYWORDS[keyword];
+                if (!results.find(r => r.product === product)) {
+                    results.push({ product, qty: null, keyword });
+                }
+            }
+        }
+    }
+    
+    return results;
 }
 
 /**

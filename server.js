@@ -220,6 +220,23 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             content = buildResponse('quote_added', { item: calc.lastAdded, recommendation: rec });
             quickReplies = buildQuickReplies('quote_added');
             break;
+        
+        case 'multi_quote':
+            // הוספת כמה מוצרים בבת אחת
+            const addedItems = [];
+            for (const prod of data.products) {
+                if (prod.qty) {
+                    const multiCalc = calculate_custom_job(session.cart, {
+                        product_name: prod.product,
+                        qty: prod.qty
+                    });
+                    session.cart = multiCalc.updatedCart;
+                    addedItems.push(multiCalc.lastAdded);
+                }
+            }
+            content = buildResponse('multi_quote_added', { items: addedItems, cart: session.cart });
+            quickReplies = buildQuickReplies('quote_added');
+            break;
             
         case 'update_qty':
             const itemToUpdate = session.cart.find(i => i.product_name === data.product) || session.cart[session.cart.length-1];
