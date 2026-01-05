@@ -1,8 +1,11 @@
 /**
- * Pini Print Bot - Server V3.8
+ * Pini Print Bot - Server V3.9
  * ===========================
  * ארכיטקטורה: Server-Heavy, LLM-Light
- * כולל תיקון לקריסות סשן
+ * תיקונים:
+ * - באג היסטוריה ל-Gemini API
+ * - טיפול משופר בשגיאות LLM
+ * - ולידציה של מבנה ההיסטוריה
  */
 
 const express = require('express');
@@ -46,6 +49,39 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 const stats = { totalRequests: 0, llmCalls: 0, directHandled: 0, savings: 0 };
 
 // ============================================================
+// HELPER: וולידציה ותיקון היסטוריה
+// ============================================================
+function sanitizeHistory(history) {
+    if (!Array.isArray(history)) return [];
+    
+    return history.filter(item => {
+        // בדיקה שיש role תקין
+        if (!item || !item.role || !['user', 'model'].includes(item.role)) {
+            return false;
+        }
+        // בדיקה שיש parts תקין
+        if (!item.parts || !Array.isArray(item.parts) || item.parts.length === 0) {
+            return false;
+        }
+        // בדיקה שכל part הוא אובייקט עם text
+        return item.parts.every(part => 
+            part && typeof part === 'object' && typeof part.text === 'string' && part.text.length > 0
+        );
+    });
+}
+
+function createHistoryEntry(role, text) {
+    // יוצר entry תקין להיסטוריה
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        return null;
+    }
+    return {
+        role: role,
+        parts: [{ text: text.trim() }]
+    };
+}
+
+// ============================================================
 // MAIN CHAT ENDPOINT
 // ============================================================
 app.post('/api/chat', async (req, res) => {
@@ -55,12 +91,22 @@ app.post('/api/chat', async (req, res) => {
     try {
         const { message, userId, phone, customerName } = req.body;
         
-        console.log(`\n${'='.repeat(60)}`);
-        console.log(`💬 [Request #${stats.totalRequests}] User: "${message}"`);
+        // ולידציה בסיסית
+        if (!message || typeof message !== 'string' || message.trim().length === 0) {
+            return res.status(400).json({ error: 'Missing message', content: 'לא קיבלתי הודעה 🤔' });
+        }
         
-        // 1. ניהול סשן (כולל תיקון היסטוריה)
+        const cleanMessage = message.trim();
+        
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`💬 [Request #${stats.totalRequests}] User: "${cleanMessage}"`);
+        
+        // 1. ניהול סשן
         const session = getSession(userId);
-        if (!session.history) session.history = []; // הגנה כפולה
+        if (!session.history) session.history = [];
+        
+        // ניקוי היסטוריה פגומה (אם יש)
+        session.history = sanitizeHistory(session.history);
         
         // 2. זיהוי לקוח
         let customer = null;
@@ -70,18 +116,17 @@ app.post('/api/chat', async (req, res) => {
         } else if (session.customerPhone) {
             customer = getCustomerByPhone(session.customerPhone);
         } else {
-            // נסיון חילוץ מהטקסט
-            const extractedPhone = extractPhoneFromText(message);
+            const extractedPhone = extractPhoneFromText(cleanMessage);
             if (extractedPhone) {
-                customer = findOrCreateCustomer(extractedPhone, extractNameFromText(message));
+                customer = findOrCreateCustomer(extractedPhone, extractNameFromText(cleanMessage));
                 session.customerPhone = extractedPhone;
                 console.log(`   📱 Phone extracted: ${extractedPhone}`);
             }
         }
 
         // 3. זיהוי מצב רוח וסיווג
-        const mood = detectMood(message);
-        const classification = classifyMessage(message, { 
+        const mood = detectMood(cleanMessage);
+        const classification = classifyMessage(cleanMessage, { 
             cart: session.cart,
             pendingProduct: session.pendingProduct
         });
@@ -92,23 +137,28 @@ app.post('/api/chat', async (req, res) => {
         let responseData;
         
         if (!classification.needsLLM) {
-            // טיפול ישיר בשרת
             responseData = await handleDirectly(classification, session, userId, customer, mood);
             stats.directHandled++;
             stats.savings += 0.003;
             console.log(`⚡ Direct handling`);
         } else {
-            // העברה ל-LLM (כולל ידע עסקי)
-            responseData = await handleWithLLM(message, session, userId, customer);
+            responseData = await handleWithLLM(cleanMessage, session, userId, customer);
             stats.llmCalls++;
             console.log(`🤖 LLM handling`);
         }
         
-        // 5. עדכון היסטוריה (כאן הייתה הקריסה)
-        if (session.history) {
-            session.history.push({ role: 'user', parts: [{ text: message }] });
-            session.history.push({ role: 'model', parts: [{ text: responseData.content }] });
-            if (session.history.length > 20) session.history = session.history.slice(-20);
+        // 5. עדכון היסטוריה (רק אם יש תוכן תקין)
+        const userEntry = createHistoryEntry('user', cleanMessage);
+        const modelEntry = createHistoryEntry('model', responseData.content);
+        
+        if (userEntry && modelEntry) {
+            session.history.push(userEntry);
+            session.history.push(modelEntry);
+            
+            // שמירה על מקסימום 20 הודעות
+            if (session.history.length > 20) {
+                session.history = session.history.slice(-20);
+            }
         }
 
         // 6. יצירת דשבורד
@@ -126,13 +176,17 @@ app.post('/api/chat', async (req, res) => {
             quickReplies: responseData.quickReplies || [],
             meta: {
                 classification: classification.action,
-                mood
+                mood,
+                duration
             }
         });
         
     } catch (error) {
         console.error('❌ Server Error:', error);
-        res.status(500).json({ error: 'Internal error', content: 'אופס, קרתה תקלה רגעית. נסה שוב.' });
+        res.status(500).json({ 
+            error: 'Internal error', 
+            content: 'אופס, קרתה תקלה רגעית. נסה שוב! 🔄' 
+        });
     }
 });
 
@@ -153,7 +207,6 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             break;
             
         case 'quote':
-            // חישוב מחיר
             const calc = calculate_custom_job(session.cart, {
                 product_name: data.product,
                 qty: data.qty,
@@ -162,7 +215,6 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             });
             session.cart = calc.updatedCart;
             
-            // המלצה
             const rec = generateSmartRecommendation(data.product, data.qty, { customer, cart: session.cart });
             
             content = buildResponse('quote_added', { item: calc.lastAdded, recommendation: rec });
@@ -170,31 +222,34 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             break;
             
         case 'update_qty':
-            // לוגיקה לעדכון כמות...
             const itemToUpdate = session.cart.find(i => i.product_name === data.product) || session.cart[session.cart.length-1];
             if (itemToUpdate) {
                 const oldQty = itemToUpdate.qty;
                 const upCalc = calculate_custom_job(session.cart, {
                     product_name: itemToUpdate.product_name,
                     qty: data.qty,
-                    paper_type: itemToUpdate.paper_type // שומר על הנייר המקורי
+                    paper_type: itemToUpdate.paper_type
                 });
                 session.cart = upCalc.updatedCart;
                 content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
             } else {
-                content = "לא מצאתי את הפריט לעדכון.";
+                content = "לא מצאתי את הפריט לעדכון. מה תרצה לשנות?";
             }
             quickReplies = buildQuickReplies('cart_status');
             break;
             
         case 'remove':
             const removed = removeFromCart(userId, data.product);
-            content = removed ? buildResponse('item_removed', { productName: data.product }) : "לא מצאתי את הפריט למחיקה.";
+            content = removed 
+                ? buildResponse('item_removed', { productName: data.product }) 
+                : "לא מצאתי את הפריט למחיקה. תבדוק מה יש בעגלה?";
+            quickReplies = buildQuickReplies('cart_status');
             break;
             
         case 'clear':
             clearCart(userId);
             content = buildResponse('cart_cleared');
+            quickReplies = buildQuickReplies('greeting');
             break;
             
         case 'status':
@@ -203,10 +258,14 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             break;
             
         case 'send_quote':
-            content = buildResponse('send_quote', { cart: session.cart, total: session.cart.reduce((s, i) => s + i.client_price, 0) });
+            const total = session.cart.reduce((s, i) => s + (i.client_price || 0), 0);
+            content = buildResponse('send_quote', { cart: session.cart, total });
+            quickReplies = buildQuickReplies('send_quote');
             break;
             
         case 'quote_incomplete':
+            // שמירת המוצר הממתין
+            session.pendingProduct = data.product;
             content = buildResponse('ask_quantity', { product: data.product });
             quickReplies = buildQuickReplies('ask_quantity');
             break;
@@ -217,56 +276,148 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             break;
             
         default:
-            content = "לא הבנתי בדיוק, אפשר לנסח שוב?";
+            content = "לא הבנתי בדיוק, אפשר לנסח אחרת? 🤔";
+            quickReplies = buildQuickReplies('greeting');
     }
     
     return { content, quickReplies };
 }
 
 // ============================================================
-// LLM HANDLER
+// LLM HANDLER (עם טיפול משופר בשגיאות)
 // ============================================================
 async function handleWithLLM(message, session, userId, customer) {
-    const systemPrompt = generateSystemPrompt(userId); // שימוש בפרומפט החכם החדש
+    // בניית system prompt
+    let systemPrompt;
+    try {
+        systemPrompt = generateSystemPrompt(userId);
+    } catch (e) {
+        systemPrompt = getDefaultSystemPrompt();
+    }
     
-    const chat = model.startChat({
-        history: [
-            { role: "user", parts: [{ text: systemPrompt }] },
-            { role: "model", parts: [{ text: "הבנתי. אני פיני, הבוט של דפוס בית יצחק. אעזור ללקוח." }] },
-            ...session.history.slice(-6) // הקשר אחרון
-        ]
-    });
+    // ניקוי היסטוריה לפני שליחה ל-API
+    const cleanHistory = sanitizeHistory(session.history);
+    
+    // בניית היסטוריה ל-Gemini
+    const chatHistory = [
+        { role: "user", parts: [{ text: systemPrompt }] },
+        { role: "model", parts: [{ text: "הבנתי! אני פיני, הבוט של דפוס בית יצחק. אשמח לעזור ללקוחות שלנו. 😊" }] },
+        ...cleanHistory.slice(-6) // רק 6 הודעות אחרונות
+    ];
     
     try {
+        const chat = model.startChat({ history: chatHistory });
         const result = await chat.sendMessage(message);
         const responseText = result.response.text();
         
-        // בניית תשובה מסודרת דרך ה-Builder
-        const finalContent = buildResponse('chat', { llmResponse: responseText });
-        const quickReplies = buildQuickReplies('chat'); // כפתורי ניווט כלליים
+        if (!responseText || responseText.trim().length === 0) {
+            throw new Error('Empty response from LLM');
+        }
         
-        return { content: responseText, quickReplies };
+        const quickReplies = buildQuickReplies('chat');
+        return { content: responseText.trim(), quickReplies };
+        
     } catch (e) {
-        console.error("LLM Error:", e);
-        return { content: "יש לי קצת עומס כרגע, נסה שוב עוד רגע. 😅" };
+        console.error("LLM Error:", e.message || e);
+        
+        // תשובה חלופית חכמה
+        const fallbackResponse = generateFallbackResponse(message);
+        return { 
+            content: fallbackResponse, 
+            quickReplies: buildQuickReplies('greeting') 
+        };
     }
+}
+
+// תשובה חלופית כשה-LLM נכשל
+function generateFallbackResponse(message) {
+    const lowerMsg = message.toLowerCase();
+    
+    // זיהוי בסיסי של כוונה
+    if (lowerMsg.includes('מחיר') || lowerMsg.includes('עולה')) {
+        return "אשמח לתת לך הצעת מחיר! ספר לי מה תרצה להדפיס וכמה עותקים. 📋";
+    }
+    if (lowerMsg.includes('שאל') || lowerMsg.includes('שאלה')) {
+        return "בטח! שאל אותי מה שתרצה על שירותי הדפוס שלנו. 💬";
+    }
+    if (lowerMsg.includes('עזר') || lowerMsg.includes('עזרה')) {
+        return "אני כאן לעזור! אפשר להזמין פליירים, כרטיסי ביקור, רולאפים, הזמנות ועוד. במה להתחיל?";
+    }
+    if (lowerMsg.includes('קטלוג') || lowerMsg.includes('מוצר')) {
+        return "יש לנו מגוון רחב: פליירים, כרטיסי ביקור, הזמנות לאירועים, רולאפים, מדבקות, חוברות ועוד! מה מעניין אותך?";
+    }
+    
+    // ברירת מחדל
+    return "אני פיני מדפוס בית יצחק! 🖨️ איך אפשר לעזור לך היום? אפשר להזמין הדפסות, לקבל הצעת מחיר או לשאול שאלות.";
+}
+
+// System prompt ברירת מחדל
+function getDefaultSystemPrompt() {
+    return `אתה פיני, נציג שירות לקוחות של דפוס בית יצחק.
+תפקידך: לעזור ללקוחות להזמין הדפסות ולקבל הצעות מחיר.
+סגנון: ידידותי, מקצועי, ישראלי. תשובות קצרות וברורות.
+מוצרים: פליירים, כרטיסי ביקור, הזמנות, רולאפים, מדבקות, חוברות, פוסטרים.
+חשוב: אל תמציא מחירים! תמיד תבקש פרטים (כמות, גודל, סוג נייר) לפני הצעת מחיר.`;
 }
 
 // ============================================================
 // API ROUTES
 // ============================================================
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '3.8' }));
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        version: '3.9',
+        stats: {
+            totalRequests: stats.totalRequests,
+            directHandled: stats.directHandled,
+            llmCalls: stats.llmCalls,
+            directRate: stats.totalRequests > 0 
+                ? Math.round((stats.directHandled / stats.totalRequests) * 100) + '%'
+                : '0%'
+        }
+    });
+});
 
-// PDF
+// PDF Generation
 app.post('/api/pdf', async (req, res) => {
     try {
-        const pdf = await generateQuotePDF(req.body.cart, req.body.customer || { name: 'לקוח' });
-        res.set({ 'Content-Type': 'application/pdf' });
+        const { cart, customer } = req.body;
+        
+        if (!cart || !Array.isArray(cart) || cart.length === 0) {
+            return res.status(400).json({ error: 'Empty cart' });
+        }
+        
+        const pdf = await generateQuotePDF(cart, customer || { name: 'לקוח' });
+        res.set({ 
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="Pini_Quote.pdf"'
+        });
         res.send(pdf);
     } catch (e) {
-        res.status(500).send('Error');
+        console.error('PDF Error:', e);
+        res.status(500).json({ error: 'PDF generation failed' });
     }
 });
 
+// Stats endpoint
+app.get('/api/stats', (req, res) => {
+    res.json({
+        ...stats,
+        directRate: stats.totalRequests > 0 
+            ? ((stats.directHandled / stats.totalRequests) * 100).toFixed(1) + '%'
+            : '0%',
+        estimatedSavings: `$${stats.savings.toFixed(2)}`
+    });
+});
+
+// ============================================================
+// START SERVER
+// ============================================================
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`🚀 Pini Bot Server V3.9`);
+    console.log(`   Port: ${PORT}`);
+    console.log(`   Mode: Server-Heavy, LLM-Light`);
+    console.log(`${'='.repeat(50)}\n`);
+});

@@ -2,308 +2,592 @@
  * Message Classifier - Pini Print Bot
  * ====================================
  * מסווג הודעות ללא LLM - חוסך 80% מהקריאות ל-Gemini
- * גרסה מתוקנת V3.7: מילון מורחב ("Fat Dictionary") + Safety Valve
+ * 
+ * Actions:
+ *   - quote: בקשה להצעת מחיר (יש מוצר + כמות)
+ *   - update_qty: שינוי כמות (יש מספר + הקשר לעגלה)
+ *   - remove: הסרת פריט
+ *   - clear: ניקוי עגלה
+ *   - status: שאלה על מצב העגלה
+ *   - design_check: שאלה לגבי עיצוב
+ *   - chat: שיחה חופשית (צריך LLM)
  */
-
-// ... (שאר הקבועים נשארים אותו דבר) ...
 
 // === מילות מפתח למוצרים ===
 const PRODUCT_KEYWORDS = {
     // כרטיסי ביקור
-    'כרטיס ביקור': 'bc', 'כרטיסי ביקור': 'bc', 'כרטיסים': 'bc', 
-    'ביזנס קארד': 'bc', 'business card': 'bc', 'business cards': 'bc',
+    'כרטיס ביקור': 'bc',
+    'כרטיסי ביקור': 'bc', 
+    'כרטיסים': 'bc',
+    'ביזנס קארד': 'bc',
+    'business card': 'bc',
     
-    // כרטיסי הושבה
-    'כרטיסי הושבה': 'place_card', 'כרטיס הושבה': 'place_card', 
-    'הושבה': 'place_card', 'place card': 'place_card',
+    // כרטיסי הושבה (place cards)
+    'כרטיסי הושבה': 'place_card',
+    'כרטיס הושבה': 'place_card',
+    'הושבה': 'place_card',
+    'place card': 'place_card',
     
     // פליירים
-    'פלייר': 'flyer', 'פליירים': 'flyer', 'פלאייר': 'flyer', 
-    'פלאיירים': 'flyer', 'עלון': 'flyer', 'עלונים': 'flyer', 
-    'flyer': 'flyer', 'flyers': 'flyer',
+    'פלייר': 'flyer',
+    'פליירים': 'flyer',
+    'פלאייר': 'flyer',
+    'פלאיירים': 'flyer',
+    'עלון': 'flyer',
+    'עלונים': 'flyer',
+    'דף פרסום': 'flyer',
+    'לחלוקה': 'flyer',
+    'flyer': 'flyer',
+    'flyers': 'flyer',
     
     // הזמנות
-    'הזמנה': 'invitation', 'הזמנות': 'invitation', 
-    'הזמנה לחתונה': 'invitation', 'invitation': 'invitation',
+    'הזמנה': 'invitation',
+    'הזמנות': 'invitation',
+    'הזמנה לחתונה': 'invitation',
+    'הזמנה לאירוע': 'invitation',
+    'הזמנה לבר מצווה': 'invitation',
+    'הזמנה לברית': 'invitation',
+    'invitation': 'invitation',
     
     // רולאפ / באנרים
-    'רולאפ': 'rollup', 'רול אפ': 'rollup', 'רולאפים': 'rollup', 
-    'באנר': 'rollup', 'באנרים': 'rollup', 'roll up': 'rollup',
+    'רולאפ': 'rollup',
+    'רול אפ': 'rollup',
+    'רולאפים': 'rollup',
+    'באנר': 'rollup',
+    'באנרים': 'rollup',
+    'שמשונית': 'banner',
+    'שמשוניות': 'banner',
+    'roll up': 'rollup',
+    'rollup': 'rollup',
+    'banner': 'rollup',
     
     // קנבס
-    'קנבס': 'canvas', 'הדפסה על קנבס': 'canvas', 
-    'תמונה על קנבס': 'canvas', 'canvas': 'canvas',
+    'קנבס': 'canvas',
+    'הדפסה על קנבס': 'canvas',
+    'תמונה על קנבס': 'canvas',
+    'canvas': 'canvas',
     
     // מדבקות
-    'מדבקה': 'sticker', 'מדבקות': 'sticker', 
-    'סטיקר': 'sticker', 'סטיקרים': 'sticker',
+    'מדבקה': 'sticker',
+    'מדבקות': 'sticker',
+    'סטיקר': 'sticker',
+    'סטיקרים': 'sticker',
+    'sticker': 'sticker',
+    'stickers': 'sticker',
     
     // חוברות
-    'חוברת': 'booklet', 'חוברות': 'booklet', 
-    'קטלוג': 'booklet', 'booklet': 'booklet',
+    'חוברת': 'booklet',
+    'חוברות': 'booklet',
+    'קטלוג': 'booklet',
+    'קטלוגים': 'booklet',
+    'ברושור': 'booklet',
+    'booklet': 'booklet',
+    'catalog': 'booklet',
+    
+    // פרוספקטים
+    'פרוספקט': 'brochure',
+    'פרוספקטים': 'brochure',
+    'brochure': 'brochure',
     
     // פולדרים
-    'פולדר': 'folder', 'פולדרים': 'folder', 'folder': 'folder',
+    'פולדר': 'folder',
+    'פולדרים': 'folder',
+    'תיקייה': 'folder',
+    'תיקיות': 'folder',
+    'folder': 'folder',
     
-    // פוסטרים
-    'פוסטר': 'poster', 'פוסטרים': 'poster', 'poster': 'poster',
+    // פוסטרים ושלטים
+    'פוסטר': 'poster',
+    'פוסטרים': 'poster',
+    'שלט': 'poster',
+    'שלטים': 'poster',
+    'כרזה': 'poster',
+    'כרזות': 'poster',
+    'poster': 'poster',
     
-    // ניירת ומעטפות
-    'נייר מכתבים': 'letterhead', 
-    'מעטפה': 'envelope', 'מעטפות': 'envelope'
+    // ניירת משרדית
+    'נייר מכתבים': 'letterhead',
+    'ניירת משרדית': 'letterhead',
+    'דף לוגו': 'letterhead',
+    'letterhead': 'letterhead',
+    
+    // מעטפות
+    'מעטפה': 'envelope',
+    'מעטפות': 'envelope',
+    'envelope': 'envelope'
 };
 
-// === מילות פעולה (מורחב לכיסוי מלא) ===
+// === מילות פעולה ===
 const ACTION_KEYWORDS = {
     remove: [
         'תמחק', 'מחק', 'תוריד', 'הורד', 'הסר', 'תסיר', 
-        'תבטל', 'בטל', 'הוצא', 'וותר', 'עזוב', 'לא צריך'
+        'תבטל', 'בטל', 'הוצא', 'תוציא', 'תוריד מהעגלה',
+        'לא צריך', 'לא רוצה', 'בלי ה', 'בלי', 'לא רוצה את ה',
+        'וותר', 'ויתור', 'תוותר', 'ויתרתי', 'לוותר'
     ],
     clear: [
-        'נקה עגלה', 'רוקן עגלה', 'נקה הכל', 'מחק הכל', 
-        'התחל מחדש', 'אפס עגלה', 'תאפס', 'עזוב הכל', 'הכל מחדש'
+        'נקה עגלה', 'רוקן עגלה', 'נקה הכל', 'מחק הכל',
+        'התחל מחדש', 'התחלה מחדש', 'אפס עגלה', 'עגלה חדשה',
+        'תרוקן', 'תנקה הכל', 'עזוב הכל', 'נתחיל מחדש',
+        'תתחיל מחדש', 'מההתחלה', 'תאפס'
     ],
     update: [
-        'שנה ל', 'תשנה ל', 'עדכן', 'במקום', 'תחליף', 
-        'תעלה ל', 'תוריד ל', 'רק ל', 'בעצם'
+        'שנה ל', 'תשנה ל', 'עדכן ל', 'תעדכן ל', 
+        'במקום', 'תחליף ל', 'החלף ל',
+        'תעלה ל', 'תוריד ל', 'תגדיל ל', 'תקטין ל',
+        'תעלה את הכמות', 'תוריד את הכמות'
     ],
     status: [
-        'מה בעגלה', 'סיכום', 'סה"כ', 'כמה יוצא', 'מה המחיר', 
-        'מה המצב', 'דשבורד', 'סטטוס', 'כמה זה עולה', 'כמה עולה',
-        'מה יש לי', 'מה יש בעגלה', 'תראה לי'
+        'מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'תראה עגלה',
+        'סיכום', 'סה"כ', 'כמה יוצא', 'מה המחיר הכולל',
+        'מה הזמנתי', 'מה ביקשתי', 'מה יש לי בעגלה',
+        'הראה לי את העגלה', 'מה בהזמנה', 'מה יש בהזמנה',
+        'כמה זה עולה', 'כמה עולה', 'מה המחיר', 'מה העלות',
+        'כמה זה', 'תראה לי', 'מה יש', 'מה הסכום'
     ],
     design: [
-        'עיצוב', 'קובץ', 'pdf', 'לוגו', 'תמונה', 
-        'מוכן להדפסה', 'איך שולחים', 'יש לי קובץ'
+        'עיצוב', 'קובץ', 'pdf', 'לוגו', 'תמונה',
+        'יש לי קובץ', 'אין לי קובץ', 'צריך עיצוב',
+        'מוכן להדפסה', 'איך שולחים קובץ', 'איך אני שולח'
     ],
     send_quote: [
-        'שלח הצעת', 'שלח לי הצעה', 'שלח pdf', 'תייצר הצעה', 
-        'הצעת מחיר', 'אפשר הצעה', 'זהו תשלח', 'סיימתי תשלח', 
-        'שלח הזמנה', 'תארוז לי', 'תזמין', 'שלח הצעה', 
-        'תשלח הצעה', 'תשלח לי'
+        'שלח הצעת', 'שלח לי הצעה', 'שלח לי הצעת', 'שלח pdf', 'שלח לי pdf',
+        'תשלח הצעת', 'תשלח לי הצעה', 'תשלח לי הצעת', 'תשלח pdf',
+        'תייצר הצעה', 'תייצר הצעת', 'תייצר pdf', 
+        'הצעת מחיר בבקשה', 'הצעה בבקשה',
+        'אפשר הצעה', 'אפשר הצעת', 'תפיק הצעה', 'הפק הצעה',
+        'תכין הצעה', 'תכין הצעת', 'תעשה הצעה', 'תעשה הצעת',
+        'לשלוח הצעה', 'לייצר הצעה', 'שלח הצעה',
+        'זהו תשלח', 'זהו שלח', 'סיימתי תשלח', 'סיימתי שלח'
     ],
     greeting: [
-        'שלום', 'היי', 'הי', 'אהלן', 'מה קורה', 
-        'מה נשמע', 'בוקר טוב', 'ערב טוב', 'hi', 'hello'
+        'שלום', 'היי', 'הי', 'אהלן', 'מה קורה', 'מה נשמע',
+        'בוקר טוב', 'ערב טוב', 'צהריים טובים'
     ]
 };
 
+// === מילות חומרים (לזיהוי בהקשר) ===
 const MATERIAL_KEYWORDS = {
-    'כרומו': 'chromo', 'מט': 'matte', 'מבריק': 'gloss', 
-    'נטול עץ': 'offset', 'ממוחזר': 'recycled', 'פנינה': 'pearl', 
-    'טקסטורה': 'texture', 'ויניל': 'vinyl', 'קנבס': 'canvas', 
-    'שמשונית': 'pvc_banner', 'קאפה': 'kappa',
-    '135 גרם': '135', '170 גרם': '170', '250 גרם': '250', 
-    '300 גרם': '300', '350 גרם': '350'
+    // ניירות
+    'כרומו': 'chromo',
+    'מט': 'matte',
+    'מבריק': 'gloss',
+    'נטול עץ': 'offset',
+    'ממוחזר': 'recycled',
+    'פנינה': 'pearl',
+    'טקסטורה': 'texture',
+    'פשתן': 'texture',
+    
+    // פורמט רחב
+    'ויניל': 'vinyl',
+    'קנבס כותנה': 'canvas_cotton',
+    'קנבס': 'canvas',
+    'שמשונית': 'pvc_banner',
+    'קאפה': 'kappa',
+    
+    // משקלים
+    '135 גרם': '135',
+    '170 גרם': '170',
+    '250 גרם': '250',
+    '300 גרם': '300',
+    '350 גרם': '350'
 };
 
+// === מילות גימור ===
 const FINISHING_KEYWORDS = {
-    'למינציה': 'lamination', 'למינציה מט': 'lami_matte', 
-    'למינציה מבריקה': 'lami_gloss', 'סקודיקס': 'scodix', 
-    'הבלטה': 'scodix', 'פויל': 'foil', 'הטבעה': 'foil', 
-    'פינות עגולות': 'round_corners', 'קיפול': 'fold', 'ביג': 'crease'
+    'למינציה': 'lamination',
+    'למינציה מט': 'lami_matte',
+    'למינציה מבריקה': 'lami_gloss',
+    'למינציה משי': 'lami_silk',
+    'מגע משי': 'lami_silk',
+    'לכה סלקטיבית': 'scodix',
+    'סקודיקס': 'scodix',
+    'הבלטה': 'scodix',
+    'פויל': 'foil',
+    'הטבעה': 'foil',
+    'זהב': 'foil_gold',
+    'כסף': 'foil_silver',
+    'פינות עגולות': 'round_corners',
+    'קיפול': 'fold',
+    'ביג': 'crease'
 };
 
 /**
  * פונקציה ראשית: סיווג הודעה
+ * @param {string} message - הודעת המשתמש
+ * @param {object} context - הקשר (עגלה נוכחית, היסטוריה, pendingProduct)
+ * @returns {object} - תוצאת הסיווג
  */
 function classifyMessage(message, context = {}) {
     const text = message.toLowerCase().trim();
     const cart = context.cart || [];
-    const pendingProduct = context.pendingProduct || null;
-    
-    // נתונים בסיסיים שיוחזרו בכל מקרה
-    const baseData = { rawText: message };
+    const pendingProduct = context.pendingProduct || null; // מוצר שממתין לכמות
     
     console.log(`\n🔍 [Classifier] Analyzing: "${message}"`);
-
-    // === 🛡️ שסתום ביטחון חכם (Smart Safety Valve) ===
+    if (pendingProduct) {
+        console.log(`   📌 Pending product: ${pendingProduct}`);
+    }
+    // === שלב 1: בדיקת פעולות מיוחדות ===
     
-    // 1. בדיקת ריבוי מוצרים (תמיד מסובך -> LLM)
-    const distinctProducts = countUniqueProducts(text);
-    if (distinctProducts.length > 1) {
-        console.log(`   🤖 Complex request (multiple products) -> LLM`);
-        return { action: 'chat', confidence: 0.8, needsLLM: true, data: baseData };
-    }
-
-    // 2. בדיקת תיקון עצמי ("בעצם") - רק אם המשפט ארוך!
-    const isCorrection = text.includes('בעצם') || text.includes('לא משנה') || text.includes('עזוב');
-    if (isCorrection && extractQuantity(text) && text.length > 30) {
-        console.log(`   🤖 Complex request (long correction) -> LLM`);
-        return { action: 'chat', confidence: 0.8, needsLLM: true, data: baseData };
-    }
-
-    // === זיהוי ישויות (מוצר וכמות) ===
-    const quantity = extractQuantity(text);
-    const explicitProduct = findProductInText(text, []); 
-    const contextProduct = findProductInText(text, cart);
-    const product = explicitProduct || contextProduct;
-
-    // === לוגיקה עסקית (לפי סדר חשיבות) ===
-
-    // 1. ניקוי
+    // ניקוי עגלה
     if (matchesAny(text, ACTION_KEYWORDS.clear)) {
         console.log(`   ✅ Action: CLEAR CART`);
-        return { action: 'clear', confidence: 0.95, needsLLM: false, data: baseData };
+        return {
+            action: 'clear',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
     }
     
-    // 2. בדיקת סגירה: רק אם אין כמות ומוצר באותו משפט (כדי לא לפספס "תעשה 100 ותשלח")
-    if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
-        if (!quantity || !explicitProduct) {
-            console.log(`   ✅ Action: SEND QUOTE`);
-            return { action: 'send_quote', confidence: 0.95, needsLLM: false, data: baseData };
-        }
-    }
-    
-    // 3. הסרה
-    if (matchesAny(text, ACTION_KEYWORDS.remove)) {
-        // אם יש מספרים במשפט הסרה - חשוד כמורכב -> LLM
-        if (extractQuantity(text)) return { action: 'chat', needsLLM: true, confidence: 0.7, data: baseData };
-
+    // הסרת פריט
+    const removeMatch = matchesAny(text, ACTION_KEYWORDS.remove);
+    if (removeMatch) {
         const productToRemove = findProductInText(text, cart);
         console.log(`   ✅ Action: REMOVE - ${productToRemove || 'unknown'}`);
-        return { action: 'remove', confidence: productToRemove ? 0.9 : 0.7, needsLLM: !productToRemove, data: { ...baseData, product: productToRemove } };
+        return {
+            action: 'remove',
+            confidence: productToRemove ? 0.90 : 0.70,
+            needsLLM: !productToRemove, // אם לא מצאנו מוצר ספציפי, נשאל את ה-LLM
+            data: { 
+                product: productToRemove,
+                rawText: text
+            }
+        };
     }
     
-    // 4. סטטוס
+    // שאילתת סטטוס - כולל "כמה זה עולה"
     if (matchesAny(text, ACTION_KEYWORDS.status)) {
         console.log(`   ✅ Action: STATUS`);
-        return { action: 'status', confidence: 0.95, needsLLM: false, data: baseData };
+        return {
+            action: 'status',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {}
+        };
     }
     
-    // 5. בדיקת עיצוב (עם הגנה מפני גימורים כמו "לוגו עם לכה")
-    const finishings = findFinishingInText(text);
-    if (matchesAny(text, ACTION_KEYWORDS.design) && finishings.length === 0) {
-        console.log(`   ✅ Action: DESIGN CHECK`);
-        return { action: 'design_check', confidence: 0.85, needsLLM: false, data: baseData };
-    }
-
-    // === קבלת החלטות לפי מוצר וכמות ===
+    // === שלב 2: בדיקת בקשת הצעת מחיר ===
     
-    // A. עדכון כמות / הוספה
-    if (quantity) {
-        // אם יש מוצר מפורש - זו הוספה/הצעה (אלא אם זה עדכון מובהק)
-        if (explicitProduct && !matchesAny(text, ACTION_KEYWORDS.update)) {
-             const material = findMaterialInText(text);
-             console.log(`   ✅ Action: QUOTE - ${explicitProduct} × ${quantity}`);
-             return { action: 'quote', confidence: 0.95, needsLLM: false, data: { ...baseData, product: explicitProduct, qty: quantity, material, finishing: finishings } };
-        }
-
-        // אחרת זה עדכון (או השלמה מ-Pending)
+    // חילוץ מספר (כמות)
+    const quantity = extractQuantity(text);
+    
+    // חילוץ מוצר
+    const product = findProductInText(text);
+    
+    // === חדש: טיפול במספר בלבד (עדכון כמות או השלמת quote_incomplete) ===
+    if (quantity && !product) {
+        // אם יש מוצר ממתין (מ-quote_incomplete קודם) - השלם אותו
         if (pendingProduct) {
-            console.log(`   ✅ Action: QUOTE (pending) - ${pendingProduct}`);
-            return { action: 'quote', confidence: 0.90, needsLLM: false, data: { ...baseData, product: pendingProduct, qty: quantity, fromPending: true } };
+            console.log(`   ✅ Action: QUOTE (completing pending) - ${pendingProduct} × ${quantity}`);
+            return {
+                action: 'quote',
+                confidence: 0.90,
+                needsLLM: false,
+                data: {
+                    product: pendingProduct,
+                    qty: quantity,
+                    fromPending: true
+                }
+            };
         }
-
-        // עדכון פריט קיים
-        const productToUpdate = contextProduct || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
-        console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
-        return { action: 'update_qty', confidence: 0.90, needsLLM: false, data: { ...baseData, product: productToUpdate, qty: quantity } };
+        
+        // אחרת, אם יש עגלה - עדכן את הפריט האחרון
+        if (cart.length > 0) {
+            const lastItem = cart[cart.length - 1];
+            console.log(`   ✅ Action: UPDATE QTY - ${lastItem?.product_name} → ${quantity}`);
+            return {
+                action: 'update_qty',
+                confidence: 0.85,
+                needsLLM: false,
+                data: {
+                    product: lastItem?.product_name,
+                    qty: quantity,
+                    inferred: true
+                }
+            };
+        }
     }
     
-    // B. מוצר ללא כמות (ויש מוצר מפורש)
+    // עדכון כמות עם מילת פעולה
+    if (quantity && matchesAny(text, ACTION_KEYWORDS.update)) {
+        const productToUpdate = findProductInText(text, cart) || (cart.length > 0 ? cart[cart.length - 1]?.product_name : null);
+        console.log(`   ✅ Action: UPDATE QTY - ${productToUpdate} → ${quantity}`);
+        return {
+            action: 'update_qty',
+            confidence: 0.90,
+            needsLLM: false,
+            data: {
+                product: productToUpdate,
+                qty: quantity
+            }
+        };
+    }
+    
+    // הצעת מחיר חדשה (יש מוצר וכמות)
+    if (product && quantity) {
+        const material = findMaterialInText(text);
+        const finishing = findFinishingInText(text);
+        
+        console.log(`   ✅ Action: QUOTE - ${product} × ${quantity}`);
+        if (material) console.log(`      Material: ${material}`);
+        if (finishing.length) console.log(`      Finishing: ${finishing.join(', ')}`);
+        
+        return {
+            action: 'quote',
+            confidence: 0.95,
+            needsLLM: false,
+            data: {
+                product,
+                qty: quantity,
+                material,
+                finishing
+            }
+        };
+    }
+    
+    // יש מוצר בלי כמות - נשאל (ונשמור כ-pending)
     if (product && !quantity) {
         console.log(`   ⚠️ Action: QUOTE (missing qty) - ${product}`);
-        return { action: 'quote_incomplete', confidence: 0.80, needsLLM: false, data: { ...baseData, product, missing: 'qty' } };
+        return {
+            action: 'quote_incomplete',
+            confidence: 0.80,
+            needsLLM: false,
+            data: {
+                product,
+                missing: 'qty'
+            }
+        };
     }
     
-    // 6. ברכה (רק אם קצר)
+    // === שלב 3: בקשת שליחת הצעה ===
+    if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
+        console.log(`   ✅ Action: SEND QUOTE (PDF)`);
+        return {
+            action: 'send_quote',
+            confidence: 0.90,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // === שלב 3.5: שאלות עיצוב ===
+    if (matchesAny(text, ACTION_KEYWORDS.design)) {
+        console.log(`   ✅ Action: DESIGN CHECK`);
+        return {
+            action: 'design_check',
+            confidence: 0.85,
+            needsLLM: false,
+            data: {}
+        };
+    }
+    
+    // === שלב 3.6: ברכות ===
     if (matchesAny(text, ACTION_KEYWORDS.greeting) && text.length < 20) {
-        return { action: 'greeting', confidence: 0.90, needsLLM: false, data: baseData };
+        console.log(`   ✅ Action: GREETING`);
+        return {
+            action: 'greeting',
+            confidence: 0.90,
+            needsLLM: false,
+            data: {}
+        };
     }
     
-    // 7. ברירת מחדל -> LLM
+    // === שלב 4: ברירת מחדל - צריך LLM ===
     console.log(`   🤖 Action: CHAT (needs LLM)`);
-    return { action: 'chat', confidence: 0.50, needsLLM: true, data: { ...baseData, detectedProduct: product, detectedQty: quantity } };
+    return {
+        action: 'chat',
+        confidence: 0.50,
+        needsLLM: true,
+        data: {
+            detectedProduct: product,
+            detectedQty: quantity
+        }
+    };
 }
 
 // === פונקציות עזר ===
 
+/**
+ * בודק אם הטקסט מכיל אחת מהמילים ברשימה
+ */
 function matchesAny(text, keywords) {
     return keywords.some(kw => text.includes(kw));
 }
 
-function countUniqueProducts(text) {
-    const found = new Set();
-    const lowerText = text.toLowerCase();
-    for (const [keyword, key] of Object.entries(PRODUCT_KEYWORDS)) {
-        if (lowerText.includes(keyword)) found.add(key);
-    }
-    return Array.from(found);
-}
-
+/**
+ * חילוץ מספר מהטקסט
+ * V3.9 - עם סינון מידות, משקלים, וגדלי רולאפ
+ */
 function extractQuantity(text) {
-    // 1. ניקוי טלפונים אגרסיבי
-    let cleanText = text.replace(/05\d[- ]?\d{7}/g, '').replace(/05\d{8}/g, '').replace(/\+972\d+/g, '');
+    // === שלב 1: ניקוי מידות וגדלים לפני חילוץ ===
+    let cleanText = text;
     
-    // 2. ניקוי ביטויים מטעים
-    const excludePatterns = [/מחשבה שנייה/, /פעם שנייה/, /שנייה אחת/, /רגע שני/];
-    for (const pattern of excludePatterns) cleanText = cleanText.replace(pattern, '');
+    // 1. גדלי רולאפ: "85x200", "100×200", "85*200"
+    cleanText = cleanText.replace(/\d+\s*[x×*]\s*\d+/gi, ' ');
     
+    // 2. משקלים: "170 גרם", "350 גר'", "300g" (בלי \b כי לא עובד עם עברית)
+    cleanText = cleanText.replace(/\d+\s*(?:גרם|גר'|גר|gr|g)(?:\s|$)/gi, ' ');
+    
+    // 3. מידות אורך: "85 ס"מ", "200 סמ", "10 מטר", "50 ס״מ"
+    cleanText = cleanText.replace(/\d+\s*(?:ס"מ|ס״מ|סמ|ס'מ|cm|מ"מ|מ״מ|מטר|mm|m)(?:\s|$)/gi, ' ');
+    
+    // 4. גדלי נייר: A4, A5, B2, DL
+    cleanText = cleanText.replace(/(?:^|\s)[ABab][0-6](?:\s|$)/g, ' ');
+    cleanText = cleanText.replace(/(?:^|\s)DL(?:\s|$)/gi, ' ');
+    
+    // 5. DPI/רזולוציה: "300 dpi", "150 DPI"
+    cleanText = cleanText.replace(/\d+\s*(?:dpi|DPI)(?:\s|$)/gi, ' ');
+    
+    // מילים למספרים בעברית - רק כשהן מתארות כמות
     const hebrewNumbers = {
-        'אחד': 1, 'אחת': 1, 'יחיד': 1, 'שניים': 2, 'שתיים': 2, 'שני': 2, 'זוג': 2,
-        'שלושה': 3, 'שלוש': 3, 'ארבעה': 4, 'ארבע': 4, 'חמישה': 5, 'חמש': 5,
-        'עשר': 10, 'עשרה': 10, 'עשרים': 20, 'חמישים': 50, 'מאה': 100, 'אלף': 1000
+        'אחד': 1, 'אחת': 1, 'יחיד': 1, 'יחידה': 1,
+        'שניים': 2, 'שתיים': 2, 'שני': 2, 'זוג': 2,
+        'שלושה': 3, 'שלוש': 3,
+        'ארבעה': 4, 'ארבע': 4,
+        'חמישה': 5, 'חמש': 5,
+        'עשר': 10, 'עשרה': 10,
+        'עשרים': 20,
+        'חמישים': 50,
+        'מאה': 100,
+        'מאתיים': 200,
+        'חמש מאות': 500,
+        'אלף': 1000
     };
     
-    for (const [word, num] of Object.entries(hebrewNumbers)) {
-        if (new RegExp(`(^|\\s)${word}(\\s|$)`).test(cleanText)) return num;
+    // מילים שמכילות מספרים אבל לא מייצגות כמות
+    // "שנייה" = second (time), "ראשון/שלישי" = ordinals
+    const excludePatterns = [
+        /מחשבה שנייה/,    // "במחשבה שנייה" = on second thought
+        /פעם שנייה/,      // "פעם שנייה" = second time
+        /שנייה אחת/,      // "שנייה אחת" = one second
+        /רגע שני/,        // למקרה שיש
+    ];
+    
+    // בדוק אם יש תבניות להדרה
+    for (const pattern of excludePatterns) {
+        if (pattern.test(cleanText)) {
+            cleanText = cleanText.replace(pattern, '');
+        }
     }
     
+    // קודם בדוק מילים בעברית
+    for (const [word, num] of Object.entries(hebrewNumbers)) {
+        // בדוק שזו מילה עצמאית ולא חלק ממילה אחרת
+        const regex = new RegExp(`(^|\\s)${word}(\\s|$)`);
+        if (regex.test(cleanText)) {
+            return num;
+        }
+    }
+    
+    // תבניות מספרים - חיפוש גדול יותר קודם
     const patterns = [
-        /(\d{1,3}(?:,\d{3})+)/, 
-        /(\d+)\s*(?:יחידות|יח'|פריטים)/,
-        /(\d+)\s*(?:כרטיס|פלייר|הזמנ|רולאפ)/,
-        /ל[- ]?(\d+)/,
-        /^(\d+)$/,
-        /(\d+)/
+        /(\d{1,3}(?:,\d{3})+)/, // 1,000 or 10,000 or 100,000,000
+        /(\d+)\s*(?:יחידות|יח'|יח|פריטים|עותקים|קלפים)/,
+        /(\d+)\s*(?:כרטיס|פלייר|עלון|הזמנ|מדבק|חוברו|פוסטר|רולאפ|באנר)/,
+        /(?:כמות|qty|כמות של)\s*:?\s*(\d+)/i,
+        /ל[- ]?(\d+)/,  // "ל-500" or "ל 500"
+        /^(\d+)$/,      // רק מספר
+        /(\d+)/         // מספר כללי - בסוף
     ];
     
     for (const pattern of patterns) {
         const match = cleanText.match(pattern);
         if (match) {
+            // נקה פסיקים והמר למספר
             const num = parseInt(match[1].replace(/,/g, ''));
-            if (num >= 1 && num <= 100000000) return num;
+            // בדיקת סבירות - עד 100 מיליון
+            if (num >= 1 && num <= 100000000) {
+                return num;
+            }
         }
     }
+    
     return null;
 }
 
+/**
+ * מציאת מוצר בטקסט
+ */
 function findProductInText(text, cart = []) {
     const lowerText = text.toLowerCase();
-    // בדיקה בעגלה קודם (Context)
-    if (cart && cart.length > 0) {
-        for (const item of cart) {
-            const itemName = item.product_name?.toLowerCase() || '';
-            if (lowerText.includes(itemName) || lowerText.includes(itemName.replace(/ים$/, ''))) return item.product_name;
+    
+    // קודם בודק מוצרים בעגלה (לזיהוי "תמחק את הפליירים")
+    for (const item of cart) {
+        const itemName = item.product_name?.toLowerCase() || '';
+        if (lowerText.includes(itemName) || 
+            lowerText.includes(itemName.replace(/ים$/, '')) || // צורת יחיד
+            lowerText.includes(itemName.replace(/ות$/, 'ה'))) { // צורת יחיד נקבה
+            return item.product_name;
         }
     }
-    // בדיקה כללית
-    const sortedKeywords = Object.keys(PRODUCT_KEYWORDS).sort((a, b) => b.length - a.length);
+    
+    // אחרי זה בודק מילות מפתח
+    // ממיין לפי אורך יורד כדי לתפוס "כרטיס ביקור" לפני "כרטיס"
+    const sortedKeywords = Object.keys(PRODUCT_KEYWORDS)
+        .sort((a, b) => b.length - a.length);
+    
     for (const keyword of sortedKeywords) {
-        if (lowerText.includes(keyword)) return PRODUCT_KEYWORDS[keyword];
+        if (lowerText.includes(keyword)) {
+            return PRODUCT_KEYWORDS[keyword];
+        }
     }
+    
     return null;
 }
 
+/**
+ * מציאת חומר בטקסט
+ */
 function findMaterialInText(text) {
     const lowerText = text.toLowerCase();
+    
     for (const [keyword, value] of Object.entries(MATERIAL_KEYWORDS)) {
-        if (lowerText.includes(keyword)) return value;
+        if (lowerText.includes(keyword)) {
+            return value;
+        }
     }
+    
     return null;
 }
 
+/**
+ * מציאת גימורים בטקסט (יכול להיות יותר מאחד)
+ */
 function findFinishingInText(text) {
     const lowerText = text.toLowerCase();
     const found = [];
+    
     for (const [keyword, value] of Object.entries(FINISHING_KEYWORDS)) {
-        if (lowerText.includes(keyword)) found.push(value);
+        if (lowerText.includes(keyword)) {
+            found.push(value);
+        }
     }
+    
     return found;
 }
 
-function getProductHebrewName(key) { return key; }
+/**
+ * קבלת שם מוצר בעברית
+ */
+function getProductHebrewName(productKey) {
+    const names = {
+        'bc': 'כרטיסי ביקור',
+        'flyer': 'פליירים',
+        'invitation': 'הזמנות',
+        'rollup': 'רולאפ',
+        'banner': 'שמשונית',
+        'canvas': 'קנבס',
+        'sticker': 'מדבקות',
+        'booklet': 'חוברת',
+        'brochure': 'פרוספקט',
+        'folder': 'פולדר',
+        'poster': 'פוסטר',
+        'letterhead': 'נייר מכתבים',
+        'envelope': 'מעטפות'
+    };
+    return names[productKey] || productKey;
+}
 
 module.exports = {
     classifyMessage,
