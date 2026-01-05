@@ -19,7 +19,7 @@ const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require(
 const { generateQuotePDF } = require('./services/pdfService');
 
 // ייבוא מנועים
-const { classifyMessage } = require('./engine/classifier');
+const { classifyMessage } = require('./engine/classifier_v4');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
 const { generateDashboard } = require('./engine/dashboardManager');
 const { 
@@ -131,18 +131,23 @@ app.post('/api/chat', async (req, res) => {
             pendingProduct: session.pendingProduct
         });
         
-        console.log(`📊 Class: ${classification.action} | LLM: ${classification.needsLLM}`);
+        // Confidence threshold - הגבול בין שרת ל-LLM
+        const CONFIDENCE_THRESHOLD = 0.85;
+        const useServer = classification.confidence >= CONFIDENCE_THRESHOLD && !classification.needsLLM;
+        
+        console.log(`📊 Class: ${classification.action} | Conf: ${classification.confidence} | Handler: ${useServer ? 'SERVER' : 'LLM'}`);
         
         // 4. טיפול בבקשה
         let responseData;
         
-        if (!classification.needsLLM) {
+        if (useServer) {
             responseData = await handleDirectly(classification, session, userId, customer, mood);
             stats.directHandled++;
             stats.savings += 0.003;
             console.log(`⚡ Direct handling`);
         } else {
-            responseData = await handleWithLLM(cleanMessage, session, userId, customer);
+            // LLM מטפל - אבל עם context מהשרת
+            responseData = await handleWithLLM(cleanMessage, session, userId, customer, classification);
             stats.llmCalls++;
             console.log(`🤖 LLM handling`);
         }
@@ -311,6 +316,30 @@ async function handleDirectly(classification, session, userId, customer, mood) {
             content = buildResponse('order_status', ctx);
             quickReplies = buildQuickReplies('greeting');
             break;
+        
+        case 'decline':
+            // הלקוח סירב - ננקה את המוצר הממתין
+            session.pendingProduct = null;
+            content = buildResponse('decline', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+        
+        case 'change_material':
+            // הלקוח רוצה לשנות חומר - נציג אופציות
+            content = buildResponse('material_options', { 
+                product: data.product || session.pendingProduct || session.cart[session.cart.length-1]?.product_name 
+            });
+            quickReplies = buildQuickReplies('material_options');
+            break;
+        
+        case 'change_finishing':
+            // הלקוח רוצה להוסיף/לשנות גימור
+            content = buildResponse('finishing_options', { 
+                product: data.product || session.cart[session.cart.length-1]?.product_name,
+                requested: data.finishing
+            });
+            quickReplies = buildQuickReplies('finishing_options');
+            break;
             
         default:
             content = "לא הבנתי בדיוק, אפשר לנסח אחרת? 🤔";
@@ -331,44 +360,51 @@ const {
     TASK_TYPES 
 } = require('./engine/smartLLM');
 
-async function handleWithLLM(message, session, userId, customer) {
-    // שלב 1: זיהוי סוג המשימה
-    const taskType = detectTaskType(message, {
-        hasQuote: session.cart.length > 0,
-        pendingProduct: session.pendingProduct
-    });
+async function handleWithLLM(message, session, userId, customer, classification = {}) {
+    // שלב 1: זיהוי סוג המשימה - קודם מהclassifier, אחרת detect
+    let taskType = classification.data?.taskType;
+    if (!taskType) {
+        taskType = detectTaskType(message, {
+            hasQuote: session.cart.length > 0,
+            pendingProduct: session.pendingProduct
+        });
+    }
     
     console.log(`   📋 Task Type: ${taskType}`);
     
-    // שלב 2: בניית context מינימלי
+    // שלב 2: בניית context - כולל מידע מהclassifier
     const contextData = {
         userMessage: message,
         customer: customer,
         cart: session.cart,
-        pendingProduct: session.pendingProduct
+        pendingProduct: session.pendingProduct,
+        // מידע מהclassifier
+        detectedAction: classification.action,
+        detectedProduct: classification.data?.product,
+        detectedOccasion: classification.data?.occasion
     };
     
     // הוספת מידע ספציפי לפי סוג המשימה
-    if (taskType === TASK_TYPES.RECOMMEND) {
+    if (taskType === TASK_TYPES.RECOMMEND || taskType === 'recommend') {
         // זיהוי אירוע
         const occasions = {
             'חתונה': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
+            'חתונות': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
             'בר מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
+            'בת מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
             'ברית': ['הזמנות', 'כרטיסי תודה', 'מדבקות'],
             'תערוכה': ['רולאפים', 'פליירים', 'כרטיסי ביקור', 'פוסטרים', 'באנרים'],
             'עסק': ['כרטיסי ביקור', 'פליירים', 'ניירת משרדית', 'שלטים']
         };
         
-        for (const [occasion, products] of Object.entries(occasions)) {
-            if (message.includes(occasion)) {
-                contextData.occasion = occasion;
-                contextData.suggestions = products;
-                break;
-            }
+        const detectedOccasion = contextData.detectedOccasion || Object.keys(occasions).find(o => message.includes(o));
+        if (detectedOccasion) {
+            contextData.occasion = detectedOccasion;
+            contextData.suggestions = occasions[detectedOccasion] || occasions['חתונה'];
         }
     }
     
-    if (taskType === TASK_TYPES.EXPLAIN) {
+    if (taskType === TASK_TYPES.EXPLAIN || taskType === 'explain') {
         // הוספת מידע על מוצר אם רלוונטי
         const productInfo = getProductInfo(message);
         if (productInfo) {
