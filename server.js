@@ -19,7 +19,7 @@ const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require(
 const { generateQuotePDF } = require('./services/pdfService');
 
 // ייבוא מנועים
-const { classifyMessage } = require('./engine/classifier_v4');
+const { classifyMessage } = require('./engine/classifier');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
 const { generateDashboard } = require('./engine/dashboardManager');
 const { 
