@@ -1,3 +1,13 @@
+---
+title: Pini Print Bot
+emoji: 🖨️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: server.js
+pinned: false
+---
+
 # Pini Bot Engine V3 - Server Heavy, LLM Light
 
 ## 📁 מבנה הקבצים
