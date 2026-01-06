@@ -1,12 +1,11 @@
 /**
- * Pini Message Classifier V2 (Rule-Based)
- * ========================================
- * מנוע סיווג מהיר שלא עולה כסף (No LLM Cost)
- * מטרתו: לזהות בקשות פשוטות ולחסוך פנייה ל-Gemini.
+ * Pini Message Classifier V3 (Final Safety Logic)
+ * ===============================================
+ * מנוע סיווג מהיר עם "שסתום ביטחון" למקרים מורכבים.
+ * אם יש ספק - מעבירים ל-LLM.
  */
 
 const PRODUCT_KEYWORDS = {
-    // עברית
     'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
     'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc', 'ביזנס': 'bc',
     'הזמנה': 'invitation', 'הזמנות': 'invitation',
@@ -15,7 +14,7 @@ const PRODUCT_KEYWORDS = {
     'מדבקה': 'sticker', 'מדבקות': 'sticker', 'סטיקר': 'sticker',
     'חוברת': 'booklet', 'קטלוג': 'booklet', 'מחברת': 'booklet',
     
-    // English Support
+    // אנגלית
     'flyer': 'flyer', 'flyers': 'flyer',
     'business card': 'bc', 'cards': 'bc',
     'invitation': 'invitation', 'invites': 'invitation',
@@ -38,7 +37,6 @@ const HEBREW_NUMBERS = {
     'מאה': 100, 'מאתיים': 200, 'אלף': 1000, 'אלפיים': 2000
 };
 
-// טריגרים ל-LLM (מילים שמעידות על מורכבות)
 const COMPLEXITY_TRIGGERS = [
     'למה', 'איך', 'מתי', 'האם', 'תלוי', 
     'קובץ', 'דחוף', 'הנחה', 'יקר', 'זול', 'משלוח',
@@ -46,86 +44,108 @@ const COMPLEXITY_TRIGGERS = [
 ];
 
 /**
- * הפונקציה הראשית שמחליטה מה לעשות עם ההודעה
+ * 🛑 פונקציית הבטיחות הקריטית 🛑
+ * מזהה אם ההזמנה מורכבת מדי לטיפול מהיר
  */
+function isComplexOrder(text) {
+    // 1. האם יש סימני חיבור? (כמו בהודעה שלך: "כרטיסים + פליירים")
+    if (text.includes('+') || text.includes(' plus ')) return true;
+    
+    // 2. האם יש מילות קישור מחשידות?
+    if (text.includes(' וגם ') || text.includes(' בנוסף ') || text.includes(' ו ')) return true;
+
+    // 3. האם יש יותר ממספר אחד משמעותי במשפט?
+    // (למשל "400 כרטיסים ו 500 פליירים")
+    const numbers = text.match(/\d+/g);
+    if (numbers && numbers.length > 1) {
+        // מסננים מספרים שנראים כמו טלפון (מתחילים ב-05)
+        const realNumbers = numbers.filter(n => !n.startsWith('05') && parseInt(n) < 1000000);
+        if (realNumbers.length > 1) return true; // יש יותר מכמות אחת -> ל-LLM!
+    }
+
+    return false;
+}
+
 function classifyMessage(message, context = {}) {
     let text = message.toLowerCase();
     const cart = context.cart || [];
 
-    // 0. המרת מספרים בעברית לספרות (לפני הכל)
+    // המרת מספרים בעברית
     for (const [word, num] of Object.entries(HEBREW_NUMBERS)) {
         if (text.includes(word)) {
             text = text.replace(word, num);
         }
     }
 
-    // 1. זיהוי ברכות (מהיר)
+    // --- 🚨 בדיקת מורכבות ראשונית 🚨 ---
+    // אם זו הזמנה מורכבת, עוקפים את כל הלוגיקה ושולחים ישר ל-LLM
+    if (isComplexOrder(text)) {
+        console.log("⚠️ Complex order detected -> Sending to LLM");
+        return { action: 'chat', data: {}, needsLLM: true };
+    }
+    // ------------------------------------
+
+    // 1. ברכות
     if (ACTION_KEYWORDS.greeting.some(k => text.includes(k)) && text.length < 20) {
         return { action: 'greeting', data: {}, needsLLM: false };
     }
 
-    // 2. ניקוי עגלה
+    // 2. ניקוי
     if (ACTION_KEYWORDS.clear.some(k => text.includes(k))) {
         return { action: 'clear', data: {}, needsLLM: false };
     }
 
-    // 3. שליחת הזמנה / סיום
+    // 3. סיום/שליחה
     if (ACTION_KEYWORDS.send_quote.some(k => text.includes(k))) {
         return { action: 'send_quote', data: {}, needsLLM: false };
     }
 
-    // 4. בדיקת סטטוס / מחיר
+    // 4. סטטוס
     if (ACTION_KEYWORDS.status.some(k => text.includes(k))) {
         return { action: 'status', data: {}, needsLLM: false };
     }
 
-    // 5. בדיקת עיצוב (זיהוי קבצים או שאלות עיצוב)
+    // 5. עיצוב
     if ((text.includes('עיצוב') || text.includes('pdf') || text.includes('קובץ')) && 
         (text.includes('יש') || text.includes('מוכן') || text.includes('ממני'))) {
          return { action: 'design_check', data: {}, needsLLM: false };
     }
 
-    // 6. הסרת פריט
+    // 6. הסרה
     if (ACTION_KEYWORDS.remove.some(k => text.includes(k))) {
         const product = findProductInText(text);
         return { action: 'remove', data: { product }, needsLLM: false };
     }
 
-    // 7. בדיקת מורכבות (Safety Valve)
-    // אם ההודעה ארוכה מדי או מכילה מילות שאלה מורכבות -> שלח ל-LLM
+    // 7. מורכבות טקסטואלית כללית
     if (text.length > 60 || COMPLEXITY_TRIGGERS.some(t => text.includes(t))) {
-        // חריג: אם יש כמות ומוצר ברורים, נתייחס לזה כהזמנה למרות המלל
         const hasQty = /\d/.test(text);
         const hasProd = findProductInText(text);
+        // אם זה ארוך ואין כמות+מוצר ברורים -> LLM
         if (!(hasQty && hasProd)) {
             return { action: 'chat', data: {}, needsLLM: true };
         }
     }
 
-    // 8. זיהוי מוצרים וכמויות (הלב של המערכת)
+    // 8. זיהוי רגיל (מוצר יחיד)
     const qtyMatch = text.match(/(\d{1,3}(?:,\d{3})*)/); 
     const qty = qtyMatch ? parseInt(qtyMatch[0].replace(/,/g, '')) : null;
     const product = findProductInText(text);
 
-    // מקרה A: יש כמות + מוצר (הוספה/הצעת מחיר)
     if (qty && product) {
-        // האם זה עדכון לפריט קיים?
         const isUpdate = ACTION_KEYWORDS.update.some(k => text.includes(k)) || 
                          (cart.some(i => i.product_name === product) && !text.includes('עוד') && !text.includes('תוסיף'));
         
         if (isUpdate && (text.includes('שנה') || text.includes('עדכן') || text.includes('במקום'))) {
              return { action: 'update_qty', data: { product, qty }, needsLLM: false };
         }
-        
         return { action: 'quote', data: { product, qty }, needsLLM: false };
     }
 
-    // מקרה B: יש רק מוצר (חסרה כמות)
     if (product && !qty) {
         return { action: 'quote_incomplete', data: { product }, needsLLM: false };
     }
 
-    // מקרה C: יש רק כמות (עדכון כמות אחרונה)
     if (qty && !product) {
         if (cart.length > 0) {
             return { action: 'update_qty', data: { qty }, needsLLM: false };
@@ -136,9 +156,6 @@ function classifyMessage(message, context = {}) {
     return { action: 'chat', data: {}, needsLLM: true };
 }
 
-/**
- * מוצא מפתח מוצר מתוך הטקסט
- */
 function findProductInText(text) {
     for (const [keyword, key] of Object.entries(PRODUCT_KEYWORDS)) {
         if (text.includes(keyword)) {
