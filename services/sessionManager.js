@@ -1,92 +1,81 @@
 /**
- * Session Manager - Pini Print Bot (Fixed Prompt)
- * ===============================================
+ * Session Manager
+ * ===============
+ * מנהל את הזיכרון לטווח קצר של המשתמשים (עגלה, היסטוריה).
+ * הכל נשמר בזיכרון (RAM) ונמחק כשהשרת עושה ריסטרט.
  */
-const fs = require('fs');
-const path = require('path');
-
-// טעינת הידע העסקי
-let PRODUCT_CATALOG = {};
-let BUSINESS_INFO = { faq: {} };
-
-try {
-    const catalogData = require('../engine/productCatalog');
-    PRODUCT_CATALOG = catalogData.PRODUCT_CATALOG || {};
-    BUSINESS_INFO = catalogData.BUSINESS_INFO || { faq: {} };
-} catch (e) { console.warn("⚠️ Warning: Could not load productCatalog."); }
 
 const sessions = {};
-const SESSION_TIMEOUT = 30 * 60 * 1000;
 
+/**
+ * מקבל או יוצר סשן למשתמש
+ */
 function getSession(userId) {
-    const now = Date.now();
-    if (!sessions[userId]) sessions[userId] = createNewSession(userId);
-    if (now - sessions[userId].lastInteraction > SESSION_TIMEOUT) sessions[userId] = createNewSession(userId);
-    sessions[userId].lastInteraction = now;
+    if (!sessions[userId]) {
+        sessions[userId] = {
+            id: userId,
+            cart: [],
+            history: [], // היסטוריית שיחה
+            customerPhone: null,
+            lastInteraction: Date.now()
+        };
+    }
     return sessions[userId];
 }
 
-function createNewSession(userId) {
-    return {
-        id: userId,
-        cart: [],
-        history: [],
-        lastInteraction: Date.now(),
-        customerPhone: null
-    };
-}
-
-// === הפרומפט המתוקן ===
-function generateSystemPrompt(userId) {
+/**
+ * מוסיף הודעה להיסטוריה (כדי שהבוט יזכור הקשר)
+ */
+function addToHistory(userId, role, content) {
     const session = getSession(userId);
     
-    let cartSummary = "העגלה ריקה.";
-    if (session.cart.length > 0) {
-        cartSummary = "🛒 עגלה נוכחית:\n" + session.cart.map((item, idx) => 
-            `${idx + 1}. ${item.product_name} | כמות: ${item.qty} | מחיר: ₪${item.client_price}`
-        ).join('\n');
+    // מוודא שהמערך קיים
+    if (!session.history) session.history = [];
+    
+    session.history.push({
+        role: role, // 'user' or 'model'
+        content: content,
+        timestamp: Date.now()
+    });
+
+    // שומר רק את ה-20 הודעות האחרונות כדי לא להעמיס על הזיכרון
+    if (session.history.length > 20) {
+        session.history.shift();
     }
-
-    // הזרקת ידע
-    let knowledgeBase = "";
-    if (BUSINESS_INFO.details) {
-        knowledgeBase = `
-פרטי העסק: ${BUSINESS_INFO.details.name}, ${BUSINESS_INFO.details.location}
-שעות: ${BUSINESS_INFO.details.hours}
-משלוחים: ${BUSINESS_INFO.details.shipping}
-`;
-    }
-
-    return `
-אתה פיני, נציג המכירות של דפוס בית יצחק.
-מטרתך: לעזור ללקוח להזמין מוצרי דפוס ולתת הצעות מחיר.
-
-🛑 **חוק ברזל (CRITICAL):**
-כשהלקוח מבקש להזמין מוצרים (כמו "תכין לי 1000 כרטיסים ו-500 פליירים"), אתה **חייב** להפעיל את הכלי (Function Call) שנקרא **calculate_custom_job** עבור כל מוצר בנפרד!
-**אסור לך** להגיד "אני לא יכול לתת מחיר" או "תשתמש במחשבון". יש לך את המחשבון - תשתמש בו!
-
-הנחיות נוספות:
-1. ענה קצר, בעברית ישראלית טבעית ("סבבה", "אחלה", "אין בעיה").
-2. לשאלות מידע (איפה אתם, מתי פתוח) - ענה לפי המידע למטה.
-3. לשאלות טכניות (בליד, קבצים) - ענה מקצועית.
-
-${knowledgeBase}
-
-${cartSummary}
-`;
 }
 
-function removeFromCart(userId, keyword) {
+/**
+ * מסיר פריט מהעגלה לפי שם
+ */
+function removeFromCart(userId, productKey) {
     const session = getSession(userId);
-    const startLen = session.cart.length;
-    session.cart = session.cart.filter(i => !i.product_name.includes(keyword));
-    return session.cart.length < startLen;
+    const initialLength = session.cart.length;
+    
+    if (!productKey) return false;
+
+    // מסנן החוצה את הפריט שמכיל את המילה (למשל 'flyer')
+    session.cart = session.cart.filter(item => {
+        const pName = (item.product_name || '').toLowerCase();
+        const key = productKey.toLowerCase();
+        
+        // אם מצאנו התאמה - לא מחזירים את הפריט (מוחקים אותו)
+        return !pName.includes(key) && !item.product_category.includes(key);
+    });
+
+    return session.cart.length < initialLength; // מחזיר true אם משהו נמחק
 }
 
+/**
+ * מנקה את כל העגלה
+ */
 function clearCart(userId) {
     const session = getSession(userId);
     session.cart = [];
-    return true;
 }
 
-module.exports = { getSession, generateSystemPrompt, removeFromCart, clearCart };
+module.exports = {
+    getSession,
+    addToHistory, // <--- זה היה חסר לך!
+    removeFromCart,
+    clearCart
+};
