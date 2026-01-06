@@ -1,8 +1,9 @@
 /**
- * Pini Print Bot - Server V5 (Universal Router)
- * =============================================
- * ארכיטקטורה: LLM Router -> Server Logic -> Response
- * שומר על כל חוקי הברזל: השרת מחשב, ה-LLM רק מבין ומנסח.
+ * Pini Print Bot - Server V5 (Hybrid: Classifier + LLM)
+ * =====================================================
+ * ארכיטקטורה משולבת:
+ * 1. בדיקה מהירה (Classifier) - חינם ומהיר (80% מהמקרים)
+ * 2. בדיקה חכמה (LLM Router) - למקרים מורכבים
  */
 
 const express = require('express');
@@ -11,26 +12,20 @@ const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // --- ייבוא מנועים ושירותים ---
-const { routeRequest } = require('./engine/llmRouter'); // הראוטר החדש
-const { calculate_custom_job } = require('./services/calculation'); // המחשבון (מקור האמת)
+const { classifyMessage } = require('./engine/classifier'); // המנוע המהיר החדש
+const { routeRequest } = require('./engine/llmRouter');     // הראוטר החכם
+const { calculate_custom_job } = require('./engine/calculation'); // המחשבון
 const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
 const { generateQuotePDF } = require('./services/pdfService');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
 const { generateDashboard } = require('./engine/dashboardManager');
-const { 
-    findOrCreateCustomer, 
-    extractPhoneFromText, 
-    extractNameFromText 
-} = require('./engine/customerManager');
-const { PRODUCT_CATALOG } = require('./engine/productCatalog'); // קטלוג אמיתי לתפריטים
-
-// --- ייבוא ה-LLM החכם לשיחות ---
+const { findOrCreateCustomer, extractPhoneFromText, extractNameFromText } = require('./engine/customerManager');
+const { PRODUCT_CATALOG } = require('./engine/productCatalog');
 const { 
     detectTaskType, 
     buildPrompt, 
     validateResponse, 
-    fixResponse,
-    TASK_TYPES 
+    fixResponse
 } = require('./engine/smartLLM');
 
 dotenv.config();
@@ -40,7 +35,6 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('public'));
 
-// הגדרת Gemini לשיחות (SmartLLM)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
@@ -59,26 +53,42 @@ app.post('/api/chat', async (req, res) => {
         const session = getSession(userId);
         let customer = null;
         
-        // זיהוי לקוח (אם יש טלפון)
         const extractedPhone = extractPhoneFromText(message);
         if (phone || extractedPhone) {
             customer = findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
             session.customerPhone = customer.phone;
         }
 
-        // 2. הניתוב החדש (V5 Router)
-        // שולחים ל-LLM הקטן שיבין מה הכוונה ויחזיר JSON
-        const routerResult = await routeRequest(message, session.cart);
-        console.log(`🧠 Router Intent: ${routerResult.intent} | Product: ${routerResult.product || 'N/A'}`);
+        // 2. הניתוב החדש והחכם (Hybrid Router: Rules + LLM)
+        let routerResult;
+        
+        // קודם כל ננסה את המסווג המהיר (חינם!)
+        const classification = classifyMessage(message, { cart: session.cart });
+        
+        if (!classification.needsLLM) {
+            console.log(`⚡ Fast Path Triggered: ${classification.action}`);
+            
+            // מיפוי מהמסווג לפורמט שהשרת מכיר
+            routerResult = {
+                intent: mapActionToIntent(classification.action),
+                product: classification.data?.product,
+                qty: classification.data?.qty,
+                attributes: {}
+            };
+        } else {
+            // רק אם המסווג לא הצליח - נפנה ל-LLM (עולה כסף)
+            console.log(`🤖 Using LLM for complex request...`);
+            routerResult = await routeRequest(message, session.cart);
+        }
+        
+        console.log(`🧠 Final Intent: ${routerResult.intent} | Product: ${routerResult.product || 'N/A'}`);
 
-        // 3. ביצוע הפעולה בשרת (Server is Source of Truth)
+        // 3. ביצוע הפעולה בשרת
         let responseData = { content: '', quickReplies: [] };
-        const ctx = { cart: session.cart, customer, routerResult };
 
         switch (routerResult.intent) {
             
             case 'quote': // בקשת מחיר / הוספה
-                // חוק ברזל: השרת מחשב!
                 if (routerResult.product && routerResult.qty) {
                     const calc = calculate_custom_job(session.cart, {
                         product_name: routerResult.product,
@@ -90,22 +100,21 @@ app.post('/api/chat', async (req, res) => {
                     responseData.content = buildResponse('quote_added', { item: calc.lastAdded });
                     responseData.quickReplies = buildQuickReplies('quote_added');
                 } else if (routerResult.product) {
-                    // יש מוצר אבל אין כמות ("אני צריך פליירים")
+                    // יש מוצר אבל אין כמות
                     responseData.content = buildResponse('ask_quantity', { product: routerResult.product });
                     responseData.quickReplies = buildQuickReplies('ask_quantity');
                 } else {
-                    // לא ברור מה המוצר
                     responseData.content = "בשמחה! מה תרצה להדפיס? (כרטיסים, פליירים, הזמנות...)";
                     responseData.quickReplies = buildQuickReplies('greeting');
                 }
                 break;
 
-            case 'update': // עדכון כמות/מוצר
+            case 'update': // עדכון כמות
                 const itemToUpdate = session.cart.length > 0 ? session.cart[session.cart.length - 1] : null;
                 if (itemToUpdate && routerResult.qty) {
                     const oldQty = itemToUpdate.qty;
                     const upCalc = calculate_custom_job(session.cart, {
-                        product_name: itemToUpdate.product_name, // שומרים על המוצר המקורי אם לא שונה
+                        product_name: itemToUpdate.product_name,
                         qty: routerResult.qty,
                         paper_type: routerResult.attributes?.paper || itemToUpdate.paper_type
                     });
@@ -113,7 +122,8 @@ app.post('/api/chat', async (req, res) => {
                     responseData.content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
                     responseData.quickReplies = buildQuickReplies('cart_status');
                 } else {
-                    responseData.content = "לא מצאתי מה לעדכן. מה תרצה להזמין?";
+                    // אם אין מה לעדכן, נתייחס לזה כהוספה חדשה אם אפשר
+                    responseData.content = "לא מצאתי פריט אחרון לעדכן. מה תרצה להזמין?";
                 }
                 break;
 
@@ -129,25 +139,32 @@ app.post('/api/chat', async (req, res) => {
                 responseData.quickReplies = buildQuickReplies('greeting');
                 break;
 
-            case 'show_menu': // תפריט חכם (Sales Agent)
-                // כאן אנחנו מראים את היכולת של איש מכירות!
-                // אם הלקוח אמר "חתונה", נציג רק מוצרי חתונה
-                const context = routerResult.context || routerResult.category || ''; 
-                let menuText = "הנה מה שיש לנו להציע:";
-                let relevantProducts = [];
+            case 'status': // סטטוס עגלה (חדש!)
+                responseData.content = buildResponse('cart_status', { cart: session.cart, customer });
+                responseData.quickReplies = buildQuickReplies('cart_status');
+                break;
 
-                if (['wedding', 'חתונה', 'אירוע', 'invitation'].some(w => context.includes(w))) {
+            case 'design_check': // בדיקת עיצוב (חדש!)
+                responseData.content = buildResponse('design_check', {});
+                responseData.quickReplies = buildQuickReplies('design_check');
+                break;
+
+            case 'checkout': // סיום
+                const total = session.cart.reduce((s, i) => s + i.client_price, 0);
+                responseData.content = buildResponse('send_quote', { total, cart: session.cart });
+                responseData.quickReplies = buildQuickReplies('send_quote');
+                break;
+
+            case 'show_menu':
+                const context = routerResult.context || ''; 
+                let menuText = "הנה מה שיש לנו להציע:";
+                let relevantProducts = ['bc', 'flyer', 'invitation', 'rollup'];
+
+                if (['wedding', 'חתונה'].some(w => context.includes(w))) {
                     menuText = "🎉 מזל טוב! לחתונה אני ממליץ על:";
-                    relevantProducts = ['invitation', 'sticker', 'booklet']; // מוצרים רלוונטיים
-                } else if (['business', 'עסק', 'כנס', 'conference'].some(w => context.includes(w))) {
-                    menuText = "💼 לעסקים וכנסים הולך חזק:";
-                    relevantProducts = ['bc', 'flyer', 'rollup'];
-                } else {
-                    // תפריט כללי
-                    relevantProducts = ['bc', 'flyer', 'invitation', 'rollup'];
+                    relevantProducts = ['invitation', 'sticker', 'booklet'];
                 }
 
-                // בניית הכפתורים מהקטלוג האמיתי
                 const menuButtons = relevantProducts.map(key => {
                     const prod = PRODUCT_CATALOG[key];
                     return { text: prod ? prod.name : key, value: prod ? prod.name : key };
@@ -161,27 +178,18 @@ app.post('/api/chat', async (req, res) => {
                 responseData.content = buildResponse('greeting', { customer });
                 responseData.quickReplies = buildQuickReplies('greeting');
                 break;
-                
-            case 'checkout':
-                const total = session.cart.reduce((s, i) => s + i.client_price, 0);
-                responseData.content = buildResponse('send_quote', { total, cart: session.cart });
-                responseData.quickReplies = buildQuickReplies('send_quote');
-                break;
 
-            case 'consult': // שאלות פתוחות -> הולך ל-SmartLLM
+            case 'consult': // שאלות פתוחות -> SmartLLM
             default:
-                // כאן אנחנו משתמשים ב-SmartLLM שיודע לענות יפה אבל מפוקח
                 const llmResponse = await handleWithSmartLLM(message, session, customer);
                 responseData.content = llmResponse.content;
                 responseData.quickReplies = llmResponse.quickReplies;
                 break;
         }
 
-        // 4. שמירת היסטוריה
         addToHistory(userId, 'user', message);
         addToHistory(userId, 'model', responseData.content);
 
-        // 5. הפקת דשבורד
         const dashboard = generateDashboard(session, session.customerPhone);
 
         res.json({
@@ -189,7 +197,7 @@ app.post('/api/chat', async (req, res) => {
             cart: session.cart,
             dashboard: dashboard,
             quickReplies: responseData.quickReplies,
-            meta: { intent: routerResult.intent }
+            meta: { intent: routerResult.intent, fastPath: !classification.needsLLM }
         });
 
     } catch (error) {
@@ -198,9 +206,24 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// פונקציית עזר לטיפול בשיחה חכמה (Consult)
+// מיפוי פעולות מהמסווג המהיר לכוונות של השרת
+function mapActionToIntent(action) {
+    const map = {
+        'quote': 'quote',
+        'update_qty': 'update',
+        'remove': 'remove',
+        'clear': 'clear',
+        'greeting': 'greeting',
+        'send_quote': 'checkout',
+        'status': 'status',
+        'quote_incomplete': 'quote',
+        'design_check': 'design_check'
+    };
+    return map[action] || 'consult';
+}
+
+// פונקציית עזר לטיפול בשיחה חכמה
 async function handleWithSmartLLM(message, session, customer) {
-    // משתמשים בלוגיקה הקיימת של smartLLM.js שיש לה כבר הגנות
     const taskType = detectTaskType(message, { hasQuote: session.cart.length > 0 });
     const promptData = buildPrompt(taskType, { 
         userMessage: message, 
@@ -212,7 +235,6 @@ async function handleWithSmartLLM(message, session, customer) {
         const result = await chatModel.generateContent(promptData.system + "\n" + promptData.context);
         let text = result.response.text();
         
-        // ולידציה (השוטר) - לוודא שאין הזיות מחיר
         const validation = validateResponse(text, taskType, {});
         if (!validation.isValid) {
             text = fixResponse(text, validation.corrections);

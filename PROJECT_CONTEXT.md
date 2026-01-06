@@ -1,5 +1,5 @@
 # PINI BOT PROJECT CONTEXT
-Generated: 2026-01-06T12:26:30.710Z
+Generated: 2026-01-06T13:46:34.352Z
 
 
 
@@ -577,470 +577,6 @@ module.exports = {
     PRODUCT_MAP
 };
 
-```
-
-
---- FILE: engine\classifier.js ---
-```js
-/**
- * Message Classifier V4 - Pini Print Bot
- * =======================================
- * אלגוריתם משופר לזיהוי כוונות
- * 
- * סדר עדיפויות:
- * 0. סירוב (לא תודה, עזוב)
- * 1. Quick Replies (קטלוג, FAQ, צור קשר)
- * 2. שאלות אופציות (אילו, איזה, מה האפשרויות)
- * 3. שאלות הסבר (מה זה, מה ההבדל)
- * 4. שינוי חומר/גימור
- * 5. התייחסות להקשר (כבר אמרתי)
- * 6. המלצות (מה ממליץ לחתונה)
- * 7. מוצרים (quote, multi_quote, quote_incomplete)
- * 8. ברכות
- * 9. chat (LLM)
- */
-
-// === מילות מפתח למוצרים ===
-const PRODUCT_KEYWORDS = {
-    // כרטיסי ביקור (+ שגיאות כתיב)
-    'כרטיסי ביקור': 'bc',
-    'כרטיס ביקור': 'bc', 
-    'כרטיסי בקור': 'bc',  // שגיאת כתיב
-    'כרטיס בקור': 'bc',   // שגיאת כתיב
-    'כרטיסים': 'bc',
-    'ביזנס קארד': 'bc',
-    
-    // כרטיסי הושבה
-    'כרטיסי הושבה': 'place_card',
-    'כרטיס הושבה': 'place_card',
-    'הושבה': 'place_card',
-    
-    // פליירים (+ שגיאות כתיב)
-    'פליירים': 'flyer',
-    'פלייר': 'flyer',
-    'פליירם': 'flyer',    // שגיאת כתיב
-    'פלאייר': 'flyer',
-    'פלאיירים': 'flyer',
-    'עלונים': 'flyer',
-    'עלון': 'flyer',
-    
-    // הזמנות
-    'הזמנות': 'invitation',
-    'הזמנה': 'invitation',
-    'הזמנה לחתונה': 'invitation',
-    'הזמנה לאירוע': 'invitation',
-    
-    // רולאפ / באנרים (+ שגיאות כתיב)
-    'רולאפ': 'rollup',
-    'רולאפים': 'rollup',
-    'רולפ': 'rollup',     // שגיאת כתיב
-    'רול אפ': 'rollup',
-    'באנר': 'banner',
-    'באנרים': 'banner',
-    'שמשונית': 'banner',
-    
-    // מדבקות
-    'מדבקות': 'sticker',
-    'מדבקה': 'sticker',
-    'סטיקרים': 'sticker',
-    'סטיקר': 'sticker',
-    
-    // חוברות
-    'חוברת': 'booklet',
-    'חוברות': 'booklet',
-    'ברושור': 'brochure',
-    
-    // פולדרים/תיקיות
-    'פולדר': 'folder',
-    'פולדרים': 'folder',
-    'תיקייה': 'folder',
-    'תיקיות': 'folder',
-    
-    // פוסטרים
-    'פוסטר': 'poster',
-    'פוסטרים': 'poster',
-    'שלט': 'poster',
-    'שלטים': 'poster',
-    
-    // ניירת משרדית
-    'נייר מכתבים': 'letterhead',
-    'ניירת משרדית': 'letterhead',
-    
-    // מעטפות
-    'מעטפה': 'envelope',
-    'מעטפות': 'envelope'
-};
-
-// === מילות פעולה ===
-const ACTION_KEYWORDS = {
-    remove: ['תמחק', 'מחק', 'תוריד', 'הורד', 'הסר', 'תבטל', 'בלי', 'לוותר'],
-    clear: ['נקה עגלה', 'נקה הכל', 'מחק הכל', 'התחל מחדש', 'מההתחלה'],
-    update: ['שנה ל', 'עדכן ל', 'תחליף ל', 'תעלה ל', 'תוריד ל'],
-    send_quote: ['שלח הצעת', 'שלח הצעה', 'תשלח הצעה', 'הצעת מחיר בבקשה', 'זהו תשלח']
-};
-
-// === גימורים ===
-const FINISHING_KEYWORDS = ['למינציה', 'הבלטה', 'פויל', 'לכה', 'פינות עגולות', 'קיפול'];
-
-/**
- * פונקציה ראשית: סיווג הודעה
- */
-function classifyMessage(message, context = {}) {
-    const text = message.toLowerCase().trim();
-    const cart = context.cart || [];
-    const pendingProduct = context.pendingProduct || null;
-    
-    console.log(`\n🔍 [Classifier V4] Analyzing: "${message}"`);
-    if (pendingProduct) {
-        console.log(`   📌 Pending product: ${pendingProduct}`);
-    }
-    
-    // ============================================
-    // שלב 0: סירוב - עדיפות עליונה!
-    // ============================================
-    if (/^לא$|^לא תודה|^לא צריך|^לא רוצה|^עזוב|^ויתרתי|בסדר[,.]?\s*לא|לא משנה/.test(text)) {
-        console.log(`   ✅ Action: DECLINE`);
-        return {
-            action: 'decline',
-            confidence: 0.95,
-            needsLLM: false,
-            data: { clearPending: true }
-        };
-    }
-    
-    // ============================================
-    // שלב 0.5: התלבטות - שולחים ל-LLM
-    // ============================================
-    const hesitationPattern = /לא יודע|לא בטוח|אולי|חושב ש.*אולי|מתלבט|מתלבטת/;
-    if (hesitationPattern.test(text)) {
-        console.log(`   🤔 Action: CHAT (hesitation detected)`);
-        return {
-            action: 'chat',
-            confidence: 0.70,
-            needsLLM: true,
-            data: { taskType: 'clarify', reason: 'hesitation' }
-        };
-    }
-    
-    // ============================================
-    // שלב 1: Quick Replies
-    // ============================================
-    
-    // קטלוג מוצרים
-    if (text.includes('קטלוג מוצרים') || 
-        text.includes('מה יש לכם') || 
-        text.includes('מה אפשר להזמין') ||
-        text.includes('תפריט מחירים') ||
-        text === 'קטלוג' ||  // מילה בודדת = catalog
-        (text.includes('תפריט') && !text.includes('תפריטים'))) {
-        console.log(`   ✅ Action: CATALOG`);
-        return { action: 'catalog', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // FAQ
-    if (text.includes('שאלות ותשובות') || text.includes('שאלות נפוצות')) {
-        console.log(`   ✅ Action: FAQ`);
-        return { action: 'faq', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // צור קשר
-    if (text.includes('צור קשר') || text.includes('פרטי התקשרות')) {
-        console.log(`   ✅ Action: CONTACT`);
-        return { action: 'contact', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // סטטוס הזמנה
-    if (text.includes('סטטוס הזמנה') || text.includes('מעקב הזמנה')) {
-        console.log(`   ✅ Action: ORDER_STATUS`);
-        return { action: 'order_status', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // ============================================
-    // שלב 2: שאלות אופציות (לפני שאלות הסבר!)
-    // לא כשיש "לשלוח/קובץ/פורמט"
-    // ============================================
-    const optionsPattern = /אילו|איזה.*(?:אפשר|סוג|אופצי)|מה.*(?:אופצי|אפשרויות)|סוגי\s*(?:נייר|חומר)|מה יש ל/;
-    const notOptionsPattern = /לשלוח|קובץ|פורמט|פייל|file/;
-    if (optionsPattern.test(text) && !notOptionsPattern.test(text)) {
-        const product = findProductInText(text) || pendingProduct;
-        console.log(`   ✅ Action: OPTIONS${product ? ' for ' + product : ''}`);
-        return {
-            action: 'options',
-            confidence: 0.90,
-            needsLLM: true, // LLM יסביר את האופציות
-            data: { product, taskType: 'explain' }
-        };
-    }
-    
-    // ============================================
-    // שלב 3: שאלות הסבר (מה זה X?)
-    // ============================================
-    const explainPattern = /^מה זה|^מהו|^מהי|מה ההבדל|תסביר|מה אומר/;
-    if (explainPattern.test(text)) {
-        const product = findProductInText(text);
-        console.log(`   ✅ Action: EXPLAIN${product ? ' - ' + product : ''}`);
-        return {
-            action: 'explain',
-            confidence: 0.90,
-            needsLLM: true,
-            data: { product, taskType: 'explain' }
-        };
-    }
-    
-    // ============================================
-    // שלב 4: שינוי חומר / גימור
-    // ============================================
-    const changeMaterialPattern = /לשנות.*(?:חומר|נייר)|להחליף.*(?:חומר|נייר)|נייר אחר|חומר אחר|תחליף|תשנה|\d+\s*גרם/;
-    if (changeMaterialPattern.test(text)) {
-        console.log(`   ✅ Action: CHANGE_MATERIAL`);
-        return {
-            action: 'change_material',
-            confidence: 0.90,
-            needsLLM: false,
-            data: { product: pendingProduct || cart[cart.length-1]?.product_name }
-        };
-    }
-    
-    const changeFinishingPattern = new RegExp(FINISHING_KEYWORDS.join('|'));
-    if (changeFinishingPattern.test(text) && (text.includes('אפשר') || text.includes('להוסיף') || text.includes('רוצה'))) {
-        console.log(`   ✅ Action: CHANGE_FINISHING`);
-        return {
-            action: 'change_finishing',
-            confidence: 0.90,
-            needsLLM: false,
-            data: { finishing: findFinishingInText(text) }
-        };
-    }
-    
-    // ============================================
-    // שלב 5: התייחסות להקשר קודם
-    // ============================================
-    const contextPattern = /כבר (?:דיברתי|אמרתי)|(?:דיברנו|אמרתי).*קודם|כמו שאמרתי|כמו (?:הפעם )?הקודמת|כמו קודם|הפעם הקודמת/;
-    if (contextPattern.test(text)) {
-        console.log(`   ✅ Action: CONTEXT_REFERENCE`);
-        return {
-            action: 'context_reference',
-            confidence: 0.85,
-            needsLLM: true,
-            data: { taskType: 'clarify' }
-        };
-    }
-    
-    // ============================================
-    // שלב 6: המלצות (מה ממליץ ל...)
-    // ============================================
-    const recommendPattern = /מה.*ממליץ|מה כדאי|מה מתאים/;
-    const occasions = ['חתונה', 'חתונות', 'תערוכה', 'אירוע', 'עסק', 'בר מצווה', 'בת מצווה', 'ברית'];
-    if (recommendPattern.test(text) || occasions.some(o => text.includes(o) && text.length < 50)) {
-        const occasion = occasions.find(o => text.includes(o));
-        console.log(`   ✅ Action: RECOMMEND${occasion ? ' for ' + occasion : ''}`);
-        return {
-            action: 'recommend',
-            confidence: 0.85,
-            needsLLM: true,
-            data: { occasion, taskType: 'recommend' }
-        };
-    }
-    
-    // ============================================
-    // שלב 7: פעולות עגלה (ניקוי, הסרה, שליחה)
-    // ============================================
-    
-    // ניקוי עגלה
-    if (matchesAny(text, ACTION_KEYWORDS.clear)) {
-        console.log(`   ✅ Action: CLEAR CART`);
-        return { action: 'clear', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // הסרת פריט
-    if (matchesAny(text, ACTION_KEYWORDS.remove)) {
-        const product = findProductInText(text, cart);
-        console.log(`   ✅ Action: REMOVE - ${product || 'unknown'}`);
-        return { action: 'remove', confidence: 0.90, needsLLM: false, data: { product } };
-    }
-    
-    // שליחת הצעה
-    if (matchesAny(text, ACTION_KEYWORDS.send_quote)) {
-        console.log(`   ✅ Action: SEND_QUOTE`);
-        return { action: 'send_quote', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // סטטוס עגלה
-    if (/מה בעגלה|כמה יוצא|מה המחיר|כמה זה עולה/.test(text)) {
-        console.log(`   ✅ Action: STATUS`);
-        return { action: 'status', confidence: 0.95, needsLLM: false, data: {} };
-    }
-    
-    // ============================================
-    // שלב 8: הזמנות (מוצרים + כמויות)
-    // ============================================
-    
-    const allProducts = findAllProductsWithQuantities(text);
-    
-    // מספר בלבד - השלמה או עדכון
-    const quantity = extractQuantity(text);
-    if (quantity && allProducts.length === 0) {
-        if (pendingProduct) {
-            console.log(`   ✅ Action: QUOTE (completing) - ${pendingProduct} × ${quantity}`);
-            return {
-                action: 'quote',
-                confidence: 0.90,
-                needsLLM: false,
-                data: { product: pendingProduct, qty: quantity, fromPending: true }
-            };
-        }
-        if (cart.length > 0) {
-            const lastItem = cart[cart.length - 1];
-            console.log(`   ✅ Action: UPDATE_QTY - ${lastItem?.product_name} → ${quantity}`);
-            return {
-                action: 'update_qty',
-                confidence: 0.85,
-                needsLLM: false,
-                data: { product: lastItem?.product_name, qty: quantity }
-            };
-        }
-    }
-    
-    // כמה מוצרים עם כמויות
-    if (allProducts.length > 1 && allProducts.filter(p => p.qty).length >= 2) {
-        console.log(`   ✅ Action: MULTI_QUOTE - ${allProducts.map(p => p.product + '×' + (p.qty||'?')).join(', ')}`);
-        return {
-            action: 'multi_quote',
-            confidence: 0.95,
-            needsLLM: false,
-            data: { products: allProducts }
-        };
-    }
-    
-    // מוצר אחד עם כמות
-    if (allProducts.length >= 1 && allProducts[0].qty) {
-        const p = allProducts[0];
-        console.log(`   ✅ Action: QUOTE - ${p.product} × ${p.qty}`);
-        return {
-            action: 'quote',
-            confidence: 0.95,
-            needsLLM: false,
-            data: { product: p.product, qty: p.qty }
-        };
-    }
-    
-    // מוצר בלי כמות
-    const singleProduct = findProductInText(text);
-    if (singleProduct) {
-        console.log(`   ⚠️ Action: QUOTE_INCOMPLETE - ${singleProduct}`);
-        return {
-            action: 'quote_incomplete',
-            confidence: 0.85, // שרת יכול לשאול "כמה?"
-            needsLLM: false,
-            data: { product: singleProduct, missing: 'qty' }
-        };
-    }
-    
-    // ============================================
-    // שלב 9: ברכות (כולל סלנג)
-    // ============================================
-    const greetings = ['היי', 'שלום', 'הי', 'אהלן', 'בוקר טוב', 'ערב טוב', 'מה שלומך', 'מה נשמע', 'מה המצב', 'מה קורה', 'אחי', 'אחלה'];
-    if (greetings.some(g => text.includes(g)) && text.length < 25) {
-        console.log(`   ✅ Action: GREETING`);
-        return { action: 'greeting', confidence: 0.90, needsLLM: false, data: {} };
-    }
-    
-    // ============================================
-    // שלב 10: ברירת מחדל - LLM
-    // ============================================
-    console.log(`   🤖 Action: CHAT (needs LLM)`);
-    return {
-        action: 'chat',
-        confidence: 0.50,
-        needsLLM: true,
-        data: { taskType: 'freestyle' }
-    };
-}
-
-// === פונקציות עזר ===
-
-function matchesAny(text, keywords) {
-    return keywords.some(kw => text.includes(kw));
-}
-
-function findProductInText(text, cart = []) {
-    const lower = text.toLowerCase();
-    
-    // קודם בודק עגלה
-    for (const item of cart) {
-        const name = item.product_name?.toLowerCase() || '';
-        if (lower.includes(name)) return item.product_name;
-    }
-    
-    // מילות מפתח - ממוין לפי אורך
-    const sorted = Object.keys(PRODUCT_KEYWORDS).sort((a, b) => b.length - a.length);
-    for (const keyword of sorted) {
-        if (lower.includes(keyword)) {
-            return PRODUCT_KEYWORDS[keyword];
-        }
-    }
-    return null;
-}
-
-function findAllProductsWithQuantities(text) {
-    const lower = text.toLowerCase();
-    const results = [];
-    const sorted = Object.keys(PRODUCT_KEYWORDS).sort((a, b) => b.length - a.length);
-    
-    for (const keyword of sorted) {
-        const patterns = [
-            new RegExp(`(\\d+(?:,\\d{3})*)\\s*${keyword}`, 'i'),
-            new RegExp(`(\\d+(?:,\\d{3})*)\\s+(?:יחידות\\s+)?${keyword}`, 'i'),
-        ];
-        
-        for (const pattern of patterns) {
-            const match = lower.match(pattern);
-            if (match) {
-                const qty = parseInt(match[1].replace(/,/g, ''));
-                const product = PRODUCT_KEYWORDS[keyword];
-                if (!results.find(r => r.product === product) && qty >= 10) {
-                    results.push({ product, qty, keyword });
-                }
-                break;
-            }
-        }
-    }
-    
-    return results;
-}
-
-function extractQuantity(text) {
-    // סינון מידות, משקלים, גדלים
-    let clean = text
-        .replace(/\d+x\d+/gi, '')      // מידות
-        .replace(/\d+\s*גרם/gi, '')    // משקל
-        .replace(/\d+\s*ס"מ/gi, '')    // סנטימטרים
-        .replace(/a\d+/gi, '')         // A4, A5
-        .replace(/\d{2,3}-?\d{7}/g, ''); // טלפונים
-    
-    const match = clean.match(/(\d+(?:,\d{3})*)/);
-    if (match) {
-        const num = parseInt(match[1].replace(/,/g, ''));
-        if (num >= 10 && num <= 100000) return num;
-    }
-    return null;
-}
-
-function findFinishingInText(text) {
-    const found = [];
-    for (const finish of FINISHING_KEYWORDS) {
-        if (text.includes(finish)) found.push(finish);
-    }
-    return found;
-}
-
-module.exports = {
-    classifyMessage,
-    findProductInText,
-    findAllProductsWithQuantities,
-    extractQuantity,
-    PRODUCT_KEYWORDS
-};
 ```
 
 
@@ -1847,6 +1383,98 @@ module.exports = {
     generateUpsellSuggestions
 };
 
+```
+
+
+--- FILE: engine\llmRouter.js ---
+```js
+/**
+ * Pini Universal Router (V5)
+ * ==========================
+ * מנוע הבנה מבוסס LLM שמתנהג כמו איש מכירות חכם.
+ * הופך שפה טבעית לפקודות JSON שהשרת יודע לבצע בבטחה.
+ */
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const dotenv = require('dotenv');
+dotenv.config();
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// משתמשים במודל Flash - זול ומהיר (חשוב לתקציב)
+const routerModel = genAI.getGenerativeModel({ 
+    model: "gemini-2.0-flash",
+    generationConfig: { responseMimeType: "application/json" }
+});
+
+// קטלוג מקוצר לראוטר - כדי שידע לזהות מוצרים נכון
+const PRODUCT_LIST_SHORT = `
+- bc: כרטיסי ביקור (business cards)
+- flyer: פליירים, מנשרים, עלונים
+- invitation: הזמנות (חתונה, אירוע)
+- rollup: רולאפ, באנר, שמשונית
+- sticker: מדבקות, תוויות
+- booklet: חוברות, קטלוגים, מחברות
+- poster: פוסטרים, קנבס, קאפה
+- office: ניירת משרדית, מעטפות
+`;
+
+/**
+ * הפונקציה שמנתבת את כל ההודעות
+ */
+async function routeRequest(message, currentCartContext = []) {
+    
+    // בניית סיכום עגלה כדי שה-LLM יבין הקשר (למשל "תשנה את זה")
+    const cartSummary = currentCartContext.length > 0 
+        ? currentCartContext.map(i => `${i.product_name} (${i.qty})`).join(', ')
+        : "עגלה ריקה";
+
+    const systemPrompt = `
+    אתה "המוח המנתב" של פיני, בוט מכירות לדפוס.
+    תפקידך: לנתח את הודעת הלקוח ולהוציא פקודת JSON מדויקת לשרת.
+    
+    המוצרים שלנו:
+    ${PRODUCT_LIST_SHORT}
+
+    רשימת כוונות (Intents) מותרות:
+    1. "quote": בקשת הצעת מחיר או הוספה (דוגמה: "תכין לי 1000 כרטיסים", "כמה עולה פלייר?").
+    2. "update": שינוי פריט קיים (דוגמה: "תשנה ל-500", "תוסיף למינציה").
+    3. "remove": הסרת פריט (דוגמה: "תבטל את הרולאפ").
+    4. "show_menu": הלקוח מתלבט או מבקש המלצה (דוגמה: "מה יש לחתונה?", "אני צריך דברים לכנס").
+    5. "consult": שאלה מקצועית/פתוחה (דוגמה: "מה זה למינציה?", "זה יקר לי", "איך שולחים קובץ?").
+    6. "greeting": סתם שלום/נימוס (דוגמה: "היי", "תודה", "ביי").
+    7. "checkout": הלקוח רוצה לסיים/לשלם/לשלוח (דוגמה: "יאללה תשלח", "איך משלמים?").
+
+    הנחיות קריטיות ל-JSON:
+    - product: קוד המוצר באנגלית (למשל 'bc' ולא 'כרטיס').
+    - qty: מספר שלם בלבד (תרגם "אלף" ל-1000).
+    - context: אם הלקוח ציין אירוע (חתונה/כנס/עסק) - שמור את זה בשדה 'context'.
+    - attributes: אם הלקוח ציין נייר/גימור, שמור באובייקט.
+
+    הודעת הלקוח: "${message}"
+    מצב עגלה: ${cartSummary}
+    `;
+
+    try {
+        const result = await routerModel.generateContent(systemPrompt);
+        const responseText = result.response.text();
+        
+        // נסיון לפרסר את ה-JSON
+        const response = JSON.parse(responseText);
+        
+        // ולידציה בסיסית - אם אין intent, נחזיר consult
+        if (!response.intent) response.intent = 'consult';
+        
+        return response;
+        
+    } catch (error) {
+        console.error("Router Error:", error);
+        // Fallback: במקרה של תקלה ב-Router, נעביר למצב שיחה רגיל
+        return { intent: "consult", error: true };
+    }
+}
+
+module.exports = { routeRequest };
 ```
 
 
@@ -6140,13 +5768,10 @@ Savings:         $0.135 per 56 requests
 --- FILE: server.js ---
 ```js
 /**
- * Pini Print Bot - Server V3.9
- * ===========================
- * ארכיטקטורה: Server-Heavy, LLM-Light
- * תיקונים:
- * - באג היסטוריה ל-Gemini API
- * - טיפול משופר בשגיאות LLM
- * - ולידציה של מבנה ההיסטוריה
+ * Pini Print Bot - Server V5 (Universal Router)
+ * =============================================
+ * ארכיטקטורה: LLM Router -> Server Logic -> Response
+ * שומר על כל חוקי הברזל: השרת מחשב, ה-LLM רק מבין ומנסח.
  */
 
 const express = require('express');
@@ -6154,345 +5779,21 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// ייבוא שירותים
-const { calculate_custom_job } = require('./services/calculation');
-const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require('./services/sessionManager');
+// --- ייבוא מנועים ושירותים ---
+const { routeRequest } = require('./engine/llmRouter'); // הראוטר החדש
+const { calculate_custom_job } = require('./services/calculation'); // המחשבון (מקור האמת)
+const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
 const { generateQuotePDF } = require('./services/pdfService');
-
-// ייבוא מנועים
-const { classifyMessage } = require('./engine/classifier');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
 const { generateDashboard } = require('./engine/dashboardManager');
 const { 
     findOrCreateCustomer, 
-    getCustomerByPhone, 
-    saveQuoteToCustomer,
-    extractPhoneFromText,
-    extractNameFromText,
-    getCustomerStats,
-    searchCustomers
+    extractPhoneFromText, 
+    extractNameFromText 
 } = require('./engine/customerManager');
-const { detectMood, generateSmartRecommendation } = require('./engine/personalityEngine');
+const { PRODUCT_CATALOG } = require('./engine/productCatalog'); // קטלוג אמיתי לתפריטים
 
-dotenv.config();
-const app = express();
-
-// CORS & Middleware
-app.use(cors({ origin: '*' }));
-app.use(express.json());
-app.use(express.static('public'));
-
-// Gemini Setup
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-// סטטיסטיקות
-const stats = { totalRequests: 0, llmCalls: 0, directHandled: 0, savings: 0 };
-
-// ============================================================
-// HELPER: וולידציה ותיקון היסטוריה
-// ============================================================
-function sanitizeHistory(history) {
-    if (!Array.isArray(history)) return [];
-    
-    return history.filter(item => {
-        // בדיקה שיש role תקין
-        if (!item || !item.role || !['user', 'model'].includes(item.role)) {
-            return false;
-        }
-        // בדיקה שיש parts תקין
-        if (!item.parts || !Array.isArray(item.parts) || item.parts.length === 0) {
-            return false;
-        }
-        // בדיקה שכל part הוא אובייקט עם text
-        return item.parts.every(part => 
-            part && typeof part === 'object' && typeof part.text === 'string' && part.text.length > 0
-        );
-    });
-}
-
-function createHistoryEntry(role, text) {
-    // יוצר entry תקין להיסטוריה
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-        return null;
-    }
-    return {
-        role: role,
-        parts: [{ text: text.trim() }]
-    };
-}
-
-// ============================================================
-// MAIN CHAT ENDPOINT
-// ============================================================
-app.post('/api/chat', async (req, res) => {
-    const startTime = Date.now();
-    stats.totalRequests++;
-    
-    try {
-        const { message, userId, phone, customerName } = req.body;
-        
-        // ולידציה בסיסית
-        if (!message || typeof message !== 'string' || message.trim().length === 0) {
-            return res.status(400).json({ error: 'Missing message', content: 'לא קיבלתי הודעה 🤔' });
-        }
-        
-        const cleanMessage = message.trim();
-        
-        console.log(`\n${'='.repeat(60)}`);
-        console.log(`💬 [Request #${stats.totalRequests}] User: "${cleanMessage}"`);
-        
-        // 1. ניהול סשן
-        const session = getSession(userId);
-        if (!session.history) session.history = [];
-        
-        // ניקוי היסטוריה פגומה (אם יש)
-        session.history = sanitizeHistory(session.history);
-        
-        // 2. זיהוי לקוח
-        let customer = null;
-        if (phone) {
-            customer = findOrCreateCustomer(phone, customerName);
-            session.customerPhone = phone;
-        } else if (session.customerPhone) {
-            customer = getCustomerByPhone(session.customerPhone);
-        } else {
-            const extractedPhone = extractPhoneFromText(cleanMessage);
-            if (extractedPhone) {
-                customer = findOrCreateCustomer(extractedPhone, extractNameFromText(cleanMessage));
-                session.customerPhone = extractedPhone;
-                console.log(`   📱 Phone extracted: ${extractedPhone}`);
-            }
-        }
-
-        // 3. זיהוי מצב רוח וסיווג
-        const mood = detectMood(cleanMessage);
-        const classification = classifyMessage(cleanMessage, { 
-            cart: session.cart,
-            pendingProduct: session.pendingProduct
-        });
-        
-        // Confidence threshold - הגבול בין שרת ל-LLM
-        const CONFIDENCE_THRESHOLD = 0.85;
-        const useServer = classification.confidence >= CONFIDENCE_THRESHOLD && !classification.needsLLM;
-        
-        console.log(`📊 Class: ${classification.action} | Conf: ${classification.confidence} | Handler: ${useServer ? 'SERVER' : 'LLM'}`);
-        
-        // 4. טיפול בבקשה
-        let responseData;
-        
-        if (useServer) {
-            responseData = await handleDirectly(classification, session, userId, customer, mood);
-            stats.directHandled++;
-            stats.savings += 0.003;
-            console.log(`⚡ Direct handling`);
-        } else {
-            // LLM מטפל - אבל עם context מהשרת
-            responseData = await handleWithLLM(cleanMessage, session, userId, customer, classification);
-            stats.llmCalls++;
-            console.log(`🤖 LLM handling`);
-        }
-        
-        // 5. עדכון היסטוריה (רק אם יש תוכן תקין)
-        const userEntry = createHistoryEntry('user', cleanMessage);
-        const modelEntry = createHistoryEntry('model', responseData.content);
-        
-        if (userEntry && modelEntry) {
-            session.history.push(userEntry);
-            session.history.push(modelEntry);
-            
-            // שמירה על מקסימום 20 הודעות
-            if (session.history.length > 20) {
-                session.history = session.history.slice(-20);
-            }
-        }
-
-        // 6. יצירת דשבורד
-        const dashboard = generateDashboard(session, session.customerPhone);
-        
-        // סיום
-        const duration = Date.now() - startTime;
-        console.log(`⏱️ ${duration}ms`);
-        console.log(`${'='.repeat(60)}\n`);
-        
-        res.json({
-            content: responseData.content,
-            cart: session.cart,
-            dashboard: dashboard,
-            quickReplies: responseData.quickReplies || [],
-            meta: {
-                classification: classification.action,
-                mood,
-                duration
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Server Error:', error);
-        res.status(500).json({ 
-            error: 'Internal error', 
-            content: 'אופס, קרתה תקלה רגעית. נסה שוב! 🔄' 
-        });
-    }
-});
-
-// ============================================================
-// DIRECT HANDLER
-// ============================================================
-async function handleDirectly(classification, session, userId, customer, mood) {
-    const { action, data } = classification;
-    let content = '';
-    let quickReplies = [];
-    
-    const ctx = { cart: session.cart, customer, mood };
-
-    switch (action) {
-        case 'greeting':
-            content = buildResponse('greeting', ctx);
-            quickReplies = buildQuickReplies('greeting');
-            break;
-            
-        case 'quote':
-            const calc = calculate_custom_job(session.cart, {
-                product_name: data.product,
-                qty: data.qty,
-                paper_type: data.material,
-                finishing: data.finishing?.join(',')
-            });
-            session.cart = calc.updatedCart;
-            
-            const rec = generateSmartRecommendation(data.product, data.qty, { customer, cart: session.cart });
-            
-            content = buildResponse('quote_added', { item: calc.lastAdded, recommendation: rec });
-            quickReplies = buildQuickReplies('quote_added');
-            break;
-        
-        case 'multi_quote':
-            // הוספת כמה מוצרים בבת אחת
-            const addedItems = [];
-            for (const prod of data.products) {
-                if (prod.qty) {
-                    const multiCalc = calculate_custom_job(session.cart, {
-                        product_name: prod.product,
-                        qty: prod.qty
-                    });
-                    session.cart = multiCalc.updatedCart;
-                    addedItems.push(multiCalc.lastAdded);
-                }
-            }
-            content = buildResponse('multi_quote_added', { items: addedItems, cart: session.cart });
-            quickReplies = buildQuickReplies('quote_added');
-            break;
-            
-        case 'update_qty':
-            const itemToUpdate = session.cart.find(i => i.product_name === data.product) || session.cart[session.cart.length-1];
-            if (itemToUpdate) {
-                const oldQty = itemToUpdate.qty;
-                const upCalc = calculate_custom_job(session.cart, {
-                    product_name: itemToUpdate.product_name,
-                    qty: data.qty,
-                    paper_type: itemToUpdate.paper_type
-                });
-                session.cart = upCalc.updatedCart;
-                content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
-            } else {
-                content = "לא מצאתי את הפריט לעדכון. מה תרצה לשנות?";
-            }
-            quickReplies = buildQuickReplies('cart_status');
-            break;
-            
-        case 'remove':
-            const removed = removeFromCart(userId, data.product);
-            content = removed 
-                ? buildResponse('item_removed', { productName: data.product }) 
-                : "לא מצאתי את הפריט למחיקה. תבדוק מה יש בעגלה?";
-            quickReplies = buildQuickReplies('cart_status');
-            break;
-            
-        case 'clear':
-            clearCart(userId);
-            content = buildResponse('cart_cleared');
-            quickReplies = buildQuickReplies('greeting');
-            break;
-            
-        case 'status':
-            content = buildResponse('cart_status', ctx);
-            quickReplies = buildQuickReplies('cart_status');
-            break;
-            
-        case 'send_quote':
-            const total = session.cart.reduce((s, i) => s + (i.client_price || 0), 0);
-            content = buildResponse('send_quote', { cart: session.cart, total });
-            quickReplies = buildQuickReplies('send_quote');
-            break;
-            
-        case 'quote_incomplete':
-            // שמירת המוצר הממתין
-            session.pendingProduct = data.product;
-            content = buildResponse('ask_quantity', { product: data.product });
-            quickReplies = buildQuickReplies('ask_quantity');
-            break;
-            
-        case 'design_check':
-            content = buildResponse('design_check');
-            quickReplies = buildQuickReplies('design_check');
-            break;
-        
-        case 'catalog':
-            content = buildResponse('catalog', ctx);
-            quickReplies = []; // לא צריך כפתורים - הלקוח יכתוב מה הוא רוצה
-            break;
-        
-        case 'faq':
-            content = buildResponse('faq', ctx);
-            quickReplies = buildQuickReplies('faq');
-            break;
-        
-        case 'contact':
-            content = buildResponse('contact', ctx);
-            quickReplies = buildQuickReplies('greeting');
-            break;
-        
-        case 'order_status':
-            content = buildResponse('order_status', ctx);
-            quickReplies = buildQuickReplies('greeting');
-            break;
-        
-        case 'decline':
-            // הלקוח סירב - ננקה את המוצר הממתין
-            session.pendingProduct = null;
-            content = buildResponse('decline', ctx);
-            quickReplies = buildQuickReplies('greeting');
-            break;
-        
-        case 'change_material':
-            // הלקוח רוצה לשנות חומר - נציג אופציות
-            content = buildResponse('material_options', { 
-                product: data.product || session.pendingProduct || session.cart[session.cart.length-1]?.product_name 
-            });
-            quickReplies = buildQuickReplies('material_options');
-            break;
-        
-        case 'change_finishing':
-            // הלקוח רוצה להוסיף/לשנות גימור
-            content = buildResponse('finishing_options', { 
-                product: data.product || session.cart[session.cart.length-1]?.product_name,
-                requested: data.finishing
-            });
-            quickReplies = buildQuickReplies('finishing_options');
-            break;
-            
-        default:
-            content = "לא הבנתי בדיוק, אפשר לנסח אחרת? 🤔";
-            quickReplies = buildQuickReplies('greeting');
-    }
-    
-    return { content, quickReplies };
-}
-
-// ============================================================
-// SMART LLM HANDLER - עם בקרת שרת
-// ============================================================
+// --- ייבוא ה-LLM החכם לשיחות ---
 const { 
     detectTaskType, 
     buildPrompt, 
@@ -6501,222 +5802,222 @@ const {
     TASK_TYPES 
 } = require('./engine/smartLLM');
 
-async function handleWithLLM(message, session, userId, customer, classification = {}) {
-    // שלב 1: זיהוי סוג המשימה - קודם מהclassifier, אחרת detect
-    let taskType = classification.data?.taskType;
-    if (!taskType) {
-        taskType = detectTaskType(message, {
-            hasQuote: session.cart.length > 0,
-            pendingProduct: session.pendingProduct
-        });
-    }
-    
-    console.log(`   📋 Task Type: ${taskType}`);
-    
-    // שלב 2: בניית context - כולל מידע מהclassifier
-    const contextData = {
-        userMessage: message,
-        customer: customer,
-        cart: session.cart,
-        pendingProduct: session.pendingProduct,
-        // מידע מהclassifier
-        detectedAction: classification.action,
-        detectedProduct: classification.data?.product,
-        detectedOccasion: classification.data?.occasion
-    };
-    
-    // הוספת מידע ספציפי לפי סוג המשימה
-    if (taskType === TASK_TYPES.RECOMMEND || taskType === 'recommend') {
-        // זיהוי אירוע
-        const occasions = {
-            'חתונה': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
-            'חתונות': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
-            'בר מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
-            'בת מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
-            'ברית': ['הזמנות', 'כרטיסי תודה', 'מדבקות'],
-            'תערוכה': ['רולאפים', 'פליירים', 'כרטיסי ביקור', 'פוסטרים', 'באנרים'],
-            'עסק': ['כרטיסי ביקור', 'פליירים', 'ניירת משרדית', 'שלטים']
-        };
-        
-        const detectedOccasion = contextData.detectedOccasion || Object.keys(occasions).find(o => message.includes(o));
-        if (detectedOccasion) {
-            contextData.occasion = detectedOccasion;
-            contextData.suggestions = occasions[detectedOccasion] || occasions['חתונה'];
-        }
-    }
-    
-    if (taskType === TASK_TYPES.EXPLAIN || taskType === 'explain') {
-        // הוספת מידע על מוצר אם רלוונטי
-        const productInfo = getProductInfo(message);
-        if (productInfo) {
-            contextData.productInfo = productInfo;
-        }
-    }
-    
-    // שלב 3: בניית prompt קצר
-    const prompt = buildPrompt(taskType, contextData);
-    console.log(`   📊 Tokens: ~${prompt.estimatedTokens}`);
-    
-    // שלב 4: קריאה ל-LLM
+dotenv.config();
+const app = express();
+
+app.use(cors({ origin: '*' }));
+app.use(express.json());
+app.use(express.static('public'));
+
+// הגדרת Gemini לשיחות (SmartLLM)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+// ============================================================
+// MAIN CHAT ENDPOINT
+// ============================================================
+app.post('/api/chat', async (req, res) => {
     try {
-        const chatHistory = [
-            { role: "user", parts: [{ text: prompt.system + "\n\n" + prompt.context }] },
-            { role: "model", parts: [{ text: "הבנתי, אענה בקצרה ובהתאם להנחיות." }] }
-        ];
+        const { message, userId, phone, customerName } = req.body;
         
-        // הוספת היסטוריה קצרה (רק 4 הודעות אחרונות)
-        const recentHistory = sanitizeHistory(session.history).slice(-4);
-        chatHistory.push(...recentHistory);
+        if (!message) return res.status(400).json({ error: 'Missing message' });
         
-        const chat = model.startChat({ history: chatHistory });
-        const result = await chat.sendMessage(message);
-        let responseText = result.response.text();
+        console.log(`\n💬 User: "${message}"`);
         
-        if (!responseText || responseText.trim().length === 0) {
-            throw new Error('Empty response from LLM');
+        // 1. ניהול סשן ולקוח
+        const session = getSession(userId);
+        let customer = null;
+        
+        // זיהוי לקוח (אם יש טלפון)
+        const extractedPhone = extractPhoneFromText(message);
+        if (phone || extractedPhone) {
+            customer = findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
+            session.customerPhone = customer.phone;
         }
-        
-        // שלב 5: אימות התשובה
-        const validation = validateResponse(responseText, taskType, contextData);
-        
-        if (!validation.isValid) {
-            console.log(`   ⚠️ Validation issues: ${validation.issues.join(', ')}`);
-            responseText = fixResponse(responseText, validation.corrections, contextData);
-            console.log(`   ✅ Response fixed`);
-        }
-        
-        const quickReplies = buildQuickReplies('chat');
-        return { content: responseText.trim(), quickReplies };
-        
-    } catch (e) {
-        console.error("LLM Error:", e.message || e);
-        
-        // תשובה חלופית חכמה
-        const fallbackResponse = generateFallbackResponse(message);
-        return { 
-            content: fallbackResponse, 
-            quickReplies: buildQuickReplies('greeting') 
-        };
-    }
-}
 
-// מידע על מוצרים לשאלות
-function getProductInfo(message) {
-    const productInfoMap = {
-        'הזמנות': `סוגי הזמנות: חתונה, בר/בת מצווה, ברית, אירועים.
-אופציות נייר: כרומו מבריק, נייר כותנה, נייר פנינה.
-גימורים: למינציה, הבלטה, פויל זהב/כסף.
-גדלים נפוצים: 14x14, 15x15, 21x10 ס"מ.`,
-        
-        'פליירים': `גדלים: A4, A5, A6, DL.
-נייר: 135 גרם (דק), 170 גרם (סטנדרט), 250 גרם (עבה).
-הדפסה: חד או דו-צדדי, צבעוני או שחור-לבן.
-גימורים: למינציה מט/מבריק.`,
-        
-        'כרטיסי ביקור': `גודל סטנדרטי: 9x5 ס"מ.
-נייר: 350 גרם כרומו, כותנה, פנינה.
-גימורים: למינציה, פינות עגולות, הבלטה, פויל.`,
-        
-        'רולאפ': `גדלים: 85x200, 100x200, 120x200 ס"מ.
-כולל: מתקן אלומיניום + הדפסה + תיק נשיאה.
-חומר: ויניל איכותי 440 גרם.`
-    };
-    
-    for (const [product, info] of Object.entries(productInfoMap)) {
-        if (message.includes(product)) {
-            return info;
-        }
-    }
-    return null;
-}
+        // 2. הניתוב החדש (V5 Router)
+        // שולחים ל-LLM הקטן שיבין מה הכוונה ויחזיר JSON
+        const routerResult = await routeRequest(message, session.cart);
+        console.log(`🧠 Router Intent: ${routerResult.intent} | Product: ${routerResult.product || 'N/A'}`);
 
-// תשובה חלופית כשה-LLM נכשל
-function generateFallbackResponse(message) {
-    const lowerMsg = message.toLowerCase();
-    
-    // זיהוי בסיסי של כוונה
-    if (lowerMsg.includes('מחיר') || lowerMsg.includes('עולה')) {
-        return "אשמח לתת לך הצעת מחיר! ספר לי מה תרצה להדפיס וכמה עותקים. 📋";
-    }
-    if (lowerMsg.includes('שאל') || lowerMsg.includes('שאלה')) {
-        return "בטח! שאל אותי מה שתרצה על שירותי הדפוס שלנו. 💬";
-    }
-    if (lowerMsg.includes('עזר') || lowerMsg.includes('עזרה')) {
-        return "אני כאן לעזור! אפשר להזמין פליירים, כרטיסי ביקור, רולאפים, הזמנות ועוד. במה להתחיל?";
-    }
-    if (lowerMsg.includes('קטלוג') || lowerMsg.includes('מוצר')) {
-        return "יש לנו מגוון רחב: פליירים, כרטיסי ביקור, הזמנות לאירועים, רולאפים, מדבקות, חוברות ועוד! מה מעניין אותך?";
-    }
-    
-    // ברירת מחדל
-    return "אני פיני מדפוס בית יצחק! 🖨️ איך אפשר לעזור לך היום? אפשר להזמין הדפסות, לקבל הצעת מחיר או לשאול שאלות.";
-}
+        // 3. ביצוע הפעולה בשרת (Server is Source of Truth)
+        let responseData = { content: '', quickReplies: [] };
+        const ctx = { cart: session.cart, customer, routerResult };
 
-// ============================================================
-// API ROUTES
-// ============================================================
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        version: '3.9',
-        stats: {
-            totalRequests: stats.totalRequests,
-            directHandled: stats.directHandled,
-            llmCalls: stats.llmCalls,
-            directRate: stats.totalRequests > 0 
-                ? Math.round((stats.directHandled / stats.totalRequests) * 100) + '%'
-                : '0%'
+        switch (routerResult.intent) {
+            
+            case 'quote': // בקשת מחיר / הוספה
+                // חוק ברזל: השרת מחשב!
+                if (routerResult.product && routerResult.qty) {
+                    const calc = calculate_custom_job(session.cart, {
+                        product_name: routerResult.product,
+                        qty: routerResult.qty,
+                        paper_type: routerResult.attributes?.paper,
+                        finishing: routerResult.attributes?.finishing
+                    });
+                    session.cart = calc.updatedCart;
+                    responseData.content = buildResponse('quote_added', { item: calc.lastAdded });
+                    responseData.quickReplies = buildQuickReplies('quote_added');
+                } else if (routerResult.product) {
+                    // יש מוצר אבל אין כמות ("אני צריך פליירים")
+                    responseData.content = buildResponse('ask_quantity', { product: routerResult.product });
+                    responseData.quickReplies = buildQuickReplies('ask_quantity');
+                } else {
+                    // לא ברור מה המוצר
+                    responseData.content = "בשמחה! מה תרצה להדפיס? (כרטיסים, פליירים, הזמנות...)";
+                    responseData.quickReplies = buildQuickReplies('greeting');
+                }
+                break;
+
+            case 'update': // עדכון כמות/מוצר
+                const itemToUpdate = session.cart.length > 0 ? session.cart[session.cart.length - 1] : null;
+                if (itemToUpdate && routerResult.qty) {
+                    const oldQty = itemToUpdate.qty;
+                    const upCalc = calculate_custom_job(session.cart, {
+                        product_name: itemToUpdate.product_name, // שומרים על המוצר המקורי אם לא שונה
+                        qty: routerResult.qty,
+                        paper_type: routerResult.attributes?.paper || itemToUpdate.paper_type
+                    });
+                    session.cart = upCalc.updatedCart;
+                    responseData.content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
+                    responseData.quickReplies = buildQuickReplies('cart_status');
+                } else {
+                    responseData.content = "לא מצאתי מה לעדכן. מה תרצה להזמין?";
+                }
+                break;
+
+            case 'remove': // הסרה
+                const removed = removeFromCart(userId, routerResult.product || '');
+                responseData.content = removed ? "הסרתי את הפריט 👍" : "העגלה כבר מעודכנת.";
+                responseData.quickReplies = buildQuickReplies('cart_status');
+                break;
+            
+            case 'clear': // איפוס
+                clearCart(userId);
+                responseData.content = buildResponse('cart_cleared');
+                responseData.quickReplies = buildQuickReplies('greeting');
+                break;
+
+            case 'show_menu': // תפריט חכם (Sales Agent)
+                // כאן אנחנו מראים את היכולת של איש מכירות!
+                // אם הלקוח אמר "חתונה", נציג רק מוצרי חתונה
+                const context = routerResult.context || routerResult.category || ''; 
+                let menuText = "הנה מה שיש לנו להציע:";
+                let relevantProducts = [];
+
+                if (['wedding', 'חתונה', 'אירוע', 'invitation'].some(w => context.includes(w))) {
+                    menuText = "🎉 מזל טוב! לחתונה אני ממליץ על:";
+                    relevantProducts = ['invitation', 'sticker', 'booklet']; // מוצרים רלוונטיים
+                } else if (['business', 'עסק', 'כנס', 'conference'].some(w => context.includes(w))) {
+                    menuText = "💼 לעסקים וכנסים הולך חזק:";
+                    relevantProducts = ['bc', 'flyer', 'rollup'];
+                } else {
+                    // תפריט כללי
+                    relevantProducts = ['bc', 'flyer', 'invitation', 'rollup'];
+                }
+
+                // בניית הכפתורים מהקטלוג האמיתי
+                const menuButtons = relevantProducts.map(key => {
+                    const prod = PRODUCT_CATALOG[key];
+                    return { text: prod ? prod.name : key, value: prod ? prod.name : key };
+                });
+
+                responseData.content = menuText;
+                responseData.quickReplies = menuButtons;
+                break;
+
+            case 'greeting':
+                responseData.content = buildResponse('greeting', { customer });
+                responseData.quickReplies = buildQuickReplies('greeting');
+                break;
+                
+            case 'checkout':
+                const total = session.cart.reduce((s, i) => s + i.client_price, 0);
+                responseData.content = buildResponse('send_quote', { total, cart: session.cart });
+                responseData.quickReplies = buildQuickReplies('send_quote');
+                break;
+
+            case 'consult': // שאלות פתוחות -> הולך ל-SmartLLM
+            default:
+                // כאן אנחנו משתמשים ב-SmartLLM שיודע לענות יפה אבל מפוקח
+                const llmResponse = await handleWithSmartLLM(message, session, customer);
+                responseData.content = llmResponse.content;
+                responseData.quickReplies = llmResponse.quickReplies;
+                break;
         }
-    });
+
+        // 4. שמירת היסטוריה
+        addToHistory(userId, 'user', message);
+        addToHistory(userId, 'model', responseData.content);
+
+        // 5. הפקת דשבורד
+        const dashboard = generateDashboard(session, session.customerPhone);
+
+        res.json({
+            content: responseData.content,
+            cart: session.cart,
+            dashboard: dashboard,
+            quickReplies: responseData.quickReplies,
+            meta: { intent: routerResult.intent }
+        });
+
+    } catch (error) {
+        console.error('Server Error:', error);
+        res.status(500).json({ content: 'סליחה, הייתה תקלה קטנה. נסה שוב? 😅' });
+    }
 });
 
-// PDF Generation
+// פונקציית עזר לטיפול בשיחה חכמה (Consult)
+async function handleWithSmartLLM(message, session, customer) {
+    // משתמשים בלוגיקה הקיימת של smartLLM.js שיש לה כבר הגנות
+    const taskType = detectTaskType(message, { hasQuote: session.cart.length > 0 });
+    const promptData = buildPrompt(taskType, { 
+        userMessage: message, 
+        cart: session.cart, 
+        customer 
+    });
+
+    try {
+        const result = await chatModel.generateContent(promptData.system + "\n" + promptData.context);
+        let text = result.response.text();
+        
+        // ולידציה (השוטר) - לוודא שאין הזיות מחיר
+        const validation = validateResponse(text, taskType, {});
+        if (!validation.isValid) {
+            text = fixResponse(text, validation.corrections);
+        }
+        
+        return { content: text, quickReplies: [] };
+    } catch (e) {
+        return { content: "אני בודק את זה...", quickReplies: [] };
+    }
+}
+
+// PDF Generation Route
 app.post('/api/pdf', async (req, res) => {
     try {
         const { cart, customer } = req.body;
+        if (!cart || !Array.isArray(cart) || cart.length === 0) return res.status(400).json({ error: 'Cart empty' });
         
-        if (!cart || !Array.isArray(cart) || cart.length === 0) {
-            return res.status(400).json({ error: 'Empty cart' });
-        }
+        const pdfBuffer = await generateQuotePDF(cart, customer || { name: 'לקוח' });
         
-        const pdf = await generateQuotePDF(cart, customer || { name: 'לקוח' });
-        res.set({ 
+        res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': 'attachment; filename="Pini_Quote.pdf"'
+            'Content-Disposition': 'attachment; filename="quote.pdf"'
         });
-        res.send(pdf);
+        res.send(pdfBuffer);
     } catch (e) {
-        console.error('PDF Error:', e);
-        res.status(500).json({ error: 'PDF generation failed' });
+        console.error("PDF Error", e);
+        res.status(500).send("Error generating PDF");
     }
 });
 
-// Stats endpoint
-app.get('/api/stats', (req, res) => {
-    res.json({
-        ...stats,
-        directRate: stats.totalRequests > 0 
-            ? ((stats.directHandled / stats.totalRequests) * 100).toFixed(1) + '%'
-            : '0%',
-        estimatedSavings: `$${stats.savings.toFixed(2)}`
-    });
-});
-
-// ============================================================
-// START SERVER
-// ============================================================
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => {
-    console.log(`\n${'='.repeat(50)}`);
-    console.log(`🚀 Pini Bot Server V3.9`);
-    console.log(`   Port: ${PORT}`);
-    console.log(`   Mode: Server-Heavy, LLM-Light`);
-    console.log(`${'='.repeat(50)}\n`);
-});
+app.listen(PORT, () => console.log(`🚀 Pini V5 Router Server running on port ${PORT}`));
 ```
 
 
---- FILE: services\calculation.js ---
+--- FILE: services\calculation1.js ---
 ```js
 /**
  * Calculation Engine V10 - Pini Print Bot

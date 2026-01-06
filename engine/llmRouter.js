@@ -11,13 +11,12 @@ dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// משתמשים במודל Flash - זול ומהיר (חשוב לתקציב)
+// משתמשים במודל Flash - זול ומהיר
 const routerModel = genAI.getGenerativeModel({ 
     model: "gemini-2.0-flash",
     generationConfig: { responseMimeType: "application/json" }
 });
 
-// קטלוג מקוצר לראוטר - כדי שידע לזהות מוצרים נכון
 const PRODUCT_LIST_SHORT = `
 - bc: כרטיסי ביקור (business cards)
 - flyer: פליירים, מנשרים, עלונים
@@ -30,11 +29,10 @@ const PRODUCT_LIST_SHORT = `
 `;
 
 /**
- * הפונקציה שמנתבת את כל ההודעות
+ * הפונקציה שמנתבת את כל ההודעות (כשהמנוע המהיר נכשל)
  */
 async function routeRequest(message, currentCartContext = []) {
     
-    // בניית סיכום עגלה כדי שה-LLM יבין הקשר (למשל "תשנה את זה")
     const cartSummary = currentCartContext.length > 0 
         ? currentCartContext.map(i => `${i.product_name} (${i.qty})`).join(', ')
         : "עגלה ריקה";
@@ -47,18 +45,20 @@ async function routeRequest(message, currentCartContext = []) {
     ${PRODUCT_LIST_SHORT}
 
     רשימת כוונות (Intents) מותרות:
-    1. "quote": בקשת הצעת מחיר או הוספה (דוגמה: "תכין לי 1000 כרטיסים", "כמה עולה פלייר?").
+    1. "quote": בקשת הצעת מחיר או הוספה (דוגמה: "תכין לי 1000 כרטיסים").
     2. "update": שינוי פריט קיים (דוגמה: "תשנה ל-500", "תוסיף למינציה").
     3. "remove": הסרת פריט (דוגמה: "תבטל את הרולאפ").
-    4. "show_menu": הלקוח מתלבט או מבקש המלצה (דוגמה: "מה יש לחתונה?", "אני צריך דברים לכנס").
-    5. "consult": שאלה מקצועית/פתוחה (דוגמה: "מה זה למינציה?", "זה יקר לי", "איך שולחים קובץ?").
-    6. "greeting": סתם שלום/נימוס (דוגמה: "היי", "תודה", "ביי").
-    7. "checkout": הלקוח רוצה לסיים/לשלם/לשלוח (דוגמה: "יאללה תשלח", "איך משלמים?").
+    4. "show_menu": בקשת תפריט או המלצה (דוגמה: "מה יש לחתונה?").
+    5. "consult": שאלה מקצועית/פתוחה (דוגמה: "מה זה למינציה?", "זה יקר לי").
+    6. "greeting": סתם שלום/נימוס (דוגמה: "היי", "תודה").
+    7. "checkout": הלקוח רוצה לסיים/לשלם (דוגמה: "תשלח הצעה", "איך משלמים?").
+    8. "status": בדיקת מצב עגלה (דוגמה: "מה יש לי בעגלה?", "כמה יצא הכל?").
+    9. "design_check": הלקוח מדבר על קובץ מוכן/עיצוב (דוגמה: "יש לי PDF", "צריך עיצוב?").
 
     הנחיות קריטיות ל-JSON:
-    - product: קוד המוצר באנגלית (למשל 'bc' ולא 'כרטיס').
-    - qty: מספר שלם בלבד (תרגם "אלף" ל-1000).
-    - context: אם הלקוח ציין אירוע (חתונה/כנס/עסק) - שמור את זה בשדה 'context'.
+    - product: קוד המוצר באנגלית (למשל 'bc').
+    - qty: מספר שלם בלבד.
+    - context: אם הלקוח ציין אירוע (חתונה/כנס) - שמור ב-'context'.
     - attributes: אם הלקוח ציין נייר/גימור, שמור באובייקט.
 
     הודעת הלקוח: "${message}"
@@ -68,18 +68,13 @@ async function routeRequest(message, currentCartContext = []) {
     try {
         const result = await routerModel.generateContent(systemPrompt);
         const responseText = result.response.text();
-        
-        // נסיון לפרסר את ה-JSON
         const response = JSON.parse(responseText);
         
-        // ולידציה בסיסית - אם אין intent, נחזיר consult
         if (!response.intent) response.intent = 'consult';
-        
         return response;
         
     } catch (error) {
         console.error("Router Error:", error);
-        // Fallback: במקרה של תקלה ב-Router, נעביר למצב שיחה רגיל
         return { intent: "consult", error: true };
     }
 }
