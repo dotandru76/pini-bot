@@ -1,9 +1,9 @@
 /**
- * Pini Print Bot - Server V5 (Hybrid: Classifier + LLM)
+ * Pini Print Bot - Server V5.1 (Hybrid with Context)
  * =====================================================
  * ארכיטקטורה משולבת:
- * 1. בדיקה מהירה (Classifier) - חינם ומהיר (80% מהמקרים)
- * 2. בדיקה חכמה (LLM Router) - למקרים מורכבים
+ * 1. בדיקה מהירה (Classifier) - חינם ומהיר.
+ * 2. בדיקה חכמה (LLM Router) - עם זיכרון שיחה מלא.
  */
 
 const express = require('express');
@@ -12,9 +12,9 @@ const dotenv = require('dotenv');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // --- ייבוא מנועים ושירותים ---
-const { classifyMessage } = require('./engine/classifier'); // המנוע המהיר החדש
-const { routeRequest } = require('./engine/llmRouter');     // הראוטר החכם
-const { calculate_custom_job } = require('./engine/calculation'); // המחשבון
+const { classifyMessage } = require('./engine/classifier'); // המנוע המהיר (V4)
+const { routeRequest } = require('./engine/llmRouter');     // הראוטר החכם (עם Context)
+const { calculate_custom_job } = require('./engine/calculation'); 
 const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
 const { generateQuotePDF } = require('./services/pdfService');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
@@ -62,7 +62,7 @@ app.post('/api/chat', async (req, res) => {
         // 2. הניתוב החדש והחכם (Hybrid Router: Rules + LLM)
         let routerResult;
         
-        // קודם כל ננסה את המסווג המהיר (חינם!)
+        // קודם כל ננסה את המסווג המהיר (למקרים פשוטים)
         const classification = classifyMessage(message, { cart: session.cart });
         
         if (!classification.needsLLM) {
@@ -76,9 +76,11 @@ app.post('/api/chat', async (req, res) => {
                 attributes: {}
             };
         } else {
-            // רק אם המסווג לא הצליח - נפנה ל-LLM (עולה כסף)
+            // אם המסווג נכשל או זיהה מורכבות - פונים ל-LLM
             console.log(`🤖 Using LLM for complex request...`);
-            routerResult = await routeRequest(message, session.cart);
+            
+            // *** תיקון קריטי: שליחת ההיסטוריה לראוטר ***
+            routerResult = await routeRequest(message, session.cart, session.history);
         }
         
         console.log(`🧠 Final Intent: ${routerResult.intent} | Product: ${routerResult.product || 'N/A'}`);
@@ -122,7 +124,6 @@ app.post('/api/chat', async (req, res) => {
                     responseData.content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
                     responseData.quickReplies = buildQuickReplies('cart_status');
                 } else {
-                    // אם אין מה לעדכן, נתייחס לזה כהוספה חדשה אם אפשר
                     responseData.content = "לא מצאתי פריט אחרון לעדכן. מה תרצה להזמין?";
                 }
                 break;
@@ -139,12 +140,12 @@ app.post('/api/chat', async (req, res) => {
                 responseData.quickReplies = buildQuickReplies('greeting');
                 break;
 
-            case 'status': // סטטוס עגלה (חדש!)
+            case 'status': // סטטוס עגלה
                 responseData.content = buildResponse('cart_status', { cart: session.cart, customer });
                 responseData.quickReplies = buildQuickReplies('cart_status');
                 break;
 
-            case 'design_check': // בדיקת עיצוב (חדש!)
+            case 'design_check': // בדיקת עיצוב
                 responseData.content = buildResponse('design_check', {});
                 responseData.quickReplies = buildQuickReplies('design_check');
                 break;
@@ -187,6 +188,7 @@ app.post('/api/chat', async (req, res) => {
                 break;
         }
 
+        // שמירת ההודעות בהיסטוריה (חובה כדי שהראוטר יראה אותן בפעם הבאה)
         addToHistory(userId, 'user', message);
         addToHistory(userId, 'model', responseData.content);
 
@@ -228,7 +230,8 @@ async function handleWithSmartLLM(message, session, customer) {
     const promptData = buildPrompt(taskType, { 
         userMessage: message, 
         cart: session.cart, 
-        customer 
+        customer,
+        history: session.history // מעבירים היסטוריה גם לכאן ליתר ביטחון
     });
 
     try {
@@ -266,4 +269,4 @@ app.post('/api/pdf', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`🚀 Pini V5 Router Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Pini V5.1 Server (Memory Enabled) running on port ${PORT}`));

@@ -1,8 +1,10 @@
 /**
- * Pini Message Classifier V4 (Smart Logic)
- * ========================================
- * תיקון קריטי: זיהוי מורכבות לפי סוגי מוצרים (ולא סתם מספרים),
- * ושינוי סדר העדיפויות כדי למנוע טעויות בזיהוי.
+ * Pini Message Classifier V5 (Production Ready)
+ * =============================================
+ * שיפורים:
+ * 1. זיהוי שאלות (?) - מונע הזמנה בטעות כשלקוח רק מתעניין.
+ * 2. רגישות למילות קישור ("כמו", "בלי") ולרגש ("שחיטה", "פיצוי").
+ * 3. טיפול חכם בסטטוס מחיר.
  */
 
 const PRODUCT_KEYWORDS = {
@@ -13,7 +15,7 @@ const PRODUCT_KEYWORDS = {
     'רולאפ': 'rollup', 'באנר': 'rollup', 'שמשונית': 'banner',
     'קנבס': 'canvas', 'תמונה': 'canvas',
     'מדבקה': 'sticker', 'מדבקות': 'sticker', 'סטיקר': 'sticker',
-    'חוברת': 'booklet', 'קטלוג': 'booklet', 'מחברת': 'booklet',
+    'חוברת': 'booklet', 'קטלוג': 'booklet', 'מחברת': 'booklet', 'ספר': 'booklet',
     
     // אנגלית
     'flyer': 'flyer', 'flyers': 'flyer',
@@ -38,23 +40,25 @@ const HEBREW_NUMBERS = {
     'מאה': 100, 'מאתיים': 200, 'אלף': 1000, 'אלפיים': 2000
 };
 
-// טריגרים ל-LLM (מילים שמעידות על שיחה מורכבת/רגשית)
+// 🚩 מילים שמקפיצות ל-LLM מיד
 const COMPLEXITY_TRIGGERS = [
     'למה', 'איך', 'מתי', 'האם', 'תלוי', 
     'קובץ', 'דחוף', 'הנחה', 'יקר', 'זול', 'משלוח', 'הבדל',
+    'פיצוי', 'חינם', 'תלונה', 'שחיטה', 'גרוע', 'עקום', // רגש שלילי/שירות
+    'כמו', 'בערך', 'אולי', // אי ודאות
+    'בליד', 'קרופ', 'וקטור', // מונחים טכניים
+    'למחר', 'היום', // דחיפות
     'why', 'how', 'when', 'discount', 'expensive'
 ];
 
 /**
  * 🧠 זיהוי מורכבות חכם
- * בודק אם יש הזמנה של מספר מוצרים שונים במקביל
  */
 function isComplexOrder(text) {
     // 1. סימני חיבור מפורשים
     if (text.includes('+') || text.includes(' plus ')) return true;
     
-    // 2. בדיקה: כמה סוגי מוצרים שונים הוזכרו במשפט?
-    // אם הוזכרו גם "פלייר" וגם "כרטיס" -> זה מורכב לטיפול מהיר
+    // 2. ריבוי מוצרים (למשל: "פלייר וגם כרטיס")
     const foundCategories = new Set();
     for (const [keyword, category] of Object.entries(PRODUCT_KEYWORDS)) {
         if (text.includes(keyword)) {
@@ -62,9 +66,7 @@ function isComplexOrder(text) {
         }
     }
     
-    if (foundCategories.size > 1) {
-        return true; // יש יותר ממוצר אחד -> ל-LLM
-    }
+    if (foundCategories.size > 1) return true;
 
     return false;
 }
@@ -80,35 +82,39 @@ function classifyMessage(message, context = {}) {
         }
     }
 
-    // --- שלב 0: בדיקות בטיחות ומורכבות (Safety First) ---
+    // --- שלב 0: Safety & Complexity ---
     
-    // א. האם זו הזמנה מרובת מוצרים?
+    // א. הזמנה מרובת מוצרים -> LLM
     if (isComplexOrder(text)) {
-        console.log("⚠️ Complex order detected (Multi-Product) -> Sending to LLM");
         return { action: 'chat', data: {}, needsLLM: true };
     }
 
-    // ב. האם יש טריגרים של שיחה מורכבת ("יקר לי", "איך זה עובד")?
-    // בודקים את זה *לפני* שמחפשים מילות מפתח כמו "בטל" או "שלח"
+    // ב. טריגרים מילוליים (רגש, דחיפות, טכני) -> LLM
     if (COMPLEXITY_TRIGGERS.some(t => text.includes(t))) {
         return { action: 'chat', data: {}, needsLLM: true };
     }
 
+    // ג. זיהוי שאלות על מוצרים ("הקנבסים זה עם מסגרת?") -> LLM
+    // אם יש שם של מוצר וגם סימן שאלה, וזו לא שאלת מחיר סטנדרטית
+    const hasProduct = findProductInText(text);
+    const isPriceQuestion = text.includes('כמה') || text.includes('מחיר') || text.includes('cost');
+    if (hasProduct && text.includes('?') && !isPriceQuestion) {
+        return { action: 'chat', data: {}, needsLLM: true };
+    }
+
     // --- שלב 1: זיהוי ליבה (מוצר + כמות) ---
-    // העלינו את זה למעלה! אם יש "1000 פליירים", זה קודם כל Quote.
-    // זה מונע מ"תשלח לי 1000 פליירים" ליפול על "Send Quote" בטעות.
-    
     const qtyMatch = text.match(/(\d{1,3}(?:,\d{3})*)/); 
     const qty = qtyMatch ? parseInt(qtyMatch[0].replace(/,/g, '')) : null;
     const product = findProductInText(text);
 
     if (qty && product) {
-        // בודקים אם זה עדכון
+        // האם זה עדכון?
         const isUpdate = ACTION_KEYWORDS.update.some(k => text.includes(k)) || 
                          (cart.some(i => i.product_name === product) && 
                           !text.includes('עוד') && !text.includes('תוסיף') && !text.includes('גם'));
         
-        if (isUpdate && (text.includes('שנה') || text.includes('עדכן') || text.includes('במקום'))) {
+        // תיקון: אם הלקוח אומר "תוריד ל-2000" זה Update, אבל אם הוא אומר "זה יקר, תוריד" - ה-Complex Trigger כבר תפס את זה למעלה
+        if (isUpdate && (text.includes('שנה') || text.includes('עדכן') || text.includes('במקום') || text.includes('תוריד') || text.includes('תעלה'))) {
              return { action: 'update_qty', data: { product, qty }, needsLLM: false };
         }
         return { action: 'quote', data: { product, qty }, needsLLM: false };
@@ -117,7 +123,7 @@ function classifyMessage(message, context = {}) {
     // --- שלב 2: פעולות פשוטות ---
 
     // ברכות
-    if (ACTION_KEYWORDS.greeting.some(k => text.includes(k)) && text.length < 20) {
+    if (ACTION_KEYWORDS.greeting.some(k => text.includes(k)) && text.length < 20 && !text.includes('?')) {
         return { action: 'greeting', data: {}, needsLLM: false };
     }
 
@@ -126,19 +132,19 @@ function classifyMessage(message, context = {}) {
         return { action: 'clear', data: {}, needsLLM: false };
     }
 
-    // שליחה / סיום (רק אם לא מצאנו מוצר+כמות קודם)
+    // שליחה / סיום
     if (ACTION_KEYWORDS.send_quote.some(k => text.includes(k))) {
         return { action: 'send_quote', data: {}, needsLLM: false };
     }
 
-    // סטטוס
+    // סטטוס (רק אם לא נתפס למעלה ע"י טריגרים כמו "שחיטה")
     if (ACTION_KEYWORDS.status.some(k => text.includes(k))) {
         return { action: 'status', data: {}, needsLLM: false };
     }
 
-    // עיצוב
+    // עיצוב / בדיקת קבצים
     if ((text.includes('עיצוב') || text.includes('pdf') || text.includes('קובץ')) && 
-        (text.includes('יש') || text.includes('מוכן') || text.includes('ממני'))) {
+        (text.includes('יש') || text.includes('מוכן') || text.includes('ממני') || text.includes('בדיקה'))) {
          return { action: 'design_check', data: {}, needsLLM: false };
     }
 
