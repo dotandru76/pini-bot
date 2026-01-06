@@ -138,6 +138,63 @@ const scenario6 = {
         { user: "תשלח הצעה", expected: "send_quote" },
     ]
 };
+// ==============================
+// סצנריו 8: סוכן הכאוס (The Chaos Agent) 🌪️
+// ==============================
+const scenario8 = {
+    name: "🌪️ סנאריו סוכן הכאוס - Ultimate Stress Test",
+    description: "לקוח שמנסה לשבור את המערכת: פקודות סותרות, ריבוי מוצרים, ושפה מעורבת",
+    messages: [
+        // 1. התקפה משולבת: שני מוצרים + דחיפות + כמות גדולה
+        { 
+            user: "היי פיני תקשיב טוב, יש לי כנס של החיים עוד יומיים ואני חייב 1000 פליירים וגם 500 כרטיסי ביקור דחוףףף", 
+            expected: "chat", 
+            note: "קלאסי ל-LLM: יש 'וגם' + שני מספרים שונים" 
+        },
+
+        // 2. ביטול והוספה באותו משפט (מורכבות גבוהה)
+        { 
+            user: "בעצם תבטל את הכרטיסים ותוסיף במקום זה 2 רולאפים 85x200", 
+            expected: "chat", 
+            note: "Remove + Add במשפט אחד -> חייב LLM" 
+        },
+
+        // 3. אנגלית + שינוי כמות + בקשת מחיר (Multi-Intent)
+        { 
+            user: "Change the flyers amount to 5,000 and show me the price", 
+            expected: "chat", 
+            note: "אנגלית + Update + Status -> LLM ידע לפרק את זה" 
+        },
+
+        // 4. בדיקת שפיות (Simple Status) - זה דווקא אמור להיות מהיר!
+        { 
+            user: "רגע, מה שמתי בעגלה עד עכשיו?", 
+            expected: "status",
+            note: "שאלה פשוטה -> Fast Path (⚡)"
+        },
+
+        // 5. משא ומתן / רגש (Sentiment)
+        { 
+            user: "תקשיב זה יקר לי בטירוף. תעשה לי הנחה או שאני מבטל הכל והולך למתחרים", 
+            expected: "chat", 
+            note: "זיהוי התנגדות מחיר (Objection Handling)" 
+        },
+
+        // 6. הוספה מרומזת ("עוד") + סגירה
+        { 
+            user: "טוב נו... תוסיף עוד 100 הזמנות ל-VIP ונסגור את הסיפור", 
+            expected: "chat", 
+            note: "הקשר מורכב: הוספה + כוונה לסיים" 
+        },
+
+        // 7. וידוא סופי
+        { 
+            user: "סגור, שלח לחשבונית.", 
+            expected: "send_quote",
+            note: "סיום סטנדרטי -> Fast Path (⚡)" 
+        }
+    ]
+};
 
 // הרצת סצנריו בודד
 function runScenario(scenario) {
@@ -223,7 +280,7 @@ function runAllScenarios() {
     console.log(`${BOLD}     🧪 PINI BOT - COMPREHENSIVE TEST SUITE${RESET}`);
     console.log(`${'█'.repeat(60)}`);
     
-    const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6];
+    const scenarios = [scenario1, scenario2, scenario3, scenario4, scenario5, scenario6, scenario8];
     let totalPassed = 0;
     let totalFailed = 0;
     
