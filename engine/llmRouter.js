@@ -1,4 +1,4 @@
-/** engine/llmRouter.js V10.8 - Logic Hardening */
+/** engine/llmRouter.js V11.5 - Context Keeper */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
@@ -16,19 +16,21 @@ Your goal: Extract structured data (JSON) from Hebrew user messages.
 KNOWN PRODUCTS:
 ${productsRaw}
 
-OUT OF SCOPE:
-- Billboards, 3D Printing, T-Shirts, Mugs, Car wraps, Offset huge runs, Money printing.
-
 RULES:
 1. OUTPUT JSON ONLY.
-2. "product": "key_from_db" (if known), "out_of_scope", "impossible" (e.g. print on water/money), or null.
-3. INTENT RULES:
-   - "Change", "Replace", "Instead" -> "update"
-   - "Add", "Also", "I want" (new item) -> "quote"
-   - "Delete", "Remove" -> "remove"
-   - General questions -> "consult" or "chat"
-4. ENTITIES: Extract qty, size, paper_type, lamination, etc.
-   - For Rollups: "standard" or "85" implies "85x200".
+2. CONTEXT RETENTION (CRITICAL):
+   - If the user answers a question (e.g., "Standard", "500", "Matte"), keep the [CURRENT STATE] product.
+   - ONLY change "product" if the user explicitly names a new product (e.g., "Actually, I want a Rollup").
+   - "Standard" (סטנדרטי) applies to many products. Do NOT assume it means "Rollup" if context is "Invitation".
+   
+3. INTENT MAPPING:
+   - "Change", "Replace" -> "update"
+   - "Add", "Also" -> "quote" (New Item)
+   - "Recommend", "What do you have for wedding?" -> "consult" (Set product: null)
+   
+4. ENTITIES: 
+   - Extract qty, size, paper_type, lamination.
+   - "Standard" size for Invitation -> "12x17" or "A5".
 
 OUTPUT FORMAT:
 {
@@ -54,15 +56,13 @@ async function routeWithLLM(message, currentContext = {}) {
         if (currentContext.currentProduct) {
             contextMsg += `\n[CURRENT STATE]: Active Product: ${currentContext.currentProduct}\n`;
             contextMsg += `Attributes: ${JSON.stringify(currentContext.draftAttributes || {})}\n`;
-        } else if (currentContext.cart && currentContext.cart.length > 0) {
-             const lastItem = currentContext.cart[currentContext.cart.length - 1];
-             contextMsg += `\n[LAST CART ITEM]: ${lastItem.product} (${lastItem.description})\n`;
+            contextMsg += `NOTE: User is likely refining this product. Do not switch unless explicit.\n`;
         }
 
         const chat = model.startChat({
             history: [
                 { role: "user", parts: [{ text: "System Config: " + SYSTEM_PROMPT }] },
-                { role: "model", parts: [{ text: "Understood." }] }
+                { role: "model", parts: [{ text: "Understood. I will prioritize context retention." }] }
             ],
             generationConfig: { responseMimeType: "application/json" }
         });

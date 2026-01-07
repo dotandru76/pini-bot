@@ -1,4 +1,4 @@
-/** engine/planner.js V11.3 - Final Polish */
+/** engine/planner.js V11.5 - Recommendation & Stability Engine */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -8,22 +8,31 @@ try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/produc
 
 function planActions(intentData, session) {
     
-    // --- 1. THE SUPERVISOR ---
+    // --- 1. THE SUPERVISOR (תיקון כוונות) ---
     const hasParams = intentData.extractedParams && Object.keys(intentData.extractedParams).length > 0;
     
-    // Downgrade empty updates to chat ("חחח סתם")
-    if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
-        intentData.intent = 'chat';
+    // ANTI-HALLUCINATION: מניעת קפיצה לרולאפ בגלל המילה "סטנדרטי"
+    // אם אנחנו באמצע מוצר (למשל הזמנה) והמשתמש רק נתן פרמטר (גודל/כמות)
+    // וה-LLM החליט פתאום לשנות מוצר בלי סיבה טובה -> נתעלם משינוי המוצר
+    if (session.currentProduct && intentData.product && intentData.product !== session.currentProduct) {
+        // אם המשתמש לא אמר את שם המוצר החדש במפורש, נשארים עם הישן
+        // (בדיקה פשוטה: האם הטקסט שזוהה ב-LLM כסיכום מכיל את שם המוצר החדש?)
+        // כאן אנחנו עושים 'Hard Lock': אם זה Update, אל תחליף מוצר!
+        if (intentData.intent === 'update') {
+            console.log(`🛡️ Supervisor: Blocked implicit switch from ${session.currentProduct} to ${intentData.product}`);
+            intentData.product = session.currentProduct;
+        }
     }
 
-    // Context Switch -> Force Quote ("החלפת נושא")
-    if (intentData.intent === 'update' && intentData.product && intentData.product !== session.currentProduct) {
-        intentData.intent = 'quote'; 
+    // Downgrade empty updates to chat
+    if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
+        intentData.intent = 'consult'; // שונה ל-consult כדי לתפוס המלצות
     }
 
     // --- 2. ACTION HANDLERS ---
     const actions = [];
 
+    // System Actions
     if (['greeting', 'thank_you', 'bye'].includes(intentData.intent)) {
         return { actions: [{ type: 'GENERATE_RESPONSE', template: 'greeting', payload: { text: "בכיף! אני כאן אם צריך עוד משהו. 😊" } }] };
     }
@@ -41,16 +50,31 @@ function planActions(intentData, session) {
          return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מעולה, אפיק לך הצעת מחיר מסודרת." } }] };
     }
 
-    // === CHAT BARRIER ===
-    if (intentData.intent === 'chat') {
-        return { 
-            actions: [{ 
-                type: 'GENERATE_RESPONSE', 
-                payload: { text: "נשמע טוב! אני רק בוט דפוס 🤖, אז בוא נחזור לעניינים. תרצה להוסיף משהו לעגלה?" } 
-            }] 
-        };
+    // === RECOMMENDATION ENGINE (מנוע ההמלצות) ===
+    if (intentData.intent === 'consult' || intentData.intent === 'chat') {
+        const text = (intentData.summary || "").toLowerCase(); // או להשתמש בטקסט המקורי אם הועבר
+        
+        // זיהוי מילות מפתח להמלצה (זה פתרון זמני עד שה-LLM יעשה את זה מושלם)
+        // אבל זה סופר מהיר ויעיל
+        if (intentData.intent === 'consult' && !intentData.product && !session.currentProduct) {
+             // אם המשתמש שאל על חתונה/אירוע
+             // הערה: במערכת מלאה היינו מעבירים את ה-Message המקורי ל-Planner
+             // כאן נשתמש בתשובה גנרית חכמה
+             
+             return { 
+                actions: [{ 
+                    type: 'GENERATE_RESPONSE', 
+                    payload: { text: "לחתונה ואירועים אני ממליץ על:\n💌 הזמנות (מנייר פנינה/מט)\n🔖 כרטיסי הושבה\n📜 תפריטים לשולחן\n🥡 מדבקות למזכרות\n\nעם מה נתחיל?" } 
+                }] 
+            };
+        }
+
+        // CHAT BARRIER
+        if (intentData.intent === 'chat') {
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "נשמע טוב! אני בוט דפוס 🤖. תרצה להוסיף משהו לעגלה?" } }] };
+        }
     }
-    // ====================
+    // ==========================================
 
     // Scope Checks
     if (intentData.product === 'out_of_scope') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "וואו, זה גדול עלינו. אני מתמחה בדפוס דיגיטלי ופורמט רחב סטנדרטי." } }] };
@@ -72,6 +96,14 @@ function planActions(intentData, session) {
     if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "המוצר הזה לא קיים במערכת כרגע." } }] };
 
     const newParams = intentData.extractedParams || {};
+    
+    // נרמול "סטנדרטי"
+    if (newParams.size && (newParams.size === 'standard' || newParams.size === 'סטנדרטי')) {
+        if (currentProductKey === 'invitation') newParams.size = '12x17';
+        if (currentProductKey === 'bc') newParams.size = '9x5';
+        if (currentProductKey === 'rollup') newParams.size = '85x200';
+    }
+
     if (productConfig.engine === 'wide' && newParams.paper_type) newParams.material = newParams.paper_type;
 
     const validNewParams = {};
@@ -83,7 +115,6 @@ function planActions(intentData, session) {
         ? validNewParams 
         : { ...session.draftAttributes, ...validNewParams };
     
-    // Sticker Defaults
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
     let missingParam = null;
