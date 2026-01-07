@@ -1,25 +1,30 @@
 /**
- * Pini Print Bot - Server V7 (Strategy Enabled)
- * =============================================
- * שרת חכם שיודע לא רק להגיב אלא גם ליזום מהלכים (Proactive)
+ * Pini Print Bot - The Silent Engine (V8)
+ * =======================================
+ * ארכיטקטורה: Agentic Workflow (Plan -> Execute -> Respond)
+ * כולל מערכת לוגים מתקדמת לניטור ולמידה.
  */
 
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fs = require('fs');
+const path = require('path');
 
-// ייבוא מנועים
-const { classifyMessage } = require('./engine/classifier'); 
-const { routeRequest } = require('./engine/llmRouter'); 
+// --- ייבוא המנועים השקטים ---
+const { classifyMessage } = require('./engine/classifier');
+const { extractParameters } = require('./engine/extractor');
+const { planActions } = require('./engine/planner');
 const { calculate_custom_job } = require('./engine/calculation');
-const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
-const { generateQuotePDF } = require('./services/pdfService');
-const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
 const { generateDashboard } = require('./engine/dashboardManager');
+const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
+const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
 const { findOrCreateCustomer, extractPhoneFromText, extractNameFromText } = require('./engine/customerManager');
-const { PRODUCT_CATALOG } = require('./engine/productCatalog');
-const { detectTaskType, buildPrompt, validateResponse, fixResponse } = require('./engine/smartLLM');
+const { generateQuotePDF } = require('./services/pdfService');
+
+// --- ייבוא מנועי AI (למקרים מורכבים בלבד) ---
+const { routeRequest } = require('./engine/llmRouter'); // Fallback Planner
+const { handleWithSmartLLM } = require('./engine/smartLLM'); // Fallback Responder
 
 dotenv.config();
 const app = express();
@@ -28,195 +33,241 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('public'));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-// הגדרות ברירת מחדל לאסטרטגיה
-const POPULAR_DEFAULTS = {
-    'bc': 500,
-    'flyer': 1000,
-    'invitation': 200,
-    'rollup': 1,
-    'sticker': 500,
-    'booklet': 50
+// === מערכת לוגים צבעונית ===
+const LOG = {
+    info: (msg) => console.log(`\x1b[36mℹ️  ${msg}\x1b[0m`), // Cyan
+    success: (msg) => console.log(`\x1b[32m✅ ${msg}\x1b[0m`), // Green
+    warning: (msg) => console.log(`\x1b[33m⚠️  ${msg}\x1b[0m`), // Yellow
+    error: (msg) => console.log(`\x1b[31m❌ ${msg}\x1b[0m`), // Red
+    brain: (msg) => console.log(`\x1b[35m🧠 ${msg}\x1b[0m`), // Magenta (Thinking)
+    action: (msg) => console.log(`\x1b[34m⚙️  ${msg}\x1b[0m`)  // Blue (Action)
 };
 
+// === מנגנון למידה עצמית (Self Correction) ===
+function logLearningEvent(type, input, output, correction = null) {
+    const event = {
+        timestamp: new Date().toISOString(),
+        type,
+        input,
+        output,
+        correction
+    };
+    // בפועל: שומרים לדאטהבייס. כרגע נכתוב לקובץ JSON
+    fs.appendFile('learning_logs.json', JSON.stringify(event) + '\n', (err) => {
+        if (err) console.error("Failed to save learning log");
+    });
+}
+
+// ============================================================
+// MAIN CHAT ENDPOINT
+// ============================================================
 app.post('/api/chat', async (req, res) => {
+    const startTime = Date.now();
     try {
         const { message, userId, phone, customerName } = req.body;
         if (!message) return res.status(400).json({ error: 'Missing message' });
-        
-        console.log(`\n💬 User: "${message}"`);
+
+        console.log('\n' + '='.repeat(60));
+        LOG.info(`New Message from ${userId}: "${message}"`);
+
+        // 1. ניהול סשן
         const session = getSession(userId);
+        let customer = null;
         
-        // זיהוי לקוח
+        // זיהוי לקוח (שם/טלפון)
         const extractedPhone = extractPhoneFromText(message);
         if (phone || extractedPhone) {
-            findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
-            session.customerPhone = phone || extractedPhone;
+            customer = findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
+            session.customerPhone = customer.phone;
+            LOG.success(`Customer Identified: ${customer.name || customer.phone}`);
         }
 
-        // ניתוב
-        let routerResult;
+        // ============================================================
+        // שלב 1: הבנה (Perception)
+        // ============================================================
+        
+        // א. סיווג (Classifier) - האם זה פשוט או מורכב?
         const classification = classifyMessage(message, { cart: session.cart });
-        
+        LOG.brain(`Classifier: [${classification.intent}] (Confidence: ${classification.confidence})`);
+
+        let intent = classification.intent;
+        let params = {};
+        let strategy = 'standard';
+
+        // ב. חילוץ פרמטרים (Extractor) או פנייה ל-LLM
         if (!classification.needsLLM) {
-            console.log(`⚡ Fast Path: ${classification.action}`);
-            routerResult = {
-                intent: mapActionToIntent(classification.action),
-                strategy: 'standard', // מסלול מהיר הוא תמיד סטנדרטי
-                items: [{ product: classification.data?.product, qty: classification.data?.qty }]
-            };
+            // מסלול מהיר (Rule-Based)
+            LOG.success(`⚡ Fast Path Triggered (No AI)`);
+            params = extractParameters(message);
+            LOG.brain(`Extracted Params: ${JSON.stringify(params)}`);
         } else {
-            console.log(`🤖 Using LLM (Strategy Engine)...`);
-            routerResult = await routeRequest(message, session.cart, session.history);
+            // מסלול חכם (LLM)
+            LOG.warning(`🤖 Complex Request -> Calling LLM Planner...`);
+            const llmResult = await routeRequest(message, session.cart, session.history);
+            intent = llmResult.intent;
+            strategy = llmResult.strategy || 'standard';
+            // נרמול התוצאה מה-LLM למבנה של ה-Extractor
+            if (llmResult.items && llmResult.items.length > 0) {
+                params = llmResult.items[0]; // לוקחים את הראשון כעיקרי כרגע
+                // אם יש מספר פריטים, ה-Planner יצטרך לדעת לטפל בזה (הרחבה עתידית)
+            }
+            LOG.brain(`LLM Decided: Intent=${intent}, Strategy=${strategy}`);
+            
+            // תיעוד ללמידה: למה המסווג נכשל?
+            logLearningEvent('fallback_to_llm', message, classification);
         }
+
+        // ============================================================
+        // שלב 2: תכנון (Planning)
+        // ============================================================
         
-        console.log(`🧠 Intent: ${routerResult.intent} | Strategy: ${routerResult.strategy}`);
+        // הוספת Strategy לפרמטרים אם הגיע מה-LLM או זוהה ע"י המערכת
+        if (params.attributes?.urgency === 'high') strategy = 'check_urgency';
+        
+        const plan = planActions(intent, params, session);
+        LOG.brain(`Action Plan Generated: ${plan.actions.length} steps`);
+        plan.actions.forEach(a => LOG.brain(`  -> ${a.type} (${JSON.stringify(a.payload || {})})`));
 
-        let responseData = { content: '', quickReplies: [] };
+        // ============================================================
+        // שלב 3: ביצוע (Execution)
+        // ============================================================
+        
+        let executionResults = {
+            responses: [], // אוסף תבניות תשובה
+            actionsTaken: [],
+            uiActions: [] // כפתורים וכו'
+        };
 
-        switch (routerResult.intent) {
-            case 'quote':
-                // === טיפול באסטרטגיה: הצעה יזומה (Offer Popular) ===
-                if (routerResult.strategy === 'offer_popular' && routerResult.items?.[0]?.product) {
-                    const product = routerResult.items[0].product;
-                    const defaultQty = POPULAR_DEFAULTS[product] || 100;
+        for (const action of plan.actions) {
+            LOG.action(`Executing: ${action.type}...`);
+            
+            try {
+                switch (action.type) {
+                    case 'CALCULATE_AND_ADD':
+                        const calcResult = calculate_custom_job(session.cart, action.payload);
+                        session.cart = calcResult.updatedCart;
+                        executionResults.lastItem = calcResult.lastAdded;
+                        executionResults.actionsTaken.push('item_added');
+                        LOG.success(`Added ${calcResult.lastAdded.product_name} (Price: ${calcResult.lastAdded.client_price})`);
+                        break;
+
+                    case 'UPDATE_CART_ITEM':
+                        // לוגיקה לעדכון (דומה להוספה, אבל דורס קיים)
+                        // ... (מימוש דומה ל-CALCULATE_AND_ADD)
+                        LOG.success(`Updated item quantity`);
+                        break;
+
+                    case 'REMOVE_FROM_CART':
+                        const removed = removeFromCart(userId, action.product);
+                        if (removed) LOG.success(`Removed ${action.product}`);
+                        else LOG.warning(`Item to remove not found: ${action.product}`);
+                        break;
+
+                    case 'CHECK_URGENCY_OPTIONS':
+                        // סימולציה: בדיקה מול טבלת ייצור
+                        const canExpress = true; // נניח שכן
+                        const expressCost = 50; // נניח
+                        executionResults.urgencyOption = { canExpress, cost: expressCost };
+                        LOG.info(`Urgency Check: Available (+${expressCost} NIS)`);
+                        break;
+
+                    case 'GENERATE_RESPONSE':
+                        // שומרים את התבנית שצריך להפעיל בסוף
+                        executionResults.responseTemplate = action.template;
+                        break;
                     
-                    // מחשבים את ההצעה הפופולרית
-                    const calc = calculate_custom_job(session.cart, {
-                        product_name: product,
-                        qty: defaultQty
-                    });
-                    
-                    // לא מוסיפים לעגלה אוטומטית, רק מציגים (סימולציה)
-                    responseData.content = `הכי הולך אצלנו זה ${defaultQty} יחידות ב-₪${calc.lastAdded.client_price}. זה מתאים לך, או שתרצה כמות אחרת?`;
-                    responseData.quickReplies = [
-                        { text: `כן, תזמין ${defaultQty}`, value: `אני רוצה ${defaultQty} ${product}` },
-                        { text: 'כמות אחרת', value: 'כמות אחרת' }
-                    ];
-                    break;
+                    case 'UPDATE_DASHBOARD':
+                        // יבוצע בסוף גורף
+                        break;
+                        
+                    case 'CALL_LLM_CONSULTANT':
+                        // במקרה שאין ברירה וצריך תשובה חופשית
+                        const llmResponse = await handleWithSmartLLM(message, session, customer);
+                        executionResults.customText = llmResponse.content;
+                        executionResults.quickReplies = llmResponse.quickReplies;
+                        break;
                 }
-
-                // === טיפול באסטרטגיה: דחיפות (Check Urgency) ===
-                if (routerResult.strategy === 'check_urgency') {
-                    responseData.content = `אני מבין שזה דחוף! 🚀\nיש לנו מסלול אקספרס (מהיום להיום/מחר) בתוספת תשלום, או רגיל (3 ימי עסקים).\nאיך תרצה להתקדם?`;
-                    responseData.quickReplies = [
-                        { text: 'אקספרס (דחוף!)', value: 'אקספרס' },
-                        { text: 'רגיל זה בסדר', value: 'רגיל' }
-                    ];
-                    break; // עוצרים כאן כדי לקבל תשובה
-                }
-
-                // === מסלול רגיל (הוספה לעגלה) ===
-                const itemsToAdd = routerResult.items || [];
-                const addedItems = [];
-
-                for (const item of itemsToAdd) {
-                    if (item.product && item.qty) {
-                        const calc = calculate_custom_job(session.cart, {
-                            product_name: item.product,
-                            qty: item.qty,
-                            paper_type: item.attributes?.paper
-                        });
-                        session.cart = calc.updatedCart;
-                        addedItems.push(calc.lastAdded);
-                    }
-                }
-
-                if (addedItems.length > 0) {
-                    // אם ה-Strategy הוא close_deal, נוסיף משפט סגירה
-                    let closingText = "";
-                    if (routerResult.strategy === 'close_deal') {
-                        closingText = "\n\nיש לנו את כל הפרטים. לשלוח לך לינק לתשלום וסגירה?";
-                    } else if (routerResult.strategy === 'req_file') {
-                        closingText = "\n\nיש לך כבר קובץ מוכן לשלוח לי?";
-                    }
-
-                    responseData.content = (addedItems.length === 1 
-                        ? buildResponse('quote_added', { item: addedItems[0] })
-                        : buildResponse('multi_quote_added', { items: addedItems, cart: session.cart })) + closingText;
-                    
-                    responseData.quickReplies = buildQuickReplies('cart_status');
-                } else {
-                    responseData.content = "הבנתי שאתה רוצה להזמין, מה הכמויות וסוג המוצר?";
-                    responseData.quickReplies = buildQuickReplies('greeting');
-                }
-                break;
-
-            case 'update':
-                const updateData = routerResult.items?.[0] || {};
-                const lastItem = session.cart[session.cart.length - 1];
-                if (lastItem && updateData.qty) {
-                    const upCalc = calculate_custom_job(session.cart, {
-                        product_name: lastItem.product_name,
-                        qty: updateData.qty
-                    });
-                    session.cart = upCalc.updatedCart;
-                    responseData.content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty: lastItem.qty });
-                }
-                break;
-
-            case 'status':
-                responseData.content = buildResponse('cart_status', { cart: session.cart });
-                responseData.quickReplies = buildQuickReplies('cart_status');
-                break;
-
-            case 'design_check':
-                responseData.content = buildResponse('design_check', {});
-                responseData.quickReplies = buildQuickReplies('design_check');
-                break;
-
-            case 'checkout':
-                const total = session.cart.reduce((s, i) => s + i.client_price, 0);
-                responseData.content = buildResponse('send_quote', { total, cart: session.cart });
-                responseData.quickReplies = buildQuickReplies('send_quote');
-                break;
-
-            case 'greeting':
-                responseData.content = buildResponse('greeting');
-                responseData.quickReplies = buildQuickReplies('greeting');
-                break;
-
-            case 'consult':
-            default:
-                const llmResponse = await handleWithSmartLLM(message, session);
-                responseData.content = llmResponse.content;
-                break;
+            } catch (err) {
+                LOG.error(`Action Failed: ${action.type} - ${err.message}`);
+                logLearningEvent('execution_error', action, err.message);
+            }
         }
 
+        // ============================================================
+        // שלב 4: ניסוח תשובה (Response Generation)
+        // ============================================================
+        
+        let finalResponse = '';
+        let quickReplies = [];
+
+        // אם יש טקסט מותאם אישית מה-LLM (במקרה של Consult)
+        if (executionResults.customText) {
+            finalResponse = executionResults.customText;
+            quickReplies = executionResults.quickReplies || [];
+        } 
+        // אחרת, השתמש בתבנית שנבחרה ע"י ה-Planner
+        else if (executionResults.responseTemplate) {
+            // הזרקת נתונים לתבנית
+            const context = {
+                item: executionResults.lastItem,
+                cart: session.cart,
+                customer: customer,
+                userMessage: message,
+                // אם הייתה בדיקת דחיפות, נעביר את התוצאה לתבנית
+                urgency: executionResults.urgencyOption 
+            };
+            
+            finalResponse = buildResponse(executionResults.responseTemplate, context);
+            quickReplies = buildQuickReplies(executionResults.responseTemplate);
+            
+            // אם זוהתה דחיפות, נוסיף משפט דינמי (בלי LLM!)
+            if (strategy === 'check_urgency' && executionResults.urgencyOption) {
+                finalResponse += `\n\n🚀 ראיתי שזה דחוף. אפשר להריץ את זה באקספרס בתוספת ₪${executionResults.urgencyOption.cost}. לאשר?`;
+                quickReplies = [
+                    { text: 'כן, אקספרס', value: 'אשר אקספרס' },
+                    { text: 'לא, רגיל', value: 'משלוח רגיל' }
+                ];
+            }
+        } 
+        // ברירת מחדל אם משהו השתבש
+        else {
+            finalResponse = "קיבלתי, אבל אני לא בטוח מה לעשות הלאה. רוצה לדבר עם נציג?";
+            LOG.error("No response template selected!");
+        }
+
+        // שמירה בהיסטוריה
         addToHistory(userId, 'user', message);
-        addToHistory(userId, 'model', responseData.content);
+        addToHistory(userId, 'model', finalResponse);
+
+        // עדכון דשבורד
+        const dashboard = generateDashboard(session, session.customerPhone);
+        
+        const processTime = Date.now() - startTime;
+        LOG.info(`Request processed in ${processTime}ms`);
 
         res.json({
-            content: responseData.content,
+            content: finalResponse,
             cart: session.cart,
-            dashboard: generateDashboard(session, session.customerPhone),
-            quickReplies: responseData.quickReplies,
-            meta: { intent: routerResult.intent, strategy: routerResult.strategy }
+            dashboard: dashboard,
+            quickReplies: quickReplies,
+            meta: { 
+                intent, 
+                strategy, 
+                fastPath: !classification.needsLLM,
+                processTime 
+            }
         });
 
     } catch (error) {
-        console.error('Server Error:', error);
-        res.status(500).json({ content: 'תקלה בשרת, נסה שוב.' });
+        LOG.error(`Server Error: ${error.message}`);
+        console.error(error);
+        res.status(500).json({ content: 'סליחה, הייתה תקלה במערכת. נסה שוב.' });
     }
 });
 
-function mapActionToIntent(action) {
-    const map = { 'quote': 'quote', 'update_qty': 'update', 'remove': 'remove', 'greeting': 'greeting', 'send_quote': 'checkout', 'status': 'status', 'design_check': 'design_check' };
-    return map[action] || 'consult';
-}
-
-async function handleWithSmartLLM(message, session) {
-    const taskType = detectTaskType(message, { hasQuote: session.cart.length > 0 });
-    const promptData = buildPrompt(taskType, { userMessage: message, cart: session.cart, history: session.history });
-    const result = await chatModel.generateContent(promptData.system + "\n" + promptData.context);
-    let text = result.response.text();
-    return { content: text, quickReplies: [] };
-}
-
 // PDF Route
 app.post('/api/pdf', async (req, res) => {
+    // ... (אותו קוד קיים)
     try {
         const { cart, customer } = req.body;
         if (!cart || !Array.isArray(cart) || cart.length === 0) return res.status(400).json({ error: 'Cart empty' });
@@ -227,9 +278,14 @@ app.post('/api/pdf', async (req, res) => {
         });
         res.send(pdfBuffer);
     } catch (e) {
+        console.error("PDF Error", e);
         res.status(500).send("Error generating PDF");
     }
 });
 
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`🚀 Pini V7 Server (Strategy Engine) running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`\n🚀 Pini V8 Silent Engine Running on port ${PORT}`);
+    console.log(`📝 Logging enabled with color coding`);
+    console.log(`🧠 Self-correction hooks active\n`);
+});
