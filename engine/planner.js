@@ -1,133 +1,121 @@
 /**
- * Pini Planner V4 (DB Driven)
- * ===========================
- * המוח של המערכת.
- * תוקן: עובד מול קבצי ה-DB הקיימים בתיקיית db/
- * מזהה חוסרים במידע ומייצר כפתורים דינמיים.
+ * Pini Planner V6 (Strict DB Mode)
+ * ================================
+ * עובד אך ורק מול products.json ו-materials.json.
+ * לא ממציא שאלות ולא מנחש.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// טעינה בטוחה של ה-DB (עם Fallback למקרה של שגיאה)
+// טעינת הקבצים שהעלית
 let productsDB = {};
 let materialsDB = {};
 
 try {
-    // מניחים שהקבצים נמצאים תיקייה אחת למעלה ב-db
+    // נתיב יחסי לתיקיית db
     productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
     materialsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
 } catch (e) {
-    console.error("⚠️ Error loading DB files in Planner:", e.message);
+    console.error("❌ Critical Error: Could not load DB files.", e.message);
 }
 
 function planActions(intent, params, session) {
-    const plan = {
-        actions: [],
-        nextState: 'idle'
-    };
+    const plan = { actions: [], nextState: 'idle' };
 
-    // 1. זיהוי המוצר עליו אנחנו מדברים (מההודעה הנוכחית או מההקשר בסשן)
-    // session.currentProduct נשמר בשרת כדי לזכור על מה דיברנו בסיבוב הקודם
+    // 1. זיהוי מוצר (מההודעה או מהזיכרון)
     let productKey = params.product || session.currentProduct;
-    
-    // מיפוי שמות נפוצים למפתחות ב-DB (במידה וה-Extractor החזיר שם כללי)
-    // (הערה: ה-Extractor כבר אמור לעשות את זה, אבל ליתר ביטחון)
-    if (productKey === 'business_card') productKey = 'bc';
-    if (productKey === 'flyers') productKey = 'flyer';
 
-    // === טיפול בכפתור "תפריט ראשי" או התחלה ===
+    // מיפוי שמות נפוצים למפתחות המדויקים ב-products.json
+    const aliasMap = {
+        'business_card': 'bc',
+        'flyers': 'flyer',
+        'invitations': 'invitation',
+        'roll_up': 'rollup',
+        'envelopes': 'envelope',
+        'stickers': 'sticker',
+        'folders': 'folder'
+    };
+    if (aliasMap[productKey]) productKey = aliasMap[productKey];
+
+    // === תפריט ראשי ===
     if (!productKey && (intent === 'greeting' || intent === 'quote')) {
-        const mainMenuOptions = Object.entries(productsDB).map(([key, val]) => ({
-            text: val.title, // "כרטיסי ביקור"
-            value: key       // "bc"
+        const menuOptions = Object.entries(productsDB).map(([key, data]) => ({
+            text: data.title, // למשל: "כרטיסי ביקור"
+            value: key        // למשל: "bc"
         }));
-
+        
         plan.actions.push({ 
             type: 'PRESENT_OPTIONS', 
-            question: 'מה נדפיס היום? בחר מוצר כדי להתחיל:',
-            options: mainMenuOptions
+            question: 'מה נדפיס היום? בחר מוצר:', 
+            options: menuOptions 
         });
         return plan;
     }
 
-    // === לוגיקת המשפך (Funnel) ===
+    // === מנוע השאלות (The Funnel) ===
     if (intent === 'quote' || intent === 'update' || (intent === 'consult' && productKey)) {
         
-        // בדיקה שהמוצר קיים ב-DB
         const productConfig = productsDB[productKey];
-        
         if (!productConfig) {
-            // מוצר לא מוכר -> מעביר ל-LLM
+            // אם המוצר לא ב-JSON, ה-LLM יטפל בזה
             plan.actions.push({ type: 'CALL_LLM_CONSULTANT', input: params });
             return plan;
         }
 
-        // שמירת המוצר בסשן (פעולה שתבוצע בשרת)
+        // נועלים הקשר
         plan.actions.push({ type: 'SET_SESSION_CONTEXT', product: productKey });
 
-        // איסוף כל המידע שיש לנו עד כה (מההודעה הנוכחית + מהסשן)
-        // אנחנו בודקים אם הערך ב-params הוא תשובה לשאלה כלשהי
-        const currentAttributes = { ...session.draftAttributes }; // מתחילים ממה שזכרנו
+        // טוענים טיוטה מהסשן
+        const currentAttributes = { ...session.draftAttributes };
 
-        // ניסיון למפות את הקלט הנוכחי (params) לשדות ב-Config
-        // למשל: אם המשתמש שלח "1000", וזה תואם לאופציה בשאלת qty, נשמור את זה.
+        // אם המשתמש ענה תשובה בטקסט חופשי, מנסים להתאים אותה
         if (params.raw_text) {
-            matchInputToAttributes(params.raw_text, productConfig, currentAttributes);
+            matchInputToConfig(params.raw_text, productConfig, currentAttributes);
         }
-        // גם שומרים פרמטרים מפורשים מה-Extractor
-        if (params.qty) currentAttributes.qty = params.qty;
+        // דריסה עם פרמטרים מפורשים אם יש
+        if (params.qty) currentAttributes.qty = params.qty.toString();
         if (params.attributes) Object.assign(currentAttributes, params.attributes);
 
-        // --- לולאת השאלות הדינמית ---
+        // --- המעבר על השאלות ב-products.json ---
         for (const question of productConfig.questions) {
-            const key = question.key; // למשל 'qty', 'paper', 'size'
+            const key = question.key; // qty, paper, size...
             
-            // האם יש לנו כבר תשובה לשאלה הזו?
+            // אם אין תשובה לשאלה הזו
             if (!currentAttributes[key]) {
                 
-                // חסר מידע! מכינים את הכפתורים
+                // יצירת כפתורים מתוך ה-options ב-JSON
                 const dynamicOptions = question.options.map(opt => ({
-                    text: getHumanReadableName(opt.value, key), // המרה לעברית יפה
-                    value: opt.value // הערך הטכני שישלח בחזרה
+                    text: getHumanName(opt.value, key), // המרה לעברית דרך materials.json
+                    value: opt.value
                 }));
 
                 plan.actions.push({
                     type: 'PRESENT_OPTIONS',
-                    question: question.text ? `בוא נבחר ${question.text}:` : `בחר אפשרות עבור ${key}:`,
+                    question: `בחר ${question.text}:`,
                     options: dynamicOptions,
-                    saveDraft: currentAttributes // שומרים את מה שאספנו עד כה
+                    saveDraft: currentAttributes // שומרים התקדמות
                 });
-                
-                return plan; // עוצרים ושולחים ללקוח
+                return plan;
             }
         }
 
-        // --- יש את כל המידע! ---
-        // אם הגענו לפה, כל השאלות נענו.
-        
-        // המרה למבנה שהמחשבון מצפה לו
+        // === סיימנו את כל השאלות ===
         const finalPayload = {
             product_name: productKey,
-            qty: parseInt(currentAttributes.qty) || 1, // ברירת מחדל אם נפל
-            ...currentAttributes // שאר המאפיינים (paper, size...)
+            qty: parseInt(currentAttributes.qty),
+            attributes: currentAttributes // מכיל paper, size, extras וכו'
         };
 
-        plan.actions.push({ 
-            type: 'CALCULATE_AND_ADD', 
-            payload: finalPayload 
-        });
-        
-        // מנקים את הטיוטה כי סיימנו
-        plan.actions.push({ type: 'CLEAR_SESSION_CONTEXT' }); 
-
+        plan.actions.push({ type: 'CALCULATE_AND_ADD', payload: finalPayload });
+        plan.actions.push({ type: 'CLEAR_SESSION_CONTEXT' });
         plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'quote_added' });
         plan.actions.push({ type: 'UPDATE_DASHBOARD' });
         
         return plan;
     }
 
-    // === שאר הפעולות (ללא שינוי מהותי) ===
+    // פעולות כלליות
     switch (intent) {
         case 'checkout':
             plan.actions.push({ type: 'SUMMARIZE_CART' });
@@ -139,73 +127,56 @@ function planActions(intent, params, session) {
             plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'cart_cleared' });
             plan.actions.push({ type: 'UPDATE_DASHBOARD' });
             break;
-        case 'remove':
-            plan.actions.push({ type: 'REMOVE_FROM_CART' });
-            plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'item_removed' });
-            plan.actions.push({ type: 'UPDATE_DASHBOARD' });
-            break;
-        case 'status':
-            plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'cart_status' });
-            break;
         default:
             plan.actions.push({ type: 'CALL_LLM_CONSULTANT', input: params });
-            break;
     }
 
     return plan;
 }
 
-// --- פונקציות עזר ---
+// --- עזרים ---
 
-// מנסה להבין אם הטקסט החופשי של המשתמש הוא תשובה לאחת השאלות
-function matchInputToAttributes(text, config, attributes) {
+function matchInputToConfig(text, config, attributes) {
     if (!text) return;
-    const cleanText = text.toString().toLowerCase();
-
-    // עוברים על כל השאלות והאופציות שלהן
+    const clean = text.toString().toLowerCase();
+    
     for (const q of config.questions) {
-        if (attributes[q.key]) continue; // כבר יש תשובה
-
+        if (attributes[q.key]) continue;
         for (const opt of q.options) {
-            // בדיקה האם הערך נמצא בטקסט (למשל "300" או "chromo")
-            // או אם השם היפה שלו נמצא בטקסט
-            const humanName = getHumanReadableName(opt.value, q.key);
-            
-            if (cleanText === opt.value.toLowerCase() || 
-                cleanText === humanName.toLowerCase() ||
-                cleanText.includes(opt.value) // התאמה גסה יותר
-               ) {
+            const human = getHumanName(opt.value, q.key).toLowerCase();
+            const val = opt.value.toLowerCase();
+            // התאמה מדויקת או חלקית חזקה
+            if (clean === val || clean === human || (human.length > 3 && clean.includes(human))) {
                 attributes[q.key] = opt.value;
-                return; // מצאנו התאמה אחת, זה מספיק לסיבוב הזה
+                return;
             }
         }
     }
 }
 
-// המרה מקוד טכני לשם יפה (מתוך materials.json)
-function getHumanReadableName(value, key) {
-    if (!isNaN(value)) return Number(value).toLocaleString(); // מספרים
+// פונקציה חכמה שמוצאת את השם ב-materials.json
+function getHumanName(val, key) {
+    if (!isNaN(val)) return Number(val).toLocaleString(); // כמויות
 
-    // חיפוש בטבלאות השונות
-    const tables = [materialsDB.papers, materialsDB.finishing, materialsDB.wide_media];
-    for (const table of tables) {
-        if (table && table[value] && table[value].name) {
-            return table[value].name;
+    // חיפוש בכל הקטגוריות ב-materials.json
+    const cats = ['papers', 'finishing', 'wide_media'];
+    for (const cat of cats) {
+        if (materialsDB[cat] && materialsDB[cat][val]) {
+            return materialsDB[cat][val].name;
         }
     }
 
-    // מיפויים ידניים לדברים שאין להם "שם" ב-JSON
-    const manualMap = {
-        '1': 'צד אחד', '2': 'דו צדדי (4/4)',
-        'yes': 'כן', 'no': 'לא',
-        'A4': 'A4 (דף סטנדרטי)', 'A5': 'A5 (חצי דף)', 'A6': 'A6 (גלויה)',
-        'none': 'ללא תוספות',
+    // מיפויים ידניים שחסרים ב-JSON (כמו גדלים)
+    const manual = {
+        '1': 'צד אחד', '2': 'דו צדדי',
+        'A4': 'A4', 'A5': 'A5', 'A6': 'A6',
+        'none': 'ללא', 'yes': 'כן', 'no': 'לא',
+        'fold_simple': 'קיפול אמצע', 'fold_tri': 'קיפול פרוספקט',
         'wood_frame': 'מתיחה על עץ',
-        'pocket_glue': 'כיס מודבק',
-        'env_standard': 'מעטפה רגילה', 'env_fancy': 'מעטפה מהודרת'
+        'env_standard': 'סטנדרט', 'env_fancy': 'מהודרת'
     };
     
-    return manualMap[value] || value;
+    return manual[val] || val;
 }
 
 module.exports = { planActions };
