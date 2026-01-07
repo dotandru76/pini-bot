@@ -3,389 +3,515 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>פיני - דפוס בית יצחק</title>
+    <title>דפוס בית יצחק - הצ'אט של פיני</title>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Heebo', sans-serif; height: 100vh; display: flex; overflow: hidden; background-color: #d1d7db; }
-
-        /* --- צד ימין: דשבורד מנהל (מוסתר במובייל) --- */
-        .manager-panel { 
-            width: 350px; 
-            background-color: #202c33; 
-            color: #e9edef; 
-            padding: 20px; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
-            border-left: 1px solid #374045; 
-            box-shadow: 2px 0 5px rgba(0,0,0,0.3); 
-            z-index: 100; 
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #f3f4f6;
+            --chat-bg: #ffffff;
+            --user-msg-bg: #dbeafe;
+            --bot-msg-bg: #f3f4f6;
+            --text-color: #1f2937;
+            --accent-color: #10b981; /* Green for success/money */
         }
-        .manager-header { font-size: 1.1em; font-weight: bold; border-bottom: 1px solid #8696a0; padding-bottom: 10px; color: #00a884; margin-bottom: 5px; }
-        
-        .stats-row { display: flex; gap: 10px; margin-bottom: 10px; }
-        .stat-card { background: #111b21; padding: 10px; border-radius: 8px; flex: 1; text-align: center; border: 1px solid #374045; }
-        .stat-val { font-size: 1.2em; font-weight: bold; color: #00a884; }
-        .stat-label { font-size: 0.8em; color: #8696a0; }
-        
-        .production-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1; }
-        .prod-item { background: #111b21; padding: 10px; border-radius: 6px; font-size: 0.9em; border-left: 3px solid #00a884; }
-        .prod-header { display: flex; justify-content: space-between; margin-bottom: 5px; color: #e9edef; font-weight: bold; }
-        .prod-detail { color: #8696a0; font-size: 0.85em; display: flex; justify-content: space-between; }
 
-        /* --- צד שמאל: אזור הצ'אט --- */
-        .chat-container { flex: 1; display: flex; flex-direction: column; position: relative; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; }
-        
-        /* כותרת עם תמונה */
-        .chat-header { 
-            background-color: #202c33; 
-            color: white; 
-            padding: 10px 15px; 
-            display: flex; 
-            align-items: center; 
-            gap: 15px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+        body {
+            font-family: 'Heebo', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            color: var(--text-color);
+        }
+
+        /* --- Layout --- */
+        .container {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 100%;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        /* --- Sidebar (Dashboard) --- */
+        .sidebar {
+            width: 300px;
+            background: #1e293b;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #334155;
+        }
+
+        .sidebar-header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #334155;
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .stat-label { font-size: 0.8rem; color: #94a3b8; }
+        .stat-value { font-size: 1.4rem; font-weight: bold; color: var(--accent-color); }
+
+        .cart-section {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .cart-item {
+            background: #334155;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            border-right: 3px solid var(--primary-color);
+        }
+
+        .cart-total {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid #334155;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .pdf-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 6px;
+            margin-top: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .pdf-btn:hover { background: var(--secondary-color); }
+
+        /* --- Chat Area --- */
+        .chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--chat-bg);
+            position: relative;
+        }
+
+        .chat-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
             z-index: 10;
         }
-        
-        .avatar-container { position: relative; }
-        .header-avatar { 
-            width: 45px; height: 45px; 
-            border-radius: 50%; 
-            object-fit: cover; 
-            border: 2px solid rgba(255,255,255,0.1);
-            background-color: #fff;
-        }
-        .online-dot {
-            position: absolute; bottom: 2px; right: 2px;
-            width: 10px; height: 10px;
-            background-color: #00a884;
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-color);
             border-radius: 50%;
-            border: 1px solid #202c33;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
         }
 
-        .bot-info { display: flex; flex-direction: column; }
-        .bot-name { font-weight: bold; font-size: 1.1em; }
-        .bot-status { font-size: 0.8em; color: #8696a0; }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+        }
 
-        /* הודעות */
-        .chat-messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
-        
-        .message { max-width: 70%; padding: 10px 15px; border-radius: 7px; position: relative; font-size: 0.95em; line-height: 1.4; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); white-space: pre-wrap; }
-        .message.bot { align-self: flex-start; background-color: white; border-top-left-radius: 0; }
-        .message.user { align-self: flex-end; background-color: #d9fdd3; border-top-right-radius: 0; }
-        
-        .timestamp { font-size: 0.7em; color: #999; text-align: left; margin-top: 5px; display: block; }
+        .messages {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
 
-        /* אזור הקלדה */
-        .input-area { background-color: #202c33; padding: 10px 20px; display: flex; gap: 10px; align-items: center; }
-        input { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; font-size: 1em; background-color: #2a3942; color: white; }
-        button { background-color: #00a884; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        button:hover { background-color: #008f6f; }
+        .message {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            position: relative;
+            white-space: pre-wrap; /* שומר על ירידת שורה */
+        }
 
-        /* כרטיס הצעת מחיר */
-        .quote-card { background: #f0f2f5; border-right: 4px solid #00a884; padding: 10px; margin: 5px 0; border-radius: 4px; font-size: 0.9em; }
-        .quote-title { font-weight: bold; color: #111b21; display: flex; justify-content: space-between; }
-        .quote-detail { color: #54656f; font-size: 0.9em; margin-top: 2px; }
-        .quote-price { color: #00a884; font-weight: bold; margin-top: 5px; font-size: 1.1em; }
+        .message.bot {
+            background: var(--bot-msg-bg);
+            align-self: flex-start;
+            border-top-right-radius: 2px;
+        }
 
-        /* כפתורים חכמים (Chips) */
-        .quick-replies { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
-        .chip { background-color: #2a3942; color: #e9edef; padding: 6px 12px; border-radius: 16px; font-size: 0.85em; cursor: pointer; border: 1px solid #374045; transition: 0.2s; }
-        .chip:hover { background-color: #374045; border-color: #00a884; }
+        .message.user {
+            background: var(--user-msg-bg);
+            align-self: flex-end;
+            border-top-left-radius: 2px;
+        }
 
-        /* כפתור PDF */
-        .btn-summary { display: inline-block; background: #00a884; color: white; padding: 8px 15px; border-radius: 20px; text-decoration: none; margin-top: 10px; font-size: 0.9em; border: none; cursor: pointer; text-align: center; width: 100%; }
-        .btn-summary:hover { background: #008f6f; }
+        /* --- Quick Replies --- */
+        .quick-replies {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
 
-        /* רספונסיביות */
-        @media (max-width: 800px) {
-            .manager-panel { display: none; } /* במובייל מסתירים את המנהל */
-            .message { max-width: 85%; }
+        .chip {
+            background: white;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* --- Typing Indicator --- */
+        .typing {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-bottom: 10px;
+            align-self: flex-start;
+            display: none; /* Hidden by default */
+            font-style: italic;
+        }
+
+        /* --- Input Area --- */
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        input:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
+
+        button.send-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button.send-btn:hover { background: var(--secondary-color); }
+
+        /* --- Mobile Responsive --- */
+        @media (max-width: 768px) {
+            .sidebar { display: none; } /* במובייל נסתיר את הדשבורד כרגע */
         }
     </style>
 </head>
 <body>
 
-    <div class="manager-panel">
-        <div class="manager-header">📊 דשבורד ייצור (Live)</div>
-        
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="stat-val" id="total-revenue">₪0</div>
-                <div class="stat-label">הכנסות</div>
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>📊 דשבורד ניהול</span>
             </div>
-            <div class="stat-card">
-                <div class="stat-val" id="profit-margin">0%</div>
-                <div class="stat-label">רווח</div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">הכנסה יומית</div>
+                    <div class="stat-value" id="stat-revenue">₪0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">הזמנות סגורות</div>
+                    <div class="stat-value" id="stat-orders">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">יחס המרה</div>
+                    <div class="stat-value" id="stat-conversion">0%</div>
+                </div>
             </div>
+
+            <div class="sidebar-header" style="margin-top: 20px;">
+                <span>🛒 עגלה פעילה</span>
+            </div>
+
+            <div class="cart-section" id="cart-items">
+                <div style="text-align: center; color: #94a3b8; margin-top: 20px;">העגלה ריקה</div>
+            </div>
+
+            <div class="cart-total" id="cart-total-display">
+                סה"כ: ₪0
+            </div>
+            <button class="pdf-btn" onclick="downloadPDF()">📄 הורד הצעת מחיר (PDF)</button>
         </div>
 
-        <div class="manager-header" style="margin-top: 15px;">🏭 פקודות עבודה</div>
-        <div class="production-list" id="production-queue">
-            <div style="text-align: center; color: #8696a0; margin-top: 20px;">ממתין להזמנות...</div>
-        </div>
-
-        <div class="manager-header" style="margin-top: 15px;">👤 פרטי לקוח</div>
-        <div class="prod-item" id="customer-info" style="border-left-color: #00a884;">
-            <div class="prod-header">אורח</div>
-            <div class="prod-detail">ממתין לזיהוי...</div>
-        </div>
-    </div>
-
-    <div class="chat-container">
-        <div class="chat-header">
-            <div class="avatar-container">
-                <img src="pini.png" alt="פיני" class="header-avatar" onerror="this.src='https://cdn-icons-png.flaticon.com/512/4712/4712027.png'">
-                <div class="online-dot"></div>
+        <div class="chat-area">
+            <div class="chat-header">
+                <div class="avatar">פ</div>
+                <div>
+                    <div style="font-weight: bold;">פיני - דפוס בית יצחק</div>
+                    <div style="font-size: 0.8rem; color: #10b981;">
+                        <span class="status-dot"></span> מחובר (Agentic Mode)
+                    </div>
+                </div>
             </div>
-            <div class="bot-info">
-                <div class="bot-name">דפוס בית יצחק</div>
-                <div class="bot-status">פיני מחובר | משיב מיד</div>
-            </div>
-        </div>
 
-        <div class="chat-messages" id="messages"></div>
-        
-        <div class="input-area">
-            <input type="text" id="userInput" placeholder="כתוב הודעה לפיני..." onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()">שלח ➤</button>
+            <div class="messages" id="messages-container">
+                <div class="message bot">
+                    אהלן! אני פיני. 👋<br>
+                    אני כאן כדי לתת הצעות מחיר, לבדוק זמינות ולסגור הזמנות.<br>
+                    נסה אותי: "צריך 1000 כרטיסי ביקור למחר"
+                </div>
+                
+                <div class="quick-replies" id="initial-replies">
+                    <div class="chip" onclick="sendMessage('כמה עולים 1000 כרטיסי ביקור?')">כמה עולה כרטיס ביקור?</div>
+                    <div class="chip" onclick="sendMessage('צריך דחוף רולאפ להיום')">דחוף להיום!</div>
+                </div>
+            </div>
+
+            <div class="typing" id="typing-indicator" style="margin-right: 20px;">
+                פיני מקליד...
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="user-input" placeholder="כתוב הודעה..." autocomplete="off">
+                <button class="send-btn" onclick="sendMessage()">שלח</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const API_URL = 'https://dotandru-pini-print-bot.hf.space/api/chat';
-        let userId = 'user_' + Math.random().toString(36).substr(2, 9);
+        // --- State Management ---
+        const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
+        let isProcessing = false;
 
-        // הוספת הודעה למסך
-        function addMsg(text, sender) {
+        // --- Core Logic ---
+
+        async function sendMessage(text = null) {
+            if (isProcessing) return;
+
+            const inputField = document.getElementById('user-input');
+            const message = text || inputField.value.trim();
+            
+            if (!message) return;
+
+            // 1. UI Update (User Message)
+            appendMessage(message, 'user');
+            inputField.value = '';
+            removeQuickReplies(); // נקה כפתורים ישנים
+            
+            isProcessing = true;
+            showTyping(true);
+
+            try {
+                // 2. Server Call
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: userId,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+
+                // 3. UI Update (Bot Response)
+                showTyping(false);
+                appendMessage(data.content, 'bot');
+                
+                // 4. Render Quick Replies
+                if (data.quickReplies && data.quickReplies.length > 0) {
+                    appendQuickReplies(data.quickReplies);
+                }
+
+                // 5. Update State (Cart & Dashboard)
+                updateDashboard(data.dashboard);
+                updateCart(data.cart);
+                currentCart = data.cart; // שמור לשימוש מקומי
+
+            } catch (error) {
+                console.error('Error:', error);
+                showTyping(false);
+                appendMessage('אופס, הייתה תקלה בתקשורת. נסה שוב.', 'bot');
+            } finally {
+                isProcessing = false;
+                scrollToBottom();
+                inputField.focus();
+            }
+        }
+
+        // --- UI Helper Functions ---
+
+        function appendMessage(text, sender) {
+            const container = document.getElementById('messages-container');
             const div = document.createElement('div');
             div.className = `message ${sender}`;
-            div.innerText = text;
-            
-            const time = document.createElement('span');
-            time.className = 'timestamp';
-            const now = new Date();
-            time.innerText = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
-            
-            div.appendChild(time);
-            document.getElementById('messages').appendChild(div);
+            // המרת לינקים אם יש (למשל PDF)
+            div.innerHTML = text.replace(/\n/g, '<br>'); 
+            container.appendChild(div);
             scrollToBottom();
+        }
+
+        function appendQuickReplies(replies) {
+            const container = document.getElementById('messages-container');
+            const qrDiv = document.createElement('div');
+            qrDiv.className = 'quick-replies';
+            
+            replies.forEach(reply => {
+                const chip = document.createElement('div');
+                chip.className = 'chip';
+                chip.innerText = reply.text;
+                // בלחיצה, שלח את ה-Value לשרת
+                chip.onclick = () => sendMessage(reply.value);
+                qrDiv.appendChild(chip);
+            });
+
+            container.appendChild(qrDiv);
+            scrollToBottom();
+        }
+
+        function removeQuickReplies() {
+            // מסיר כפתורים ישנים כדי לא לבלבל
+            const oldQRs = document.querySelectorAll('.quick-replies');
+            oldQRs.forEach(el => el.remove());
+        }
+
+        function showTyping(show) {
+            const indicator = document.getElementById('typing-indicator');
+            indicator.style.display = show ? 'block' : 'none';
         }
 
         function scrollToBottom() {
-            const chat = document.getElementById('messages');
-            chat.scrollTop = chat.scrollHeight;
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
         }
 
-        // הצגת כרטיס הצעת מחיר
-        function addQuoteCard(quote) {
-            const div = document.createElement('div');
-            div.className = 'message bot';
-            div.innerHTML = `
-                <div class="quote-card">
-                    <div class="quote-title">
-                        <span>${quote.product_name}</span>
-                        <span>x${quote.qty.toLocaleString()}</span>
-                    </div>
-                    <div class="quote-detail">📄 ${quote.description || 'סטנדרט'}</div>
-                    <div class="quote-price">₪${quote.client_price.toLocaleString()}</div>
-                </div>
-                <span class="timestamp">הצעת מחיר</span>
-            `;
-            document.getElementById('messages').appendChild(div);
-            scrollToBottom();
-        }
-
-        // הצגת כפתורים חכמים
-        function addButtons(options) {
-            if (!options || options.length === 0) return;
-
-            const div = document.createElement('div');
-            div.className = 'message bot';
-            div.style.background = 'transparent';
-            div.style.boxShadow = 'none';
-            div.style.padding = '0';
-            
-            const container = document.createElement('div');
-            container.className = 'quick-replies';
-            
-            options.forEach(opt => {
-                const btn = document.createElement('div');
-                btn.className = 'chip';
-                const label = typeof opt === 'string' ? opt : opt.text;
-                const val = typeof opt === 'string' ? opt : opt.value;
-                
-                btn.innerText = label;
-                btn.onclick = () => {
-                    document.getElementById('userInput').value = val;
-                    sendMessage();
-                };
-                container.appendChild(btn);
-            });
-            
-            div.appendChild(container);
-            document.getElementById('messages').appendChild(div);
-            scrollToBottom();
-        }
-
-        // כפתור PDF
-        function addCartSummaryButton() {
-            const lastMsg = document.getElementById('messages').lastElementChild;
-            if (lastMsg && lastMsg.querySelector('.btn-summary')) return;
-
-            const div = document.createElement('div');
-            div.className = 'message bot';
-            div.style.background = 'transparent'; 
-            div.style.boxShadow = 'none';
-            
-            div.innerHTML = `<button class="btn-summary" onclick="downloadPDF()">📄 הורד הצעת מחיר רשמית (PDF)</button>`;
-            document.getElementById('messages').appendChild(div);
-            scrollToBottom();
-        }
-
-        async function downloadPDF() {
-            if (currentCart.length === 0) return alert('העגלה ריקה');
-            addMsg("מפיק מסמך PDF... ⏳", "bot");
-            
-            try {
-                const res = await fetch('/api/pdf', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח פרטי' } })
-                });
-                
-                if (res.ok) {
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = "Pini_Quote.pdf";
-                    document.body.appendChild(a);
-                    a.click();
-                    addMsg("המסמך ירד בהצלחה! ✅", "bot");
-                } else {
-                    addMsg("שגיאה בהפקת PDF ❌", "bot");
-                }
-            } catch (e) {
-                console.error(e);
-                addMsg("שגיאה בתקשורת ❌", "bot");
-            }
-        }
+        // --- Dashboard & Cart Functions ---
 
         function updateDashboard(dashboard) {
             if (!dashboard) return;
-
-            if (dashboard.currentDeal) {
-                document.getElementById('total-revenue').innerText = `₪${dashboard.currentDeal.totalPrice.toLocaleString()}`;
-                document.getElementById('profit-margin').innerText = `${dashboard.currentDeal.profit_margin}%`;
-            }
-
-            const queueEl = document.getElementById('production-queue');
-            queueEl.innerHTML = '';
-
-            if (dashboard.production && dashboard.production.steps) {
-                dashboard.production.steps.forEach(step => {
-                    const item = document.createElement('div');
-                    item.className = 'prod-item';
-                    item.innerHTML = `
-                        <div class="prod-header">
-                            <span>${step.department}</span>
-                            <span>${step.time} דק'</span>
-                        </div>
-                        <div class="prod-detail">
-                            <span>${step.action}</span>
-                        </div>
-                    `;
-                    queueEl.appendChild(item);
-                });
-            }
-            
-            if (dashboard.customer) {
-                document.getElementById('customer-info').innerHTML = `
-                    <div class="prod-header">${dashboard.customer.name || 'לקוח מזוהה'}</div>
-                    <div class="prod-detail">טלפון: ${dashboard.customer.phone}</div>
-                    <div class="prod-detail" style="margin-top:5px; color:#00a884;">${dashboard.customer.isVIP ? '⭐ לקוח VIP' : 'לקוח רגיל'}</div>
-                `;
-            }
+            // הנחה: הדשבורד מחזיר מספרים מעוצבים או גולמיים
+            // המרת מספרים לפורמט מטבע אם צריך
+            document.getElementById('stat-revenue').innerText = '₪' + (dashboard.dailyRevenue || 0).toLocaleString();
+            document.getElementById('stat-orders').innerText = dashboard.dailyOrders || 0;
+            document.getElementById('stat-conversion').innerText = (dashboard.conversionRate || 0) + '%';
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('userInput');
-            const text = input.value.trim();
-            if (!text) return;
-
-            addMsg(text, 'user');
-            input.value = '';
+        function updateCart(cart) {
+            const container = document.getElementById('cart-items');
+            const totalDisplay = document.getElementById('cart-total-display');
             
-            const oldChips = document.querySelectorAll('.quick-replies');
-            oldChips.forEach(c => c.style.display = 'none');
+            container.innerHTML = ''; // ניקוי
+            let total = 0;
 
-            const loadingId = 'loading-' + Date.now();
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'message bot';
-            loadingDiv.id = loadingId;
-            loadingDiv.innerText = 'פיני מקליד...';
-            document.getElementById('messages').appendChild(loadingDiv);
-            scrollToBottom();
+            if (!cart || cart.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #94a3b8; margin-top: 20px;">העגלה ריקה</div>';
+            } else {
+                cart.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'cart-item';
+                    itemDiv.innerHTML = `
+                        <div style="font-weight:bold;">${item.product_name}</div>
+                        <div style="display:flex; justify-content:space-between; margin-top:5px;">
+                            <span>${item.qty} יח'</span>
+                            <span>₪${item.client_price}</span>
+                        </div>
+                        <div style="font-size:0.8rem; color:#94a3b8;">${item.paper_type || 'רגיל'}</div>
+                    `;
+                    container.appendChild(itemDiv);
+                    total += item.client_price;
+                });
+            }
+
+            totalDisplay.innerText = 'סה"כ: ₪' + total.toLocaleString();
+        }
+
+        async function downloadPDF() {
+            if (!currentCart || currentCart.length === 0) {
+                alert("העגלה ריקה! אין מה להדפיס.");
+                return;
+            }
 
             try {
-                const res = await fetch(API_URL, {
+                const response = await fetch('/api/pdf', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text, userId: userId })
+                    body: JSON.stringify({ cart: currentCart, customer: { name: 'אורח' } }) // אפשר לשפר עם שם הלקוח
                 });
 
-                const loader = document.getElementById(loadingId);
-                if (loader) loader.remove();
-
-                if (!res.ok) throw new Error(`Server returned ${res.status}`);
-                
-                const data = await res.json();
-                console.log("Server response:", data);
-
-                if (data.text) addMsg(data.text, 'bot'); // שים לב: השינוי הוא בשימוש ב-data.text
-                if (data.content) addMsg(data.content, 'bot'); // תמיכה לאחור
-
-                if (data.cart) currentCart = data.cart;
-                
-                // תמיכה בפורמט החדש של התשובה
-                const meta = data.meta || {};
-                
-                // כפתורים
-                if (meta.quick_replies) addButtons(meta.quick_replies);
-                if (data.quickReplies) addButtons(data.quickReplies);
-
-                // עדכון דשבורד
-                if (data.dashboard) updateDashboard(data.dashboard);
-
-            } catch (e) { 
-                console.error("Fetch error:", e); 
-                const loader = document.getElementById(loadingId);
-                if (loader) loader.remove();
-                addMsg("⚠️ שגיאה בתקשורת עם השרת.", 'bot'); 
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = "quote.pdf";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } else {
+                    alert("שגיאה בהפקת PDF");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("תקלה בהורדת הקובץ");
             }
         }
+
+        // --- Event Listeners ---
         
-        function handleKeyPress(e) {
+        // שליחה ב-Enter
+        document.getElementById('user-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') sendMessage();
-        }
-        
-        window.onload = function() {
-            fetch(API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: 'היי', userId: userId })
-            }).then(res => res.json()).then(data => {
-                if (data.text) addMsg(data.text, 'bot');
-                else if (data.content) addMsg(data.content, 'bot');
-                
-                if (data.meta && data.meta.quick_replies) addButtons(data.meta.quick_replies);
-                else if (data.quickReplies) addButtons(data.quickReplies);
-            }).catch(e => console.error(e));
-        }
+        });
+
     </script>
 </body>
 </html>
