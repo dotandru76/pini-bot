@@ -5,334 +5,368 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>דפוס בית יצחק - הצ'אט של פיני</title>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <style>
         :root {
-            --primary-color: #2563eb;
-            --secondary-color: #1e40af;
-            --bg-color: #f3f4f6;
-            --chat-bg: #ffffff;
-            --user-msg-bg: #dbeafe;
-            --bot-msg-bg: #f3f4f6;
-            --text-color: #1f2937;
-            --accent-color: #10b981; /* Green for success/money */
+            --app-bg: #d1d7db;
+            --chat-bg-color: #efeae2;
+            --header-bg: #f0f2f5;
+            --sidebar-bg: #ffffff;
+            --user-msg-bg: #d9fdd3;
+            --bot-msg-bg: #ffffff;
+            --primary-color: #00a884;
+            --text-primary: #111b21;
+            --text-secondary: #667781;
         }
 
         body {
             font-family: 'Heebo', sans-serif;
-            background-color: var(--bg-color);
+            background-color: var(--app-bg);
             margin: 0;
             height: 100vh;
             display: flex;
-            color: var(--text-color);
+            justify-content: center;
+            align-items: center;
+            color: var(--text-primary);
         }
 
-        /* --- Layout --- */
-        .container {
+        /* --- Main Container --- */
+        .app-container {
             display: flex;
             width: 100%;
-            max-width: 1400px;
-            margin: 0 auto;
-            height: 100%;
+            max-width: 1600px;
+            height: 100vh;
             background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
         }
 
-        /* --- Sidebar (Dashboard) --- */
+        @media (min-width: 1400px) {
+            .app-container {
+                height: 95vh;
+                width: 95vw;
+                border-radius: 0;
+            }
+        }
+
+        /* --- Sidebar (Order Summary - Client Facing) --- */
         .sidebar {
-            width: 300px;
-            background: #1e293b;
-            color: white;
-            padding: 20px;
+            width: 350px;
+            background: var(--sidebar-bg);
+            border-left: 1px solid #e9edef;
             display: flex;
             flex-direction: column;
-            border-left: 1px solid #334155;
+            z-index: 2;
         }
 
         .sidebar-header {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #334155;
+            height: 60px;
+            background: var(--header-bg);
+            padding: 0 16px;
             display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #e9edef;
+            font-weight: bold;
+            color: var(--text-primary);
+            font-size: 1.1rem;
+        }
+
+        .cart-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #fff;
+        }
+
+        .cart-empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 50px;
+            display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 10px;
         }
 
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: #334155;
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        .stat-label { font-size: 0.8rem; color: #94a3b8; }
-        .stat-value { font-size: 1.4rem; font-weight: bold; color: var(--accent-color); }
-
-        .cart-section {
-            flex-grow: 1;
-            overflow-y: auto;
-        }
-
         .cart-item {
-            background: #334155;
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            border-right: 3px solid var(--primary-color);
+            background: #fff;
+            border-bottom: 1px solid #f0f2f5;
+            padding: 12px 0;
+            margin-bottom: 5px;
+            position: relative;
         }
 
-        .cart-total {
-            margin-top: auto;
-            padding-top: 20px;
-            border-top: 1px solid #334155;
+        .cart-item-title { font-weight: bold; font-size: 0.95rem; }
+        .cart-item-details { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
+        .cart-item-price { font-weight: bold; color: var(--text-primary); float: left; }
+
+        .sidebar-footer {
+            padding: 20px;
+            background: #f0f2f5;
+            border-top: 1px solid #e9edef;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
             font-size: 1.2rem;
             font-weight: bold;
-            text-align: center;
+            margin-bottom: 15px;
+            color: var(--primary-color);
         }
 
-        .pdf-btn {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 10px;
+        .action-btn {
             width: 100%;
-            border-radius: 6px;
-            margin-top: 15px;
-            cursor: pointer;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
             font-weight: bold;
-            transition: background 0.2s;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-        .pdf-btn:hover { background: var(--secondary-color); }
+
+        .action-btn:hover { background-color: #008f6f; }
 
         /* --- Chat Area --- */
         .chat-area {
-            flex-grow: 1;
+            flex: 1;
             display: flex;
             flex-direction: column;
-            background: var(--chat-bg);
+            background-color: var(--chat-bg-color);
+            background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png");
+            background-repeat: repeat;
+            opacity: 1;
             position: relative;
         }
 
         .chat-header {
-            padding: 15px 20px;
-            border-bottom: 1px solid #e5e7eb;
+            height: 60px;
+            background: var(--header-bg);
+            padding: 0 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
-            background: white;
-            z-index: 10;
+            gap: 15px;
+            border-bottom: 1px solid #e9edef;
         }
 
         .avatar {
             width: 40px;
             height: 40px;
-            background: var(--primary-color);
+            background: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+        .chat-info { flex: 1; }
+        .chat-name { font-weight: bold; font-size: 1rem; }
+        .chat-status { font-size: 0.8rem; color: var(--text-secondary); }
+
+        .header-actions {
+            color: #54656f;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 10px;
         }
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            background: #10b981;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
+        /* --- Messages --- */
         .messages {
-            flex-grow: 1;
-            padding: 20px;
+            flex: 1;
+            padding: 20px 50px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
         }
 
         .message {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 12px;
-            line-height: 1.5;
+            max-width: 65%;
+            padding: 8px 12px;
+            border-radius: 7.5px;
+            font-size: 0.95rem;
+            line-height: 1.4;
             position: relative;
-            white-space: pre-wrap; /* שומר על ירידת שורה */
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+            white-space: pre-wrap;
         }
 
         .message.bot {
             background: var(--bot-msg-bg);
             align-self: flex-start;
-            border-top-right-radius: 2px;
+            border-top-right-radius: 0;
         }
 
         .message.user {
             background: var(--user-msg-bg);
             align-self: flex-end;
-            border-top-left-radius: 2px;
+            border-top-left-radius: 0;
+        }
+
+        .msg-time {
+            font-size: 0.7rem;
+            color: #999;
+            text-align: left;
+            margin-top: 4px;
+            float: left;
+        }
+
+        /* --- Input Area --- */
+        .input-area {
+            height: 62px;
+            background: #f0f2f5;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            color: #54656f;
+            cursor: pointer;
+            font-size: 1.4rem;
+            padding: 5px;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
+        }
+
+        input {
+            border: none;
+            width: 100%;
+            outline: none;
+            font-size: 1rem;
+            font-family: inherit;
         }
 
         /* --- Quick Replies --- */
         .quick-replies {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
             flex-wrap: wrap;
-            margin-top: 5px;
         }
 
         .chip {
             background: white;
-            border: 1px solid var(--primary-color);
+            border: 1px solid #e9edef;
             color: var(--primary-color);
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .chip:hover {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        /* --- Typing Indicator --- */
-        .typing {
-            font-size: 0.8rem;
-            color: #6b7280;
-            margin-bottom: 10px;
-            align-self: flex-start;
-            display: none; /* Hidden by default */
-            font-style: italic;
-        }
-
-        /* --- Input Area --- */
-        .input-area {
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e5e7eb;
-            display: flex;
-            gap: 10px;
-        }
-
-        input {
-            flex-grow: 1;
-            padding: 12px;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: inherit;
-        }
-
-        input:focus { outline: 2px solid var(--primary-color); border-color: transparent; }
-
-        button.send-btn {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 0 25px;
-            border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            transition: background 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            transition: 0.2s;
+        }
+        
+        .chip:hover {
+            background: #f0fdf4;
+            transform: translateY(-1px);
         }
 
-        button.send-btn:hover { background: var(--secondary-color); }
-
-        /* --- Mobile Responsive --- */
         @media (max-width: 768px) {
-            .sidebar { display: none; } /* במובייל נסתיר את הדשבורד כרגע */
+            .app-container { flex-direction: column; }
+            .sidebar { 
+                width: 100%; 
+                height: 30%; 
+                border-left: none; 
+                border-top: 1px solid #ccc;
+                order: 2; 
+            }
+            .chat-area { height: 70%; order: 1; }
+            .messages { padding: 10px; }
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <span>📊 דשבורד ניהול</span>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">הכנסה יומית</div>
-                    <div class="stat-value" id="stat-revenue">₪0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">הזמנות סגורות</div>
-                    <div class="stat-value" id="stat-orders">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">יחס המרה</div>
-                    <div class="stat-value" id="stat-conversion">0%</div>
-                </div>
-            </div>
-
-            <div class="sidebar-header" style="margin-top: 20px;">
-                <span>🛒 עגלה פעילה</span>
-            </div>
-
-            <div class="cart-section" id="cart-items">
-                <div style="text-align: center; color: #94a3b8; margin-top: 20px;">העגלה ריקה</div>
-            </div>
-
-            <div class="cart-total" id="cart-total-display">
-                סה"כ: ₪0
-            </div>
-            <button class="pdf-btn" onclick="downloadPDF()">📄 הורד הצעת מחיר (PDF)</button>
-        </div>
-
+    <div class="app-container">
+        
         <div class="chat-area">
             <div class="chat-header">
-                <div class="avatar">פ</div>
-                <div>
-                    <div style="font-weight: bold;">פיני - דפוס בית יצחק</div>
-                    <div style="font-size: 0.8rem; color: #10b981;">
-                        <span class="status-dot"></span> מחובר (Agentic Mode)
-                    </div>
+                <div class="avatar">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="chat-info">
+                    <div class="chat-name">פיני - דפוס בית יצחק</div>
+                    <div class="chat-status" id="connection-status">מחובר</div>
+                </div>
+                <div class="header-actions">
+                    <i class="fas fa-search"></i>
+                    <i class="fas fa-ellipsis-v" title="תפריט"></i>
                 </div>
             </div>
 
-            <div class="messages" id="messages-container">
-                <div class="message bot">
-                    אהלן! אני פיני. 👋<br>
-                    אני כאן כדי לתת הצעות מחיר, לבדוק זמינות ולסגור הזמנות.<br>
-                    נסה אותי: "צריך 1000 כרטיסי ביקור למחר"
-                </div>
-                
-                <div class="quick-replies" id="initial-replies">
-                    <div class="chip" onclick="sendMessage('כמה עולים 1000 כרטיסי ביקור?')">כמה עולה כרטיס ביקור?</div>
-                    <div class="chip" onclick="sendMessage('צריך דחוף רולאפ להיום')">דחוף להיום!</div>
-                </div>
-            </div>
-
-            <div class="typing" id="typing-indicator" style="margin-right: 20px;">
-                פיני מקליד...
-            </div>
+            <div class="messages" id="messages-container"></div>
 
             <div class="input-area">
-                <input type="text" id="user-input" placeholder="כתוב הודעה..." autocomplete="off">
-                <button class="send-btn" onclick="sendMessage()">שלח</button>
+                <div class="icon-btn" onclick="toggleMenu()" title="תפריט מהיר"><i class="fas fa-bars"></i></div>
+                <div class="icon-btn"><i class="fas fa-paperclip"></i></div>
+                <div class="input-wrapper">
+                    <input type="text" id="user-input" placeholder="הקלד הודעה..." autocomplete="off">
+                </div>
+                <div class="icon-btn" onclick="sendMessage()" style="color: var(--primary-color);"><i class="fas fa-paper-plane"></i></div>
             </div>
         </div>
+
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span><i class="fas fa-shopping-cart"></i> סיכום ההזמנה שלך</span>
+            </div>
+
+            <div class="cart-content" id="cart-items">
+                <div class="cart-empty-state">
+                    <i class="fas fa-receipt" style="font-size: 3rem; opacity: 0.2;"></i>
+                    <p>העגלה ריקה כרגע</p>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="total-row">
+                    <span>סה"כ לתשלום:</span>
+                    <span id="cart-total-display">₪0</span>
+                </div>
+                <button class="action-btn" onclick="downloadPDF()">
+                    <i class="fas fa-file-pdf"></i> הורד הצעת מחיר (PDF)
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        // --- State Management ---
+        // חיבור לכתובת שעובדת
+        const API_URL = 'https://dotandru-pini-print-bot.hf.space/api/chat';
+        const PDF_URL = 'https://dotandru-pini-print-bot.hf.space/api/pdf';
+
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
-
-        // --- Core Logic ---
 
         async function sendMessage(text = null) {
             if (isProcessing) return;
@@ -342,45 +376,45 @@
             
             if (!message) return;
 
-            // 1. UI Update (User Message)
-            appendMessage(message, 'user');
+            // עדכון UI למשתמש
+            addMsg(message, 'user');
             inputField.value = '';
-            removeQuickReplies(); // נקה כפתורים ישנים
+            removeQuickReplies();
             
             isProcessing = true;
-            showTyping(true);
+            updateStatus('פיני מקליד...');
 
             try {
-                // 2. Server Call
-                const response = await fetch('/api/chat', {
+                const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: userId,
-                        message: message
-                    })
+                    body: JSON.stringify({ message: message, userId: userId })
                 });
 
-                const data = await response.json();
+                if (!res.ok) throw new Error(`Server status: ${res.status}`);
 
-                // 3. UI Update (Bot Response)
-                showTyping(false);
-                appendMessage(data.content, 'bot');
+                const data = await res.json();
                 
-                // 4. Render Quick Replies
-                if (data.quickReplies && data.quickReplies.length > 0) {
-                    appendQuickReplies(data.quickReplies);
-                }
+                updateStatus('מחובר');
+                
+                // תמיכה בכל הפורמטים (ישן וחדש)
+                const content = data.text || data.content;
+                if (content) addMsg(content, 'bot');
 
-                // 5. Update State (Cart & Dashboard)
-                updateDashboard(data.dashboard);
-                updateCart(data.cart);
-                currentCart = data.cart; // שמור לשימוש מקומי
+                // כפתורים
+                const buttons = data.quickReplies || (data.meta && data.meta.quick_replies);
+                if (buttons) addButtons(buttons);
+
+                // עדכון עגלה
+                if (data.cart) {
+                    currentCart = data.cart;
+                    updateCartUI(data.cart);
+                }
 
             } catch (error) {
                 console.error('Error:', error);
-                showTyping(false);
-                appendMessage('אופס, הייתה תקלה בתקשורת. נסה שוב.', 'bot');
+                updateStatus('שגיאת חיבור');
+                addMsg('אופס, יש בעיה בתקשורת עם השרת.', 'bot');
             } finally {
                 isProcessing = false;
                 scrollToBottom();
@@ -388,130 +422,122 @@
             }
         }
 
-        // --- UI Helper Functions ---
-
-        function appendMessage(text, sender) {
+        function addMsg(text, sender) {
             const container = document.getElementById('messages-container');
             const div = document.createElement('div');
             div.className = `message ${sender}`;
-            // המרת לינקים אם יש (למשל PDF)
-            div.innerHTML = text.replace(/\n/g, '<br>'); 
+            const now = new Date();
+            const timeStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
+            div.innerHTML = text.replace(/\n/g, '<br>') + `<div class="msg-time">${timeStr}</div>`;
             container.appendChild(div);
             scrollToBottom();
         }
 
-        function appendQuickReplies(replies) {
+        function addButtons(options) {
             const container = document.getElementById('messages-container');
             const qrDiv = document.createElement('div');
             qrDiv.className = 'quick-replies';
-            
-            replies.forEach(reply => {
-                const chip = document.createElement('div');
-                chip.className = 'chip';
-                chip.innerText = reply.text;
-                // בלחיצה, שלח את ה-Value לשרת
-                chip.onclick = () => sendMessage(reply.value);
-                qrDiv.appendChild(chip);
+            options.forEach(opt => {
+                const btn = document.createElement('div');
+                btn.className = 'chip';
+                const label = typeof opt === 'string' ? opt : opt.text;
+                const val = typeof opt === 'string' ? opt : opt.value;
+                btn.innerText = label;
+                btn.onclick = () => sendMessage(val);
+                qrDiv.appendChild(btn);
             });
-
             container.appendChild(qrDiv);
             scrollToBottom();
         }
 
         function removeQuickReplies() {
-            // מסיר כפתורים ישנים כדי לא לבלבל
-            const oldQRs = document.querySelectorAll('.quick-replies');
-            oldQRs.forEach(el => el.remove());
+            document.querySelectorAll('.quick-replies').forEach(el => el.remove());
         }
 
-        function showTyping(show) {
-            const indicator = document.getElementById('typing-indicator');
-            indicator.style.display = show ? 'block' : 'none';
+        function updateCartUI(cart) {
+            const container = document.getElementById('cart-items');
+            const totalDisplay = document.getElementById('cart-total-display');
+            container.innerHTML = '';
+            let total = 0;
+
+            if (!cart || cart.length === 0) {
+                container.innerHTML = `
+                <div class="cart-empty-state">
+                    <i class="fas fa-receipt" style="font-size: 3rem; opacity: 0.2;"></i>
+                    <p>העגלה ריקה כרגע</p>
+                </div>`;
+            } else {
+                cart.forEach(item => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'cart-item';
+                    itemDiv.innerHTML = `
+                        <div class="cart-item-title">${item.product_name} (${item.qty} יח')</div>
+                        <div class="cart-item-price">₪${item.client_price}</div>
+                        <div style="clear:both;"></div>
+                        <div class="cart-item-details">${item.paper_type || 'מפרט סטנדרטי'}</div>
+                    `;
+                    container.appendChild(itemDiv);
+                    total += item.client_price;
+                });
+            }
+            totalDisplay.innerText = '₪' + total.toLocaleString();
+        }
+
+        async function downloadPDF() {
+            if (currentCart.length === 0) return alert('העגלה ריקה');
+            addMsg("מפיק מסמך PDF... ⏳", "bot");
+            
+            try {
+                const res = await fetch(PDF_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח' } })
+                });
+                
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = "Quote.pdf";
+                    document.body.appendChild(a);
+                    a.click();
+                    addMsg("המסמך ירד בהצלחה! ✅", "bot");
+                } else {
+                    addMsg("שגיאה בהפקת PDF ❌", "bot");
+                }
+            } catch (e) {
+                console.error(e);
+                addMsg("שגיאה בתקשורת ❌", "bot");
+            }
+        }
+
+        function updateStatus(text) {
+            const el = document.getElementById('connection-status');
+            el.innerText = text;
+            el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
         }
 
         function scrollToBottom() {
             const container = document.getElementById('messages-container');
             container.scrollTop = container.scrollHeight;
         }
-
-        // --- Dashboard & Cart Functions ---
-
-        function updateDashboard(dashboard) {
-            if (!dashboard) return;
-            // הנחה: הדשבורד מחזיר מספרים מעוצבים או גולמיים
-            // המרת מספרים לפורמט מטבע אם צריך
-            document.getElementById('stat-revenue').innerText = '₪' + (dashboard.dailyRevenue || 0).toLocaleString();
-            document.getElementById('stat-orders').innerText = dashboard.dailyOrders || 0;
-            document.getElementById('stat-conversion').innerText = (dashboard.conversionRate || 0) + '%';
-        }
-
-        function updateCart(cart) {
-            const container = document.getElementById('cart-items');
-            const totalDisplay = document.getElementById('cart-total-display');
-            
-            container.innerHTML = ''; // ניקוי
-            let total = 0;
-
-            if (!cart || cart.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: #94a3b8; margin-top: 20px;">העגלה ריקה</div>';
-            } else {
-                cart.forEach(item => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'cart-item';
-                    itemDiv.innerHTML = `
-                        <div style="font-weight:bold;">${item.product_name}</div>
-                        <div style="display:flex; justify-content:space-between; margin-top:5px;">
-                            <span>${item.qty} יח'</span>
-                            <span>₪${item.client_price}</span>
-                        </div>
-                        <div style="font-size:0.8rem; color:#94a3b8;">${item.paper_type || 'רגיל'}</div>
-                    `;
-                    container.appendChild(itemDiv);
-                    total += item.client_price;
-                });
-            }
-
-            totalDisplay.innerText = 'סה"כ: ₪' + total.toLocaleString();
-        }
-
-        async function downloadPDF() {
-            if (!currentCart || currentCart.length === 0) {
-                alert("העגלה ריקה! אין מה להדפיס.");
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/pdf', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cart: currentCart, customer: { name: 'אורח' } }) // אפשר לשפר עם שם הלקוח
-                });
-
-                if (response.ok) {
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = "quote.pdf";
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                } else {
-                    alert("שגיאה בהפקת PDF");
-                }
-            } catch (e) {
-                console.error(e);
-                alert("תקלה בהורדת הקובץ");
-            }
-        }
-
-        // --- Event Listeners ---
         
-        // שליחה ב-Enter
+        function toggleMenu() {
+            addButtons([{ text: 'נקה עגלה', value: 'clear' }, { text: 'מה המצב?', value: 'status' }]);
+        }
+
         document.getElementById('user-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') sendMessage();
         });
 
+        // הודעת פתיחה
+        window.onload = function() {
+            setTimeout(() => {
+                addMsg("אהלן! אני פיני. 👋<br>אני כאן לתת הצעות מחיר מהירות.", 'bot');
+                addButtons([{ text: 'כרטיסי ביקור', value: 'כמה עולה 1000 כרטיסי ביקור?' }, { text: 'פליירים', value: 'צריך פליירים דחוף' }]);
+            }, 500);
+        };
     </script>
 </body>
 </html>
