@@ -1,6 +1,8 @@
 /**
- * Pini Universal Router (V6 - Multi-Item & Context Support)
- * ========================================================
+ * Pini Universal Router (V7 - Strategy Engine)
+ * ============================================
+ * מנוע הבנה מבוסס LLM.
+ * חידוש: לא רק מבין מה נאמר, אלא מתכנן את הצעד הבא (Strategy).
  */
 
 const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -27,7 +29,7 @@ const PRODUCT_LIST_SHORT = `
 `;
 
 /**
- * הפונקציה שמנתבת את ההודעות ומבינה הקשר
+ * הפונקציה שמנתבת את ההודעות ומבינה הקשר ואסטרטגיה
  */
 async function routeRequest(message, currentCartContext = [], history = []) {
     
@@ -41,24 +43,32 @@ async function routeRequest(message, currentCartContext = [], history = []) {
     ).join('\n    ');
 
     const systemPrompt = `
-    אתה "המוח המנתב" של פיני, בוט מכירות לדפוס. תפקידך להוציא JSON מדויק.
+    אתה "המוח המנתב" של פיני, בוט מכירות לדפוס. תפקידך להוציא JSON מדויק ולחזות את הצעד הבא.
     
     מוצרים:
     ${PRODUCT_LIST_SHORT}
 
     כוונות (Intents):
-    1. "quote": בקשת מחיר או הוספה (גם עבור כמה מוצרים יחד).
+    1. "quote": בקשת מחיר או הוספה.
     2. "update": שינוי כמות לפריט קיים.
     3. "remove": הסרת פריט.
     4. "show_menu": המלצה או תפריט.
-    5. "consult": תשובה לשאלת בוט (כמו "יש לי קובץ"), שאלה מקצועית, או דחיפות.
+    5. "consult": תשובה לשאלת בוט, שאלה מקצועית, או דחיפות.
     6. "greeting": נימוס בלבד.
     7. "checkout": סיום הזמנה.
     8. "status": מצב עגלה.
     9. "design_check": דיבור על קבצים/עיצוב.
 
+    *** אסטרטגיה (Strategy) - הצעד החכם הבא: ***
+    עליך לזהות מה חסר כדי לסגור עסקה ולהנחות את השרת:
+    - "offer_popular": הלקוח שאל על מוצר בלי כמות -> השרת יציע את הכמות הנפוצה.
+    - "check_urgency": הלקוח נשמע לחוץ ("דחוף", "למחר") -> השרת יבדוק אקספרס.
+    - "req_file": יש מוצר וכמות, אבל לא דיברנו על קובץ -> השרת יבקש קובץ.
+    - "close_deal": יש הכל (מוצר, כמות, קובץ) -> השרת ידחוף לסגירה.
+    - "standard": אין אסטרטגיה מיוחדת, המשך רגיל.
+
     כללים ל-JSON:
-    - החזר שדה 'intent' ושדה 'items' (מערך של אובייקטים).
+    - החזר שדה 'intent', 'strategy' ושדה 'items' (מערך).
     - כל פריט ב-'items' מכיל: 'product' (קוד באנגלית), 'qty' (מספר), 'attributes' (אובייקט).
 
     היסטוריה:
@@ -74,6 +84,7 @@ async function routeRequest(message, currentCartContext = [], history = []) {
         const response = JSON.parse(responseText);
         
         if (!response.intent) response.intent = 'consult';
+        if (!response.strategy) response.strategy = 'standard';
         
         // תיקון פורמט אם המודל החזיר מוצר בודד
         if (!response.items && response.product) {
@@ -88,7 +99,7 @@ async function routeRequest(message, currentCartContext = [], history = []) {
         
     } catch (error) {
         console.error("Router Error:", error);
-        return { intent: "consult", error: true };
+        return { intent: "consult", strategy: "standard", error: true };
     }
 }
 
