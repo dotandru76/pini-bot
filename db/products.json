@@ -1,77 +1,55 @@
 {
-  "bc": {
-    "title": "כרטיסי ביקור",
-    "engine": "sheet_fed",
-    "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "250" }, { "value": "500" }, { "value": "1000" }] },
-      { "key": "paper", "text": "סוג נייר", "options": [{ "value": "chromo_300" }, { "value": "matte_300" }] },
-      { "key": "sides", "text": "הדפסה", "options": [{ "value": "1" }, { "value": "2" }] },
-      { "key": "extras", "text": "השבחות", "options": [{ "value": "lami_matte" }, { "value": "lami_gloss" }, { "value": "round_corners" }, { "value": "none" }] }
-    ]
-  },
   "flyer": {
-    "title": "פליירים",
-    "engine": "sheet_fed",
+    "name": "פליירים",
+    "engine": "digital",
     "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "1000" }, { "value": "2500" }, { "value": "5000" }] },
-      { "key": "size", "text": "גודל", "options": [{ "value": "A5" }, { "value": "A6" }] },
-      { "key": "paper", "text": "נייר", "options": [{ "value": "chromo_135" }, { "value": "chromo_170" }] },
-      { "key": "fold", "text": "קיפול", "options": [{ "value": "none" }, { "value": "fold_simple" }, { "value": "fold_tri" }] }
+      { "key": "size", "question_he": "באיזה גודל הפלייר?", "options": [{ "label": "A5", "value": "A5" }, { "label": "A4", "value": "A4" }] },
+      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "כרומו 130 (רגיל)", "value": "chromo_130" }, { "label": "כרומו 300 (עבה)", "value": "chromo_300" }] },
+      { "key": "qty", "question_he": "כמה יחידות להדפיס?", "type": "number" }
     ]
   },
-  "rollup": {
-    "title": "רולאפ",
-    "engine": "wide_format",
+  "bc": {
+    "name": "כרטיסי ביקור",
+    "engine": "digital",
     "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "1" }, { "value": "2" }, { "value": "5" }] },
-      { "key": "size", "text": "גודל", "options": [{ "value": "85x200" }, { "value": "100x200" }] }
+      { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number" },
+      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350", "value": "matte_350" }] },
+      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "מט", "value": "matte" }] }
     ]
   },
   "invitation": {
-    "title": "הזמנות לאירועים",
-    "engine": "sheet_fed",
+    "name": "הזמנות",
+    "engine": "digital",
     "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "200" }, { "value": "400" }, { "value": "600" }] },
-      { "key": "size", "text": "גודל", "options": [{ "value": "A5" }, { "value": "13x18" }] },
-      { "key": "paper", "text": "סוג נייר", "options": [{ "value": "pearl_300" }, { "value": "texture_300" }, { "value": "chromo_350" }] },
-      { "key": "fold", "text": "קיפול", "options": [{ "value": "none" }, { "value": "fold_simple" }] }, 
-      { "key": "extras", "text": "תוספות", "options": [{ "value": "foil_gold" }, { "value": "scodix" }, { "value": "none" }] }
+      { "key": "qty", "question_he": "כמה הזמנות?", "type": "number" },
+      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18", "value": "13x18" }, { "label": "A5", "value": "A5" }] },
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה", "value": "pearl_300" }, { "label": "מט", "value": "matte_350" }] }
     ]
   },
-  "envelope": {
-    "title": "מעטפות ממותגות",
-    "engine": "sheet_fed",
+  "rollup": {
+    "name": "רולאפ",
+    "engine": "wide",
     "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "500" }, { "value": "1000" }] },
-      { "key": "size", "text": "גודל", "options": [{ "value": "11x23" }, { "value": "16x23" }] },
-      { "key": "paper", "text": "סוג מעטפה", "options": [{ "value": "env_standard" }, { "value": "env_fancy" }] }
+      { "key": "size", "question_he": "מה הגודל הרצוי?", "options": [{ "label": "85x200", "value": "85x200" }, { "label": "100x200", "value": "100x200" }] },
+      { "key": "qty", "question_he": "כמה מתקנים?", "type": "number" }
     ]
   },
   "canvas": {
-    "title": "הדפסה על קנבס",
-    "engine": "wide_format",
+    "name": "קנבס",
+    "engine": "wide",
     "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "1" }, { "value": "3" }] },
-      { "key": "size", "text": "גודל (ס\"מ)", "options": [{ "value": "50x70" }, { "value": "70x100" }, { "value": "100x100" }] },
-      { "key": "frame", "text": "מסגרת", "options": [{ "value": "wood_frame" }, { "value": "none" }] }
-    ]
-  },
-  "folder": {
-    "title": "פולדרים",
-    "engine": "sheet_fed",
-    "questions": [
-      { "key": "qty", "text": "כמות", "options": [{ "value": "100" }, { "value": "500" }] },
-      { "key": "pocket", "text": "כיס", "options": [{ "value": "pocket_glue" }, { "value": "none" }] },
-      { "key": "extras", "text": "גימור", "options": [{ "value": "lami_matte" }, { "value": "lami_gloss" }] }
+      { "key": "size", "question_he": "באיזה גודל הקנבס?", "options": [{ "label": "50x70", "value": "50x70" }, { "label": "100x100", "value": "100x100" }] },
+      { "key": "frame", "question_he": "תרצה מתיחה על מסגרת עץ?", "options": [{ "label": "כן", "value": "wood_frame" }, { "label": "לא", "value": "none" }] },
+      { "key": "qty", "question_he": "כמות?", "type": "number" }
     ]
   },
   "sticker": {
-    "title": "מדבקות",
-    "engine": "wide_format",
+    "name": "מדבקות",
+    "engine": "wide",
     "questions": [
-      { "key": "qty", "text": "כמות מ\"ר", "options": [{ "value": "1" }, { "value": "5" }, { "value": "10" }] },
-      { "key": "material", "text": "חומר", "options": [{ "value": "vinyl_sticker" }, { "value": "sticker_paper" }] },
-      { "key": "cut", "text": "חיתוך צורני", "options": [{ "value": "yes" }, { "value": "no" }] }
+      { "key": "material", "question_he": "איזה סוג מדבקה?", "options": [{ "label": "ויניל לבן", "value": "vinyl_white" }, { "label": "שקוף", "value": "vinyl_clear" }] },
+      { "key": "qty", "question_he": "כמה מטר רבוע (מ\"ר)?", "type": "number" },
+      { "key": "cut", "question_he": "צריך חיתוך צורני?", "options": [{ "label": "כן", "value": "yes" }, { "label": "לא", "value": "no" }] }
     ]
   }
 }

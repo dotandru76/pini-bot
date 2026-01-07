@@ -1,204 +1,574 @@
 /**
- * Pini Server V10 (Interactive Flow)
- * ==================================
- * שרת שתומך בדיאלוג מונחה (Guided Flow) ושומר הקשר בין שאלות.
+ * Pini Print Bot - Server V3.9
+ * ===========================
+ * ארכיטקטורה: Server-Heavy, LLM-Light
+ * תיקונים:
+ * - באג היסטוריה ל-Gemini API
+ * - טיפול משופר בשגיאות LLM
+ * - ולידציה של מבנה ההיסטוריה
  */
 
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// ייבוא שירותים
+const { calculate_custom_job } = require('./services/calculation');
+const { getSession, removeFromCart, clearCart, generateSystemPrompt } = require('./services/sessionManager');
+const { generateQuotePDF } = require('./services/pdfService');
+
+// ייבוא מנועים
 const { classifyMessage } = require('./engine/classifier');
-const { extractParameters } = require('./engine/extractor');
-const { planActions } = require('./engine/planner');
-const { calculate_custom_job } = require('./engine/calculation');
-const { generateDashboard } = require('./engine/dashboardManager');
 const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
-const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
-const { findOrCreateCustomer, extractPhoneFromText, extractNameFromText } = require('./engine/customerManager');
-const { handleWithSmartLLM } = require('./engine/smartLLM');
+const { generateDashboard } = require('./engine/dashboardManager');
+const { 
+    findOrCreateCustomer, 
+    getCustomerByPhone, 
+    saveQuoteToCustomer,
+    extractPhoneFromText,
+    extractNameFromText,
+    getCustomerStats,
+    searchCustomers
+} = require('./engine/customerManager');
+const { detectMood, generateSmartRecommendation } = require('./engine/personalityEngine');
 
 dotenv.config();
 const app = express();
 
+// CORS & Middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.static('public'));
 
-// === לוגים ===
-const LOG = {
-    action: (msg) => console.log(`\x1b[34m⚙️  ${msg}\x1b[0m`),
-    success: (msg) => console.log(`\x1b[32m✅ ${msg}\x1b[0m`),
-    error: (msg) => console.log(`\x1b[31m❌ ${msg}\x1b[0m`)
-};
+// Gemini Setup
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
+// סטטיסטיקות
+const stats = { totalRequests: 0, llmCalls: 0, directHandled: 0, savings: 0 };
+
+// ============================================================
+// HELPER: וולידציה ותיקון היסטוריה
+// ============================================================
+function sanitizeHistory(history) {
+    if (!Array.isArray(history)) return [];
+    
+    return history.filter(item => {
+        // בדיקה שיש role תקין
+        if (!item || !item.role || !['user', 'model'].includes(item.role)) {
+            return false;
+        }
+        // בדיקה שיש parts תקין
+        if (!item.parts || !Array.isArray(item.parts) || item.parts.length === 0) {
+            return false;
+        }
+        // בדיקה שכל part הוא אובייקט עם text
+        return item.parts.every(part => 
+            part && typeof part === 'object' && typeof part.text === 'string' && part.text.length > 0
+        );
+    });
+}
+
+function createHistoryEntry(role, text) {
+    // יוצר entry תקין להיסטוריה
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        return null;
+    }
+    return {
+        role: role,
+        parts: [{ text: text.trim() }]
+    };
+}
+
+// ============================================================
+// MAIN CHAT ENDPOINT
+// ============================================================
 app.post('/api/chat', async (req, res) => {
+    const startTime = Date.now();
+    stats.totalRequests++;
+    
     try {
         const { message, userId, phone, customerName } = req.body;
-        if (!message) return res.status(400).json({ error: 'Missing message' });
-
-        console.log(`\n--- New Message: "${message}" ---`);
-
-        // 1. ניהול סשן ולקוח
+        
+        // ולידציה בסיסית
+        if (!message || typeof message !== 'string' || message.trim().length === 0) {
+            return res.status(400).json({ error: 'Missing message', content: 'לא קיבלתי הודעה 🤔' });
+        }
+        
+        const cleanMessage = message.trim();
+        
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`💬 [Request #${stats.totalRequests}] User: "${cleanMessage}"`);
+        
+        // 1. ניהול סשן
         const session = getSession(userId);
+        if (!session.history) session.history = [];
         
-        // אתחול זיכרון טיוטה אם לא קיים
-        if (!session.draftAttributes) session.draftAttributes = {};
+        // ניקוי היסטוריה פגומה (אם יש)
+        session.history = sanitizeHistory(session.history);
         
-        // זיהוי לקוח (אם יש פרטים)
+        // 2. זיהוי לקוח
         let customer = null;
-        const extractedPhone = extractPhoneFromText(message);
-        if (phone || extractedPhone) {
-            customer = findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
-            session.customerPhone = customer.phone;
-        }
-
-        // 2. סיווג וחילוץ
-        const classification = classifyMessage(message, { cart: session.cart });
-        let intent = classification.intent;
-        let params = {};
-
-        // אם המשתמש בתוך תהליך (יש מוצר פעיל בסשן), ננסה לפרש את ההודעה כפרמטר לתהליך
-        // אלא אם כן הוא אמר מילת מפתח חזקה כמו "בטל" או "נקה"
-        if (session.currentProduct && intent === 'consult' && !classification.needsLLM) {
-             // הנחה: אם אנחנו באמצע תהליך והמשתמש שולח משהו קצר, זה כנראה תשובה לשאלה
-             // נעביר את הטקסט הגולמי ל-Planner שינסה להתאים אותו
-             intent = 'quote'; // ממשיכים את תהליך ההצעה
-             params = { raw_text: message };
-        } else if (!classification.needsLLM) {
-            params = extractParameters(message);
-            // אם יש טקסט גולמי שהאקסטרטור לא תפס (כמו "כרומו"), נעביר גם אותו
-            params.raw_text = message; 
+        if (phone) {
+            customer = findOrCreateCustomer(phone, customerName);
+            session.customerPhone = phone;
+        } else if (session.customerPhone) {
+            customer = getCustomerByPhone(session.customerPhone);
         } else {
-            // LLM Logic (Fallback)
-            // ... (קוד LLM קיים) ...
+            const extractedPhone = extractPhoneFromText(cleanMessage);
+            if (extractedPhone) {
+                customer = findOrCreateCustomer(extractedPhone, extractNameFromText(cleanMessage));
+                session.customerPhone = extractedPhone;
+                console.log(`   📱 Phone extracted: ${extractedPhone}`);
+            }
         }
 
-        // 3. תכנון (Planner)
-        const plan = planActions(intent, params, session);
+        // 3. זיהוי מצב רוח וסיווג
+        const mood = detectMood(cleanMessage);
+        const classification = classifyMessage(cleanMessage, { 
+            cart: session.cart,
+            pendingProduct: session.pendingProduct
+        });
         
-        // 4. ביצוע (Execution)
-        let executionResults = {
-            responses: [],
-            lastItem: null,
-            cartTotal: 0,
-            customText: null,
-            quickReplies: [] // כאן ייכנסו הכפתורים הדינמיים
-        };
-
-        for (const action of plan.actions) {
-            LOG.action(`Executing: ${action.type}`);
+        // Confidence threshold - הגבול בין שרת ל-LLM
+        const CONFIDENCE_THRESHOLD = 0.85;
+        const useServer = classification.confidence >= CONFIDENCE_THRESHOLD && !classification.needsLLM;
+        
+        console.log(`📊 Class: ${classification.action} | Conf: ${classification.confidence} | Handler: ${useServer ? 'SERVER' : 'LLM'}`);
+        
+        // 4. טיפול בבקשה
+        let responseData;
+        
+        if (useServer) {
+            responseData = await handleDirectly(classification, session, userId, customer, mood);
+            stats.directHandled++;
+            stats.savings += 0.003;
+            console.log(`⚡ Direct handling`);
+        } else {
+            // LLM מטפל - אבל עם context מהשרת
+            responseData = await handleWithLLM(cleanMessage, session, userId, customer, classification);
+            stats.llmCalls++;
+            console.log(`🤖 LLM handling`);
+        }
+        
+        // 5. עדכון היסטוריה (רק אם יש תוכן תקין)
+        const userEntry = createHistoryEntry('user', cleanMessage);
+        const modelEntry = createHistoryEntry('model', responseData.content);
+        
+        if (userEntry && modelEntry) {
+            session.history.push(userEntry);
+            session.history.push(modelEntry);
             
-            switch (action.type) {
-                // --- פעולות אינטראקטיביות ---
-                case 'PRESENT_OPTIONS':
-                    executionResults.customText = action.question;
-                    executionResults.quickReplies = action.options;
-                    // שמירת טיוטה: מעדכנים את מה שאספנו עד כה בסשן
-                    if (action.saveDraft) {
-                        session.draftAttributes = { ...session.draftAttributes, ...action.saveDraft };
-                    }
-                    break;
-
-                case 'SET_SESSION_CONTEXT':
-                    session.currentProduct = action.product;
-                    break;
-
-                case 'CLEAR_SESSION_CONTEXT':
-                    session.currentProduct = null;
-                    session.draftAttributes = {};
-                    break;
-
-                // --- פעולות חישוב ועגלה ---
-                case 'CALCULATE_AND_ADD':
-                    const calcResult = calculate_custom_job(session.cart, action.payload);
-                    session.cart = calcResult.updatedCart;
-                    executionResults.lastItem = calcResult.lastAdded;
-                    break;
-
-                case 'UPDATE_CART_ITEM':
-                    // לוגיקה לעדכון (פישוט: מחשב מחדש ומחליף)
-                    const updateResult = calculate_custom_job(session.cart, action.payload);
-                    session.cart = updateResult.updatedCart;
-                    executionResults.lastItem = updateResult.lastAdded;
-                    break;
-
-                case 'REMOVE_FROM_CART':
-                    removeFromCart(userId, action.product);
-                    break;
-
-                case 'CLEAR_CART':
-                    clearCart(userId);
-                    break;
-
-                case 'SUMMARIZE_CART':
-                    executionResults.cartTotal = session.cart.reduce((sum, item) => sum + item.client_price, 0);
-                    break;
-
-                case 'GENERATE_RESPONSE':
-                    executionResults.responseTemplate = action.template;
-                    break;
-                
-                case 'CHECK_URGENCY_OPTIONS':
-                    executionResults.urgencyOption = { canExpress: true, cost: 50 };
-                    break;
-
-                case 'CALL_LLM_CONSULTANT':
-                    const llmRes = await handleWithSmartLLM(message, session, customer);
-                    executionResults.customText = llmRes.content;
-                    break;
+            // שמירה על מקסימום 20 הודעות
+            if (session.history.length > 20) {
+                session.history = session.history.slice(-20);
             }
         }
 
-        // 5. בניית תשובה סופית
-        let finalResponse = '';
-        let finalQuickReplies = executionResults.quickReplies;
-
-        if (executionResults.customText) {
-            // אם ה-Planner ייצר טקסט מותאם (שאלה), נשתמש בו
-            finalResponse = executionResults.customText;
-        } else if (executionResults.responseTemplate) {
-            // אחרת, נשתמש בתבנית הקבועה
-            const context = {
-                item: executionResults.lastItem,
-                cart: session.cart,
-                total: executionResults.cartTotal,
-                customer: customer,
-                urgency: executionResults.urgencyOption
-            };
-            finalResponse = buildResponse(executionResults.responseTemplate, context);
-            
-            // אם אין כפתורים דינמיים, ניקח כפתורים סטטיים מהתבנית
-            if (!finalQuickReplies || finalQuickReplies.length === 0) {
-                finalQuickReplies = buildQuickReplies(executionResults.responseTemplate);
-            }
-        }
-
-        // 6. שליחה
+        // 6. יצירת דשבורד
         const dashboard = generateDashboard(session, session.customerPhone);
+        
+        // סיום
+        const duration = Date.now() - startTime;
+        console.log(`⏱️ ${duration}ms`);
+        console.log(`${'='.repeat(60)}\n`);
+        
         res.json({
-            content: finalResponse,
+            content: responseData.content,
             cart: session.cart,
             dashboard: dashboard,
-            quickReplies: finalQuickReplies
+            quickReplies: responseData.quickReplies || [],
+            meta: {
+                classification: classification.action,
+                mood,
+                duration
+            }
         });
-
+        
     } catch (error) {
-        LOG.error(error.message);
-        res.status(500).json({ content: 'שגיאה במערכת. נסה שוב.' });
+        console.error('❌ Server Error:', error);
+        res.status(500).json({ 
+            error: 'Internal error', 
+            content: 'אופס, קרתה תקלה רגעית. נסה שוב! 🔄' 
+        });
     }
 });
 
-// PDF Route (חשוב!)
+// ============================================================
+// DIRECT HANDLER
+// ============================================================
+async function handleDirectly(classification, session, userId, customer, mood) {
+    const { action, data } = classification;
+    let content = '';
+    let quickReplies = [];
+    
+    const ctx = { cart: session.cart, customer, mood };
+
+    switch (action) {
+        case 'greeting':
+            content = buildResponse('greeting', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+            
+        case 'quote':
+            const calc = calculate_custom_job(session.cart, {
+                product_name: data.product,
+                qty: data.qty,
+                paper_type: data.material,
+                finishing: data.finishing?.join(',')
+            });
+            session.cart = calc.updatedCart;
+            
+            const rec = generateSmartRecommendation(data.product, data.qty, { customer, cart: session.cart });
+            
+            content = buildResponse('quote_added', { item: calc.lastAdded, recommendation: rec });
+            quickReplies = buildQuickReplies('quote_added');
+            break;
+        
+        case 'multi_quote':
+            // הוספת כמה מוצרים בבת אחת
+            const addedItems = [];
+            for (const prod of data.products) {
+                if (prod.qty) {
+                    const multiCalc = calculate_custom_job(session.cart, {
+                        product_name: prod.product,
+                        qty: prod.qty
+                    });
+                    session.cart = multiCalc.updatedCart;
+                    addedItems.push(multiCalc.lastAdded);
+                }
+            }
+            content = buildResponse('multi_quote_added', { items: addedItems, cart: session.cart });
+            quickReplies = buildQuickReplies('quote_added');
+            break;
+            
+        case 'update_qty':
+            const itemToUpdate = session.cart.find(i => i.product_name === data.product) || session.cart[session.cart.length-1];
+            if (itemToUpdate) {
+                const oldQty = itemToUpdate.qty;
+                const upCalc = calculate_custom_job(session.cart, {
+                    product_name: itemToUpdate.product_name,
+                    qty: data.qty,
+                    paper_type: itemToUpdate.paper_type
+                });
+                session.cart = upCalc.updatedCart;
+                content = buildResponse('quote_updated', { item: upCalc.lastAdded, oldQty });
+            } else {
+                content = "לא מצאתי את הפריט לעדכון. מה תרצה לשנות?";
+            }
+            quickReplies = buildQuickReplies('cart_status');
+            break;
+            
+        case 'remove':
+            const removed = removeFromCart(userId, data.product);
+            content = removed 
+                ? buildResponse('item_removed', { productName: data.product }) 
+                : "לא מצאתי את הפריט למחיקה. תבדוק מה יש בעגלה?";
+            quickReplies = buildQuickReplies('cart_status');
+            break;
+            
+        case 'clear':
+            clearCart(userId);
+            content = buildResponse('cart_cleared');
+            quickReplies = buildQuickReplies('greeting');
+            break;
+            
+        case 'status':
+            content = buildResponse('cart_status', ctx);
+            quickReplies = buildQuickReplies('cart_status');
+            break;
+            
+        case 'send_quote':
+            const total = session.cart.reduce((s, i) => s + (i.client_price || 0), 0);
+            content = buildResponse('send_quote', { cart: session.cart, total });
+            quickReplies = buildQuickReplies('send_quote');
+            break;
+            
+        case 'quote_incomplete':
+            // שמירת המוצר הממתין
+            session.pendingProduct = data.product;
+            content = buildResponse('ask_quantity', { product: data.product });
+            quickReplies = buildQuickReplies('ask_quantity');
+            break;
+            
+        case 'design_check':
+            content = buildResponse('design_check');
+            quickReplies = buildQuickReplies('design_check');
+            break;
+        
+        case 'catalog':
+            content = buildResponse('catalog', ctx);
+            quickReplies = []; // לא צריך כפתורים - הלקוח יכתוב מה הוא רוצה
+            break;
+        
+        case 'faq':
+            content = buildResponse('faq', ctx);
+            quickReplies = buildQuickReplies('faq');
+            break;
+        
+        case 'contact':
+            content = buildResponse('contact', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+        
+        case 'order_status':
+            content = buildResponse('order_status', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+        
+        case 'decline':
+            // הלקוח סירב - ננקה את המוצר הממתין
+            session.pendingProduct = null;
+            content = buildResponse('decline', ctx);
+            quickReplies = buildQuickReplies('greeting');
+            break;
+        
+        case 'change_material':
+            // הלקוח רוצה לשנות חומר - נציג אופציות
+            content = buildResponse('material_options', { 
+                product: data.product || session.pendingProduct || session.cart[session.cart.length-1]?.product_name 
+            });
+            quickReplies = buildQuickReplies('material_options');
+            break;
+        
+        case 'change_finishing':
+            // הלקוח רוצה להוסיף/לשנות גימור
+            content = buildResponse('finishing_options', { 
+                product: data.product || session.cart[session.cart.length-1]?.product_name,
+                requested: data.finishing
+            });
+            quickReplies = buildQuickReplies('finishing_options');
+            break;
+            
+        default:
+            content = "לא הבנתי בדיוק, אפשר לנסח אחרת? 🤔";
+            quickReplies = buildQuickReplies('greeting');
+    }
+    
+    return { content, quickReplies };
+}
+
+// ============================================================
+// SMART LLM HANDLER - עם בקרת שרת
+// ============================================================
+const { 
+    detectTaskType, 
+    buildPrompt, 
+    validateResponse, 
+    fixResponse,
+    TASK_TYPES 
+} = require('./engine/smartLLM');
+
+async function handleWithLLM(message, session, userId, customer, classification = {}) {
+    // שלב 1: זיהוי סוג המשימה - קודם מהclassifier, אחרת detect
+    let taskType = classification.data?.taskType;
+    if (!taskType) {
+        taskType = detectTaskType(message, {
+            hasQuote: session.cart.length > 0,
+            pendingProduct: session.pendingProduct
+        });
+    }
+    
+    console.log(`   📋 Task Type: ${taskType}`);
+    
+    // שלב 2: בניית context - כולל מידע מהclassifier
+    const contextData = {
+        userMessage: message,
+        customer: customer,
+        cart: session.cart,
+        pendingProduct: session.pendingProduct,
+        // מידע מהclassifier
+        detectedAction: classification.action,
+        detectedProduct: classification.data?.product,
+        detectedOccasion: classification.data?.occasion
+    };
+    
+    // הוספת מידע ספציפי לפי סוג המשימה
+    if (taskType === TASK_TYPES.RECOMMEND || taskType === 'recommend') {
+        // זיהוי אירוע
+        const occasions = {
+            'חתונה': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
+            'חתונות': ['הזמנות', 'כרטיסי הושבה', 'תפריטים', 'מדבקות', 'שלטים'],
+            'בר מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
+            'בת מצווה': ['הזמנות', 'כרטיסי הושבה', 'בנרים', 'מדבקות'],
+            'ברית': ['הזמנות', 'כרטיסי תודה', 'מדבקות'],
+            'תערוכה': ['רולאפים', 'פליירים', 'כרטיסי ביקור', 'פוסטרים', 'באנרים'],
+            'עסק': ['כרטיסי ביקור', 'פליירים', 'ניירת משרדית', 'שלטים']
+        };
+        
+        const detectedOccasion = contextData.detectedOccasion || Object.keys(occasions).find(o => message.includes(o));
+        if (detectedOccasion) {
+            contextData.occasion = detectedOccasion;
+            contextData.suggestions = occasions[detectedOccasion] || occasions['חתונה'];
+        }
+    }
+    
+    if (taskType === TASK_TYPES.EXPLAIN || taskType === 'explain') {
+        // הוספת מידע על מוצר אם רלוונטי
+        const productInfo = getProductInfo(message);
+        if (productInfo) {
+            contextData.productInfo = productInfo;
+        }
+    }
+    
+    // שלב 3: בניית prompt קצר
+    const prompt = buildPrompt(taskType, contextData);
+    console.log(`   📊 Tokens: ~${prompt.estimatedTokens}`);
+    
+    // שלב 4: קריאה ל-LLM
+    try {
+        const chatHistory = [
+            { role: "user", parts: [{ text: prompt.system + "\n\n" + prompt.context }] },
+            { role: "model", parts: [{ text: "הבנתי, אענה בקצרה ובהתאם להנחיות." }] }
+        ];
+        
+        // הוספת היסטוריה קצרה (רק 4 הודעות אחרונות)
+        const recentHistory = sanitizeHistory(session.history).slice(-4);
+        chatHistory.push(...recentHistory);
+        
+        const chat = model.startChat({ history: chatHistory });
+        const result = await chat.sendMessage(message);
+        let responseText = result.response.text();
+        
+        if (!responseText || responseText.trim().length === 0) {
+            throw new Error('Empty response from LLM');
+        }
+        
+        // שלב 5: אימות התשובה
+        const validation = validateResponse(responseText, taskType, contextData);
+        
+        if (!validation.isValid) {
+            console.log(`   ⚠️ Validation issues: ${validation.issues.join(', ')}`);
+            responseText = fixResponse(responseText, validation.corrections, contextData);
+            console.log(`   ✅ Response fixed`);
+        }
+        
+        const quickReplies = buildQuickReplies('chat');
+        return { content: responseText.trim(), quickReplies };
+        
+    } catch (e) {
+        console.error("LLM Error:", e.message || e);
+        
+        // תשובה חלופית חכמה
+        const fallbackResponse = generateFallbackResponse(message);
+        return { 
+            content: fallbackResponse, 
+            quickReplies: buildQuickReplies('greeting') 
+        };
+    }
+}
+
+// מידע על מוצרים לשאלות
+function getProductInfo(message) {
+    const productInfoMap = {
+        'הזמנות': `סוגי הזמנות: חתונה, בר/בת מצווה, ברית, אירועים.
+אופציות נייר: כרומו מבריק, נייר כותנה, נייר פנינה.
+גימורים: למינציה, הבלטה, פויל זהב/כסף.
+גדלים נפוצים: 14x14, 15x15, 21x10 ס"מ.`,
+        
+        'פליירים': `גדלים: A4, A5, A6, DL.
+נייר: 135 גרם (דק), 170 גרם (סטנדרט), 250 גרם (עבה).
+הדפסה: חד או דו-צדדי, צבעוני או שחור-לבן.
+גימורים: למינציה מט/מבריק.`,
+        
+        'כרטיסי ביקור': `גודל סטנדרטי: 9x5 ס"מ.
+נייר: 350 גרם כרומו, כותנה, פנינה.
+גימורים: למינציה, פינות עגולות, הבלטה, פויל.`,
+        
+        'רולאפ': `גדלים: 85x200, 100x200, 120x200 ס"מ.
+כולל: מתקן אלומיניום + הדפסה + תיק נשיאה.
+חומר: ויניל איכותי 440 גרם.`
+    };
+    
+    for (const [product, info] of Object.entries(productInfoMap)) {
+        if (message.includes(product)) {
+            return info;
+        }
+    }
+    return null;
+}
+
+// תשובה חלופית כשה-LLM נכשל
+function generateFallbackResponse(message) {
+    const lowerMsg = message.toLowerCase();
+    
+    // זיהוי בסיסי של כוונה
+    if (lowerMsg.includes('מחיר') || lowerMsg.includes('עולה')) {
+        return "אשמח לתת לך הצעת מחיר! ספר לי מה תרצה להדפיס וכמה עותקים. 📋";
+    }
+    if (lowerMsg.includes('שאל') || lowerMsg.includes('שאלה')) {
+        return "בטח! שאל אותי מה שתרצה על שירותי הדפוס שלנו. 💬";
+    }
+    if (lowerMsg.includes('עזר') || lowerMsg.includes('עזרה')) {
+        return "אני כאן לעזור! אפשר להזמין פליירים, כרטיסי ביקור, רולאפים, הזמנות ועוד. במה להתחיל?";
+    }
+    if (lowerMsg.includes('קטלוג') || lowerMsg.includes('מוצר')) {
+        return "יש לנו מגוון רחב: פליירים, כרטיסי ביקור, הזמנות לאירועים, רולאפים, מדבקות, חוברות ועוד! מה מעניין אותך?";
+    }
+    
+    // ברירת מחדל
+    return "אני פיני מדפוס בית יצחק! 🖨️ איך אפשר לעזור לך היום? אפשר להזמין הדפסות, לקבל הצעת מחיר או לשאול שאלות.";
+}
+
+// ============================================================
+// API ROUTES
+// ============================================================
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        version: '3.9',
+        stats: {
+            totalRequests: stats.totalRequests,
+            directHandled: stats.directHandled,
+            llmCalls: stats.llmCalls,
+            directRate: stats.totalRequests > 0 
+                ? Math.round((stats.directHandled / stats.totalRequests) * 100) + '%'
+                : '0%'
+        }
+    });
+});
+
+// PDF Generation
 app.post('/api/pdf', async (req, res) => {
     try {
-        const { generateQuotePDF } = require('./services/pdfService');
-        const pdfBuffer = await generateQuotePDF(req.body.cart, req.body.customer || { name: 'לקוח' });
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(pdfBuffer);
+        const { cart, customer } = req.body;
+        
+        if (!cart || !Array.isArray(cart) || cart.length === 0) {
+            return res.status(400).json({ error: 'Empty cart' });
+        }
+        
+        const pdf = await generateQuotePDF(cart, customer || { name: 'לקוח' });
+        res.set({ 
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="Pini_Quote.pdf"'
+        });
+        res.send(pdf);
     } catch (e) {
-        res.status(500).send('Error generating PDF');
+        console.error('PDF Error:', e);
+        res.status(500).json({ error: 'PDF generation failed' });
     }
 });
 
+// Stats endpoint
+app.get('/api/stats', (req, res) => {
+    res.json({
+        ...stats,
+        directRate: stats.totalRequests > 0 
+            ? ((stats.directHandled / stats.totalRequests) * 100).toFixed(1) + '%'
+            : '0%',
+        estimatedSavings: `$${stats.savings.toFixed(2)}`
+    });
+});
+
+// ============================================================
+// START SERVER
+// ============================================================
 const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`🚀 Pini V10 (Interactive) running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`🚀 Pini Bot Server V3.9`);
+    console.log(`   Port: ${PORT}`);
+    console.log(`   Mode: Server-Heavy, LLM-Light`);
+    console.log(`${'='.repeat(50)}\n`);
+});

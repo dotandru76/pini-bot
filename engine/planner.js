@@ -1,182 +1,121 @@
-/**
- * Pini Planner V6 (Strict DB Mode)
- * ================================
- * עובד אך ורק מול products.json ו-materials.json.
- * לא ממציא שאלות ולא מנחש.
- */
-
+/** engine/planner.js V11.3 - Final Polish */
 const fs = require('fs');
 const path = require('path');
+const { calculate_custom_job } = require('./calculation');
 
-// טעינת הקבצים שהעלית
 let productsDB = {};
-let materialsDB = {};
+try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
-try {
-    // נתיב יחסי לתיקיית db
-    productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
-    materialsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
-} catch (e) {
-    console.error("❌ Critical Error: Could not load DB files.", e.message);
-}
-
-function planActions(intent, params, session) {
-    const plan = { actions: [], nextState: 'idle' };
-
-    // 1. זיהוי מוצר (מההודעה או מהזיכרון)
-    let productKey = params.product || session.currentProduct;
-
-    // מיפוי שמות נפוצים למפתחות המדויקים ב-products.json
-    const aliasMap = {
-        'business_card': 'bc',
-        'flyers': 'flyer',
-        'invitations': 'invitation',
-        'roll_up': 'rollup',
-        'envelopes': 'envelope',
-        'stickers': 'sticker',
-        'folders': 'folder'
-    };
-    if (aliasMap[productKey]) productKey = aliasMap[productKey];
-
-    // === תפריט ראשי ===
-    if (!productKey && (intent === 'greeting' || intent === 'quote')) {
-        const menuOptions = Object.entries(productsDB).map(([key, data]) => ({
-            text: data.title, // למשל: "כרטיסי ביקור"
-            value: key        // למשל: "bc"
-        }));
-        
-        plan.actions.push({ 
-            type: 'PRESENT_OPTIONS', 
-            question: 'מה נדפיס היום? בחר מוצר:', 
-            options: menuOptions 
-        });
-        return plan;
+function planActions(intentData, session) {
+    
+    // --- 1. THE SUPERVISOR ---
+    const hasParams = intentData.extractedParams && Object.keys(intentData.extractedParams).length > 0;
+    
+    // Downgrade empty updates to chat ("חחח סתם")
+    if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
+        intentData.intent = 'chat';
     }
 
-    // === מנוע השאלות (The Funnel) ===
-    if (intent === 'quote' || intent === 'update' || (intent === 'consult' && productKey)) {
-        
-        const productConfig = productsDB[productKey];
-        if (!productConfig) {
-            // אם המוצר לא ב-JSON, ה-LLM יטפל בזה
-            plan.actions.push({ type: 'CALL_LLM_CONSULTANT', input: params });
-            return plan;
-        }
+    // Context Switch -> Force Quote ("החלפת נושא")
+    if (intentData.intent === 'update' && intentData.product && intentData.product !== session.currentProduct) {
+        intentData.intent = 'quote'; 
+    }
 
-        // נועלים הקשר
-        plan.actions.push({ type: 'SET_SESSION_CONTEXT', product: productKey });
+    // --- 2. ACTION HANDLERS ---
+    const actions = [];
 
-        // טוענים טיוטה מהסשן
-        const currentAttributes = { ...session.draftAttributes };
+    if (['greeting', 'thank_you', 'bye'].includes(intentData.intent)) {
+        return { actions: [{ type: 'GENERATE_RESPONSE', template: 'greeting', payload: { text: "בכיף! אני כאן אם צריך עוד משהו. 😊" } }] };
+    }
+    if (intentData.intent === 'reset') {
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "איפסתי הכל. מה נדפיס?" } }] };
+    }
+    if (intentData.intent === 'remove') {
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את העגלה." } }] };
+    }
+    if (intentData.intent === 'show_cart') {
+        const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים בעגלה.` : "העגלה ריקה כרגע.";
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: cartText } }] };
+    }
+    if (intentData.intent === 'checkout') {
+         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מעולה, אפיק לך הצעת מחיר מסודרת." } }] };
+    }
 
-        // אם המשתמש ענה תשובה בטקסט חופשי, מנסים להתאים אותה
-        if (params.raw_text) {
-            matchInputToConfig(params.raw_text, productConfig, currentAttributes);
-        }
-        // דריסה עם פרמטרים מפורשים אם יש
-        if (params.qty) currentAttributes.qty = params.qty.toString();
-        if (params.attributes) Object.assign(currentAttributes, params.attributes);
-
-        // --- המעבר על השאלות ב-products.json ---
-        for (const question of productConfig.questions) {
-            const key = question.key; // qty, paper, size...
-            
-            // אם אין תשובה לשאלה הזו
-            if (!currentAttributes[key]) {
-                
-                // יצירת כפתורים מתוך ה-options ב-JSON
-                const dynamicOptions = question.options.map(opt => ({
-                    text: getHumanName(opt.value, key), // המרה לעברית דרך materials.json
-                    value: opt.value
-                }));
-
-                plan.actions.push({
-                    type: 'PRESENT_OPTIONS',
-                    question: `בחר ${question.text}:`,
-                    options: dynamicOptions,
-                    saveDraft: currentAttributes // שומרים התקדמות
-                });
-                return plan;
-            }
-        }
-
-        // === סיימנו את כל השאלות ===
-        const finalPayload = {
-            product_name: productKey,
-            qty: parseInt(currentAttributes.qty),
-            attributes: currentAttributes // מכיל paper, size, extras וכו'
+    // === CHAT BARRIER ===
+    if (intentData.intent === 'chat') {
+        return { 
+            actions: [{ 
+                type: 'GENERATE_RESPONSE', 
+                payload: { text: "נשמע טוב! אני רק בוט דפוס 🤖, אז בוא נחזור לעניינים. תרצה להוסיף משהו לעגלה?" } 
+            }] 
         };
-
-        plan.actions.push({ type: 'CALCULATE_AND_ADD', payload: finalPayload });
-        plan.actions.push({ type: 'CLEAR_SESSION_CONTEXT' });
-        plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'quote_added' });
-        plan.actions.push({ type: 'UPDATE_DASHBOARD' });
-        
-        return plan;
     }
+    // ====================
 
-    // פעולות כלליות
-    switch (intent) {
-        case 'checkout':
-            plan.actions.push({ type: 'SUMMARIZE_CART' });
-            plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'send_quote' });
-            break;
-        case 'clear':
-            plan.actions.push({ type: 'CLEAR_CART' });
-            plan.actions.push({ type: 'CLEAR_SESSION_CONTEXT' });
-            plan.actions.push({ type: 'GENERATE_RESPONSE', template: 'cart_cleared' });
-            plan.actions.push({ type: 'UPDATE_DASHBOARD' });
-            break;
-        default:
-            plan.actions.push({ type: 'CALL_LLM_CONSULTANT', input: params });
-    }
+    // Scope Checks
+    if (intentData.product === 'out_of_scope') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "וואו, זה גדול עלינו. אני מתמחה בדפוס דיגיטלי ופורמט רחב סטנדרטי." } }] };
+    if (intentData.product === 'impossible') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "אממ... זה בלתי אפשרי טכנית להדפיס על זה. 😅" } }] };
 
-    return plan;
-}
-
-// --- עזרים ---
-
-function matchInputToConfig(text, config, attributes) {
-    if (!text) return;
-    const clean = text.toString().toLowerCase();
+    // --- 3. PRODUCT ENGINE ---
+    let currentProductKey = intentData.product || session.currentProduct;
     
-    for (const q of config.questions) {
-        if (attributes[q.key]) continue;
-        for (const opt of q.options) {
-            const human = getHumanName(opt.value, q.key).toLowerCase();
-            const val = opt.value.toLowerCase();
-            // התאמה מדויקת או חלקית חזקה
-            if (clean === val || clean === human || (human.length > 3 && clean.includes(human))) {
-                attributes[q.key] = opt.value;
-                return;
-            }
-        }
+    // Restore context for update
+    if ((intentData.intent === 'update' || intentData.intent === 'quote') && !currentProductKey && session.cart.length > 0) {
+        currentProductKey = session.cart[session.cart.length - 1].product;
     }
-}
 
-// פונקציה חכמה שמוצאת את השם ב-materials.json
-function getHumanName(val, key) {
-    if (!isNaN(val)) return Number(val).toLocaleString(); // כמויות
+    if (!currentProductKey) {
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, כרטיסים, רולאפ...)" } }] };
+    }
 
-    // חיפוש בכל הקטגוריות ב-materials.json
-    const cats = ['papers', 'finishing', 'wide_media'];
-    for (const cat of cats) {
-        if (materialsDB[cat] && materialsDB[cat][val]) {
-            return materialsDB[cat][val].name;
+    const productConfig = productsDB[currentProductKey];
+    if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "המוצר הזה לא קיים במערכת כרגע." } }] };
+
+    const newParams = intentData.extractedParams || {};
+    if (productConfig.engine === 'wide' && newParams.paper_type) newParams.material = newParams.paper_type;
+
+    const validNewParams = {};
+    Object.keys(newParams).forEach(key => {
+        if (newParams[key] !== null && newParams[key] !== undefined) validNewParams[key] = newParams[key];
+    });
+
+    const newDraft = (intentData.intent === 'quote') 
+        ? validNewParams 
+        : { ...session.draftAttributes, ...validNewParams };
+    
+    // Sticker Defaults
+    if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
+
+    let missingParam = null;
+    let questionToAsk = null;
+
+    if (productConfig.questions) {
+        for (const q of productConfig.questions) {
+            if (!newDraft[q.key]) { missingParam = q.key; questionToAsk = q; break; }
         }
     }
 
-    // מיפויים ידניים שחסרים ב-JSON (כמו גדלים)
-    const manual = {
-        '1': 'צד אחד', '2': 'דו צדדי',
-        'A4': 'A4', 'A5': 'A5', 'A6': 'A6',
-        'none': 'ללא', 'yes': 'כן', 'no': 'לא',
-        'fold_simple': 'קיפול אמצע', 'fold_tri': 'קיפול פרוספקט',
-        'wood_frame': 'מתיחה על עץ',
-        'env_standard': 'סטנדרט', 'env_fancy': 'מהודרת'
-    };
-    
-    return manual[val] || val;
+    if (missingParam) {
+        actions.push({
+            type: 'PRESENT_OPTIONS',
+            question: questionToAsk.question_he,
+            options: questionToAsk.options || [],
+            product: currentProductKey,
+            saveDraft: newDraft
+        });
+    } else {
+        try {
+            const calculationParams = { ...newDraft, product: currentProductKey };
+            const calcResult = calculate_custom_job(session.cart, calculationParams);
+            
+            actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
+            actions.push({ type: 'GENERATE_RESPONSE', template: 'quote_success', payload: { item: calcResult.lastAdded } });
+        } catch (err) {
+            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: `שגיאה: ${err.message}` } });
+        }
+    }
+
+    return { actions };
 }
 
 module.exports = { planActions };

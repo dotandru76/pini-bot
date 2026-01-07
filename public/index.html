@@ -15,7 +15,7 @@
             --sidebar-bg: #ffffff;
             --user-msg-bg: #d9fdd3;
             --bot-msg-bg: #ffffff;
-            --primary-color: #00a884;
+            --primary-color: #008069; /* WhatsApp Green */
             --text-primary: #111b21;
             --text-secondary: #667781;
         }
@@ -136,7 +136,7 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
-        .action-btn:hover { background-color: #008f6f; }
+        .action-btn:hover { background-color: #006b56; }
 
         /* --- Chat Area --- */
         .chat-area {
@@ -144,6 +144,7 @@
             display: flex;
             flex-direction: column;
             background-color: var(--chat-bg-color);
+            /* WhatsApp default doodle background pattern */
             background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png");
             background-repeat: repeat;
             opacity: 1;
@@ -269,6 +270,7 @@
             justify-content: center;
             margin-top: 10px;
             flex-wrap: wrap;
+            padding-bottom: 10px;
         }
 
         .chip {
@@ -360,9 +362,13 @@
     </div>
 
     <script>
-        // חיבור לכתובת שעובדת
-        const API_URL = 'https://dotandru-pini-print-bot.hf.space/api/chat';
-        const PDF_URL = 'https://dotandru-pini-print-bot.hf.space/api/pdf';
+        // --- הגדרות API ---
+        // מזהה אוטומטית אם אנחנו ב-Localhost או בענן
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const BASE_URL = isLocal ? 'http://localhost:3000' : 'https://dotandru-pini-print-bot.hf.space';
+        
+        const API_URL = `${BASE_URL}/api/chat`;
+        const PDF_URL = `${BASE_URL}/api/pdf`;
 
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
@@ -397,15 +403,15 @@
                 
                 updateStatus('מחובר');
                 
-                // תמיכה בכל הפורמטים (ישן וחדש)
+                // 1. טקסט
                 const content = data.text || data.content;
                 if (content) addMsg(content, 'bot');
 
-                // כפתורים
-                const buttons = data.quickReplies || (data.meta && data.meta.quick_replies);
-                if (buttons) addButtons(buttons);
+                // 2. כפתורים (תיקון באג: תמיכה ב-options שמגיע מהשרת החדש)
+                const buttons = data.options || data.quickReplies || (data.meta && data.meta.quick_replies);
+                if (buttons && buttons.length > 0) addButtons(buttons);
 
-                // עדכון עגלה
+                // 3. עגלה
                 if (data.cart) {
                     currentCart = data.cart;
                     updateCartUI(data.cart);
@@ -414,7 +420,13 @@
             } catch (error) {
                 console.error('Error:', error);
                 updateStatus('שגיאת חיבור');
-                addMsg('אופס, יש בעיה בתקשורת עם השרת.', 'bot');
+                addMsg('אופס, השרת לא זמין כרגע. נסה שוב בעוד דקה.', 'bot');
+                
+                // במקרה של שגיאה מקומית, נוסיף הערה למפתח
+                if (isLocal) {
+                    addMsg(`[Developer Note]: ודא שהרצת את "node server.js" בטרמינל.`, 'bot');
+                }
+
             } finally {
                 isProcessing = false;
                 scrollToBottom();
@@ -440,8 +452,10 @@
             options.forEach(opt => {
                 const btn = document.createElement('div');
                 btn.className = 'chip';
-                const label = typeof opt === 'string' ? opt : opt.text;
-                const val = typeof opt === 'string' ? opt : opt.value;
+                // תמיכה באובייקט או במחרוזת
+                const label = opt.label || opt.text || opt;
+                const val = opt.value || opt;
+                
                 btn.innerText = label;
                 btn.onclick = () => sendMessage(val);
                 qrDiv.appendChild(btn);
@@ -468,19 +482,38 @@
                 </div>`;
             } else {
                 cart.forEach(item => {
+                    // מיפוי נתונים מהשרת החדש (V10)
+                    const title = item.product || 'מוצר'; // key (e.g., flyer)
+                    const desc = item.description || 'פריט מותאם אישית';
+                    const price = item.client_price || 0;
+                    
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'cart-item';
                     itemDiv.innerHTML = `
-                        <div class="cart-item-title">${item.product_name} (${item.qty} יח')</div>
-                        <div class="cart-item-price">₪${item.client_price}</div>
+                        <div class="cart-item-title">${getHebrewName(title)} (${item.qty} יח')</div>
+                        <div class="cart-item-price">₪${price}</div>
                         <div style="clear:both;"></div>
-                        <div class="cart-item-details">${item.paper_type || 'מפרט סטנדרטי'}</div>
+                        <div class="cart-item-details">${desc}</div>
                     `;
                     container.appendChild(itemDiv);
-                    total += item.client_price;
+                    total += price;
                 });
             }
             totalDisplay.innerText = '₪' + total.toLocaleString();
+        }
+        
+        // עזר לתרגום מפתחות מוצרים לשמות יפים
+        function getHebrewName(key) {
+            const map = {
+                'flyer': 'פליירים',
+                'bc': 'כרטיסי ביקור',
+                'rollup': 'רולאפ',
+                'sticker': 'מדבקות',
+                'canvas': 'קנבס',
+                'invitation': 'הזמנות',
+                'envelope': 'מעטפות'
+            };
+            return map[key] || key;
         }
 
         async function downloadPDF() {
@@ -524,7 +557,7 @@
         }
         
         function toggleMenu() {
-            addButtons([{ text: 'נקה עגלה', value: 'clear' }, { text: 'מה המצב?', value: 'status' }]);
+            addButtons([{ label: 'נקה עגלה', value: 'clear' }, { label: 'תפריט ראשי', value: 'reset' }]);
         }
 
         document.getElementById('user-input').addEventListener('keypress', function (e) {
@@ -535,7 +568,11 @@
         window.onload = function() {
             setTimeout(() => {
                 addMsg("אהלן! אני פיני. 👋<br>אני כאן לתת הצעות מחיר מהירות.", 'bot');
-                addButtons([{ text: 'כרטיסי ביקור', value: 'כמה עולה 1000 כרטיסי ביקור?' }, { text: 'פליירים', value: 'צריך פליירים דחוף' }]);
+                addButtons([
+                    { label: 'כרטיסי ביקור', value: 'כמה עולה 1000 כרטיסי ביקור?' }, 
+                    { label: 'פליירים', value: 'צריך פליירים דחוף' },
+                    { label: 'רולאפ', value: 'מחיר לרולאפ' }
+                ]);
             }, 500);
         };
     </script>

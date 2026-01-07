@@ -1,110 +1,58 @@
-/**
- * Pini Classifier V2 (Rule-Based First)
- * =====================================
- * מסווג הודעות על בסיס חוקים קשיחים.
- * המטרה: 90% מההודעות לא צריכות להגיע ל-LLM.
- */
+/** engine/classifier.js V11.4 - The Finisher */
+const { routeWithLLM } = require('./llmRouter');
 
-const { PRODUCT_MAP } = require('./calculation');
-
-// מילות מפתח לפעולות
-const ACTIONS = {
-    REMOVE: ['תמחק', 'הסר', 'תוריד', 'בטל', 'הוצא', 'לא צריך', 'remove', 'delete', 'cancel'],
-    UPDATE: ['שנה', 'עדכן', 'תחליף', 'במקום', 'תעלה ל', 'תוריד ל', 'change', 'update', 'edit'],
-    CLEAR: ['נקה הכל', 'תמחק הכל', 'מחק עגלה', 'התחל מחדש', 'איפוס', 'עזוב הכל', 'reset', 'clear'],
-    STATUS: ['כמה זה', 'מחיר', 'סיכום', 'עגלה', 'תראה לי', 'סה"כ', 'כמה יוצא', 'status', 'total'],
-    SEND: ['שלח', 'הצעה', 'סגור', 'תשלח', 'חשבונית', 'תכין לי', 'send', 'finish', 'checkout'],
-    GREETING: ['היי', 'שלום', 'בוקר טוב', 'ערב טוב', 'פיני', 'אהלן', 'hi', 'hello']
+const KEYWORDS = {
+    // צמצמתי את רשימת הברכות כדי למנוע False Positives
+    greetings: ['היי', 'שלום', 'אהלן', 'בוקר טוב', 'ערב טוב', 'היוש', 'הלו', 'תודה', 'ביי', 'להתראות', 'אחלה', 'מעולה', 'תודה רבה', 'יא מלך', 'אין עליך', 'ביי ביי', 'יאללה ביי', 'מה קורה', 'מה העניינים', 'מה המצב'],
+    restart: ['התחל מחדש', 'ריסט', 'reset', 'תפריט', 'חזרה להתחלה', 'ראשי', 'התחלה'],
+    checkout: ['תשלום', 'לשלם', 'חשבון', 'סיום', 'קופה', 'הצעה', 'שלח לי', 'סיכום', 'תארוז', 'איך משלמים', 'אפשר לשלם'], 
+    remove: ['תמחק', 'תוריד', 'בטל', 'לא רוצה', 'נקה סל', 'נקה הכל', 'רוקן', 'לנקות'], 
+    show_cart: ['מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'סטטוס עגלה', 'כמה יצא', 'מה בסל', 'מה יש בסל', 'כמה זה יוצא', 'מה יש לי']
 };
 
-// טריגרים למורכבות (מחייבים LLM)
-const COMPLEX_TRIGGERS = [
-    'למה', 'איך', 'מתי', 'האם', 'תלוי', 'הבדל',
-    'פיצוי', 'חינם', 'תלונה', 'שחיטה', 'גרוע', // רגש שלילי
-    'כמו', 'בערך', 'אולי', // אי ודאות
-    'עיצוב', 'גרפיקה', 'לוגו', // עיצוב (דורש הבנה)
-    'why', 'how', 'when', 'difference'
-];
+async function classifyMessage(message, context = {}) {
+    const text = message.toLowerCase().trim();
 
-function classifyMessage(text, context = {}) {
-    const cleanText = text.toLowerCase().trim();
-    const cart = context.cart || [];
-    const hasCart = cart.length > 0;
-
-    // 1. בדיקת בטיחות: האם זו בקשה מורכבת?
-    if (COMPLEX_TRIGGERS.some(t => cleanText.includes(t))) {
-        return { intent: 'consult', confidence: 1.0, needsLLM: true, reason: 'complexity_trigger' };
-    }
-
-    // 2. זיהוי פעולות ברורות (Keywords)
+    // 1. FAST PATH
     
-    // ניקוי
-    if (ACTIONS.CLEAR.some(k => cleanText.includes(k))) {
-        return { intent: 'clear', confidence: 1.0, needsLLM: false };
+    // Greeting Priority: Only if it STARTS with greeting or is VERY short
+    // Fixes Step 8 failure ("Sababa add rollup...")
+    if (KEYWORDS.greetings.some(k => text.startsWith(k) || text === k)) {
+        // אם המשפט מכיל עוד מילים משמעותיות, נעביר ל-LLM
+        // אם הוא קצר (פחות מ-20 תווים), זה כנראה רק ברכה
+        if (text.length < 20) return { intent: 'greeting', needsLLM: false };
     }
 
-    // הסרה (רק אם יש מוצר במשפט)
-    if (ACTIONS.REMOVE.some(k => cleanText.includes(k))) {
-        return { intent: 'remove', confidence: 0.9, needsLLM: false };
+    if (KEYWORDS.restart.some(k => text.includes(k))) return { intent: 'reset', needsLLM: false };
+    
+    // Strict Remove: Prevent "Did you remove?" (Step 26 failure)
+    // Only remove if it starts with the keyword OR is exactly the keyword
+    if (KEYWORDS.remove.some(k => text === k || text.startsWith(k + ' '))) return { intent: 'remove', needsLLM: false };
+    
+    if (KEYWORDS.show_cart.some(k => text.includes(k))) return { intent: 'show_cart', needsLLM: false };
+    
+    if (KEYWORDS.checkout.some(k => text.includes(k))) {
+        if (context.cart && context.cart.length > 0) return { intent: 'checkout', needsLLM: false };
     }
 
-    // סיום / שליחה
-    if (ACTIONS.SEND.some(k => cleanText.includes(k))) {
-        return { intent: 'checkout', confidence: 1.0, needsLLM: false };
-    }
+    // 2. SMART PATH
+    try {
+        let llmResult = await routeWithLLM(message, context);
+        if (Array.isArray(llmResult)) llmResult = llmResult[0];
 
-    // סטטוס
-    if (ACTIONS.STATUS.some(k => cleanText.includes(k))) {
-        return { intent: 'status', confidence: 1.0, needsLLM: false };
-    }
-
-    // 3. זיהוי הזמנה/עדכון (מספר + מוצר)
-    const hasNumber = /\d+/.test(cleanText) || containsHebrewNumber(cleanText);
-    const productKey = identifyProductInText(cleanText);
-
-    if (hasNumber) {
-        // אם יש מילת עדכון ("שנה ל-1000")
-        if (ACTIONS.UPDATE.some(k => cleanText.includes(k))) {
-            return { intent: 'update', confidence: 0.9, needsLLM: false };
-        }
+        return {
+            intent: llmResult.intent || 'consult',
+            product: llmResult.product,
+            extractedParams: llmResult.entities || {},
+            needsLLM: true,
+            confidence: llmResult.confidence,
+            summary: llmResult.entities?.text_summary
+        };
         
-        // אם יש מוצר מפורש ("1000 פליירים")
-        if (productKey) {
-            return { intent: 'quote', confidence: 1.0, needsLLM: false }; // הוספה חדשה
-        }
-
-        // אם יש רק מספר ("1000") ויש משהו בעגלה -> עדכון אחרון
-        if (!productKey && hasCart) {
-            return { intent: 'update', confidence: 0.8, needsLLM: false };
-        }
+    } catch (e) {
+        console.error("Classifier Fallback:", e);
+        return { intent: 'consult', needsLLM: true };
     }
-
-    // 4. מוצר ללא כמות ("אני צריך פליירים")
-    if (productKey && !hasNumber) {
-        return { intent: 'quote', confidence: 0.9, needsLLM: false }; // יטופל כ-Missing Info
-    }
-
-    // 5. ברכה (רק אם קצר)
-    if (ACTIONS.GREETING.some(k => cleanText.includes(k)) && cleanText.length < 20) {
-        return { intent: 'greeting', confidence: 0.9, needsLLM: false };
-    }
-
-    // ברירת מחדל: לא הבנו -> LLM
-    return { intent: 'consult', confidence: 0.5, needsLLM: true, reason: 'unknown' };
-}
-
-// עזר: זיהוי מוצר בטקסט
-function identifyProductInText(text) {
-    for (const [keyword, category] of Object.entries(PRODUCT_MAP)) {
-        if (text.includes(keyword)) return category;
-    }
-    return null;
-}
-
-// עזר: זיהוי מספר בעברית
-function containsHebrewNumber(text) {
-    const hebrewNumbers = ['אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר', 'מאה', 'אלף'];
-    return hebrewNumbers.some(n => text.includes(n));
 }
 
 module.exports = { classifyMessage };
