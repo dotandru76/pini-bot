@@ -152,11 +152,17 @@
         }
 
         .avatar {
-            width: 40px; height: 40px;
+            width: 45px; height: 45px;
             background: white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem; color: var(--primary-color);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden; /* חשוב כדי שהתמונה לא תצא מהעיגול */
+            border: 1px solid #ddd;
+        }
+        
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .chat-info { flex: 1; }
@@ -235,7 +241,9 @@
         
         <div class="chat-area">
             <div class="chat-header">
-                <div class="avatar"><i class="fas fa-robot"></i></div>
+                <div class="avatar">
+                    <img src="pini.png" alt="פיני" onerror="this.src='https://cdn-icons-png.flaticon.com/512/4712/4712027.png'">
+                </div>
                 <div class="chat-info">
                     <div class="chat-name">פיני - דפוס בית יצחק</div>
                     <div class="chat-status" id="connection-status">מחובר</div>
@@ -285,7 +293,7 @@
 
     <script>
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        // אם אתה עובד מקומית, זה יפנה ל-3000. בענן זה יפנה לכתובת היחסית /api
+        // שימוש בכתובת יחסית כדי למנוע בעיות CORS
         const API_URL = '/api/chat';
         const PDF_URL = '/api/pdf';
 
@@ -301,6 +309,7 @@
             
             if (!message) return;
 
+            // עדכון UI למשתמש
             addMsg(message, 'user');
             inputField.value = '';
             removeQuickReplies();
@@ -309,7 +318,6 @@
             updateStatus('פיני מקליד...');
 
             try {
-                // שימוש בכתובת יחסית כדי למנוע בעיות CORS/404 בענן
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -319,6 +327,7 @@
                 if (!res.ok) throw new Error(`Server status: ${res.status}`);
 
                 const data = await res.json();
+                
                 updateStatus('מחובר');
                 
                 const content = data.text || data.content;
@@ -352,6 +361,12 @@
             div.innerHTML = text.replace(/\n/g, '<br>') + `<div class="msg-time">${timeStr}</div>`;
             container.appendChild(div);
             scrollToBottom();
+        }
+
+        // --- תיקון השגיאה: הוספת הפונקציה החסרה ---
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            container.scrollTop = container.scrollHeight;
         }
 
         function addButtons(options) {
@@ -454,7 +469,7 @@
             if (e.key === 'Enter') sendMessage();
         });
 
-        // --- הודעת פתיחה אנושית ומקצועית ---
+        // פתיחה אנושית ומקצועית
         window.onload = function() {
             setTimeout(() => {
                 addMsg("אהלן! נעים להכיר, אני פיני. 👨‍🎨", 'bot');

@@ -1,19 +1,20 @@
+/** engine/planner.js */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
-const { buildResponse, buildQuickReplies } = require('./responseBuilder');
+const { buildResponse } = require('./responseBuilder');
 
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
-function planActions(intent, session, userMessage) {
+function planActions(intentData, session) {
     const actions = [];
 
-    if (intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: buildResponse('greeting'), quickReplies: [] } }] };
+    if (intentData.intent === 'reset') {
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "איפסתי הכל. מה נדפיס?" } }] };
     }
 
-    if (intent === 'show_cart') {
+    if (intentData.intent === 'show_cart') {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: buildResponse('cart_status', { cart: session.cart }), quickReplies: [{label: 'נקה', value: 'reset'}] } }] };
     }
 
@@ -21,7 +22,8 @@ function planActions(intent, session, userMessage) {
         const productConfig = productsDB[session.currentProduct];
         const currentAttributes = { ...session.draftAttributes };
 
-        if (intent === 'answer' || intent === 'new_order') {
+        if (intentData.intent === 'answer' || intentData.intent === 'new_order') {
+            const userMessage = intentData.extractedParams?.raw_text || "";
             for (const q of productConfig.questions) {
                 if (!currentAttributes[q.key]) {
                     // לוגיקת שמירת תשובה (מספר/אופציה)
@@ -53,13 +55,13 @@ function planActions(intent, session, userMessage) {
             } catch (e) { finalPayload.client_price = 0; }
 
             actions.push({ type: 'CALCULATE_AND_ADD', payload: finalPayload });
-            actions.push({ type: 'CHECK_QUEUE' });
+            actions.push({ type: 'CLEAR_SESSION_CONTEXT' });
         }
         return { actions };
     }
 
-    // Fallback אנושי
-    return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: buildResponse('unknown'), quickReplies: [] } }] };
+    // ברירת מחדל אנושית
+    return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: buildResponse('greeting'), quickReplies: [] } }] };
 }
 
 module.exports = { planActions };
