@@ -46,7 +46,6 @@
             .app-container { height: 95vh; width: 95vw; }
         }
 
-        /* Sidebar */
         .sidebar {
             width: 350px;
             background: var(--sidebar-bg);
@@ -130,7 +129,6 @@
         }
         .action-btn:hover { background-color: #006b56; }
 
-        /* Chat Area */
         .chat-area {
             flex: 1;
             display: flex;
@@ -155,15 +153,11 @@
             width: 45px; height: 45px;
             background: white; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            overflow: hidden; /* חשוב כדי שהתמונה לא תצא מהעיגול */
+            overflow: hidden;
             border: 1px solid #ddd;
         }
         
-        .avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
 
         .chat-info { flex: 1; }
         .chat-name { font-weight: bold; font-size: 1rem; }
@@ -238,7 +232,6 @@
 <body>
 
     <div class="app-container">
-        
         <div class="chat-area">
             <div class="chat-header">
                 <div class="avatar">
@@ -288,68 +281,30 @@
                 </button>
             </div>
         </div>
-
     </div>
 
     <script>
+        // --- הגדרות ---
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        // שימוש בכתובת יחסית כדי למנוע בעיות CORS
         const API_URL = '/api/chat';
         const PDF_URL = '/api/pdf';
-
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
 
-        async function sendMessage(text = null) {
-            if (isProcessing) return;
-
-            const inputField = document.getElementById('user-input');
-            const message = text || inputField.value.trim();
-            
-            if (!message) return;
-
-            // עדכון UI למשתמש
-            addMsg(message, 'user');
-            inputField.value = '';
-            removeQuickReplies();
-            
-            isProcessing = true;
-            updateStatus('פיני מקליד...');
-
-            try {
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, userId: userId })
-                });
-
-                if (!res.ok) throw new Error(`Server status: ${res.status}`);
-
-                const data = await res.json();
-                
-                updateStatus('מחובר');
-                
-                const content = data.text || data.content;
-                if (content) addMsg(content, 'bot');
-
-                const buttons = data.options || data.quickReplies;
-                if (buttons && buttons.length > 0) addButtons(buttons);
-
-                if (data.cart) {
-                    currentCart = data.cart;
-                    updateCartUI(data.cart);
-                }
-
-            } catch (error) {
-                console.error('Error:', error);
-                updateStatus('שגיאת חיבור');
-                addMsg('אופס, השרת לא זמין כרגע.', 'bot');
-            } finally {
-                isProcessing = false;
-                scrollToBottom();
-                inputField.focus();
+        // --- Helper Functions FIRST (למנוע ReferenceError) ---
+        
+        function updateStatus(text) {
+            const el = document.getElementById('connection-status');
+            if(el) {
+                el.innerText = text;
+                el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
             }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            if(container) container.scrollTop = container.scrollHeight;
         }
 
         function addMsg(text, sender) {
@@ -363,10 +318,8 @@
             scrollToBottom();
         }
 
-        // --- תיקון השגיאה: הוספת הפונקציה החסרה ---
-        function scrollToBottom() {
-            const container = document.getElementById('messages-container');
-            container.scrollTop = container.scrollHeight;
+        function removeQuickReplies() {
+            document.querySelectorAll('.quick-replies').forEach(el => el.remove());
         }
 
         function addButtons(options) {
@@ -384,10 +337,6 @@
             });
             container.appendChild(qrDiv);
             scrollToBottom();
-        }
-
-        function removeQuickReplies() {
-            document.querySelectorAll('.quick-replies').forEach(el => el.remove());
         }
 
         function updateCartUI(cart) {
@@ -435,14 +384,12 @@
         async function downloadPDF() {
             if (currentCart.length === 0) return alert('העגלה ריקה');
             addMsg("מפיק מסמך PDF... ⏳", "bot");
-            
             try {
                 const res = await fetch(PDF_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח' } })
                 });
-                
                 if (res.ok) {
                     const blob = await res.blob();
                     const url = window.URL.createObjectURL(blob);
@@ -455,21 +402,68 @@
                 } else {
                     addMsg("שגיאה בהפקת PDF ❌", "bot");
                 }
-            } catch (e) {
-                console.error(e);
-                addMsg("שגיאה בתקשורת ❌", "bot");
-            }
+            } catch (e) { console.error(e); addMsg("שגיאה בתקשורת ❌", "bot"); }
         }
 
         function toggleMenu() {
             addButtons([{ label: 'נקה עגלה', value: 'clear' }, { label: 'תפריט ראשי', value: 'reset' }]);
         }
 
+        // --- Core Function ---
+        async function sendMessage(text = null) {
+            if (isProcessing) return;
+
+            const inputField = document.getElementById('user-input');
+            const message = text || inputField.value.trim();
+            
+            if (!message) return;
+
+            addMsg(message, 'user');
+            inputField.value = '';
+            removeQuickReplies();
+            
+            isProcessing = true;
+            updateStatus('פיני מקליד...'); // כעת זה יעבוד כי הפונקציה מוגדרת למעלה
+
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message, userId: userId })
+                });
+
+                if (!res.ok) throw new Error(`Server status: ${res.status}`);
+
+                const data = await res.json();
+                updateStatus('מחובר');
+                
+                const content = data.text || data.content;
+                if (content) addMsg(content, 'bot');
+
+                const buttons = data.options || data.quickReplies;
+                if (buttons && buttons.length > 0) addButtons(buttons);
+
+                if (data.cart) {
+                    currentCart = data.cart;
+                    updateCartUI(data.cart);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('שגיאת חיבור');
+                addMsg('אופס, השרת לא זמין כרגע.', 'bot');
+            } finally {
+                isProcessing = false;
+                scrollToBottom();
+                inputField.focus();
+            }
+        }
+
         document.getElementById('user-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // פתיחה אנושית ומקצועית
+        // --- Init ---
         window.onload = function() {
             setTimeout(() => {
                 addMsg("אהלן! נעים להכיר, אני פיני. 👨‍🎨", 'bot');

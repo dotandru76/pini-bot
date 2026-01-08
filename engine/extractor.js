@@ -1,4 +1,4 @@
-/** Parameter Extractor V3 (Complete) */
+/** Parameter Extractor V4 (Fix: Book Recognition) */
 const KEYWORD_MAP = {
     'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
     'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
@@ -7,7 +7,9 @@ const KEYWORD_MAP = {
     'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
     'poster': 'poster', 'פוסטר': 'poster',
     'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
-    'booklet': 'booklet', 'חוברת': 'booklet'
+    
+    // --- התיקון כאן ---
+    'booklet': 'booklet', 'חוברת': 'booklet', 'ספר': 'booklet', 'חוברות': 'booklet', 'ספרים': 'booklet'
 };
 
 const HEBREW_NUMBERS = {
