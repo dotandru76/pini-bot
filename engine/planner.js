@@ -1,4 +1,4 @@
-/** engine/planner.js V11.5 - Recommendation & Stability Engine */
+/** engine/planner.js - Checklist Logic */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -6,147 +6,105 @@ const { calculate_custom_job } = require('./calculation');
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
-function planActions(intentData, session) {
-    
-    // --- 1. THE SUPERVISOR (תיקון כוונות) ---
-    const hasParams = intentData.extractedParams && Object.keys(intentData.extractedParams).length > 0;
-    
-    // ANTI-HALLUCINATION: מניעת קפיצה לרולאפ בגלל המילה "סטנדרטי"
-    // אם אנחנו באמצע מוצר (למשל הזמנה) והמשתמש רק נתן פרמטר (גודל/כמות)
-    // וה-LLM החליט פתאום לשנות מוצר בלי סיבה טובה -> נתעלם משינוי המוצר
-    if (session.currentProduct && intentData.product && intentData.product !== session.currentProduct) {
-        // אם המשתמש לא אמר את שם המוצר החדש במפורש, נשארים עם הישן
-        // (בדיקה פשוטה: האם הטקסט שזוהה ב-LLM כסיכום מכיל את שם המוצר החדש?)
-        // כאן אנחנו עושים 'Hard Lock': אם זה Update, אל תחליף מוצר!
-        if (intentData.intent === 'update') {
-            console.log(`🛡️ Supervisor: Blocked implicit switch from ${session.currentProduct} to ${intentData.product}`);
-            intentData.product = session.currentProduct;
-        }
-    }
-
-    // Downgrade empty updates to chat
-    if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
-        intentData.intent = 'consult'; // שונה ל-consult כדי לתפוס המלצות
-    }
-
-    // --- 2. ACTION HANDLERS ---
+function planActions(intent, session, userMessage) {
     const actions = [];
 
-    // System Actions
-    if (['greeting', 'thank_you', 'bye'].includes(intentData.intent)) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', template: 'greeting', payload: { text: "בכיף! אני כאן אם צריך עוד משהו. 😊" } }] };
-    }
-    if (intentData.intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "איפסתי הכל. מה נדפיס?" } }] };
-    }
-    if (intentData.intent === 'remove') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את העגלה." } }] };
-    }
-    if (intentData.intent === 'show_cart') {
-        const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים בעגלה.` : "העגלה ריקה כרגע.";
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: cartText } }] };
-    }
-    if (intentData.intent === 'checkout') {
-         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מעולה, אפיק לך הצעת מחיר מסודרת." } }] };
+    // 1. טיפול באיפוס/מחיקה
+    if (intent === 'reset') {
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "התחלנו מחדש. מה נדפיס?", quickReplies: [{label: "כרטיסי ביקור", value: "bc"}, {label: "פליירים", value: "flyer"}] } }] };
     }
 
-    // === RECOMMENDATION ENGINE (מנוע ההמלצות) ===
-    if (intentData.intent === 'consult' || intentData.intent === 'chat') {
-        const text = (intentData.summary || "").toLowerCase(); // או להשתמש בטקסט המקורי אם הועבר
-        
-        // זיהוי מילות מפתח להמלצה (זה פתרון זמני עד שה-LLM יעשה את זה מושלם)
-        // אבל זה סופר מהיר ויעיל
-        if (intentData.intent === 'consult' && !intentData.product && !session.currentProduct) {
-             // אם המשתמש שאל על חתונה/אירוע
-             // הערה: במערכת מלאה היינו מעבירים את ה-Message המקורי ל-Planner
-             // כאן נשתמש בתשובה גנרית חכמה
-             
-             return { 
-                actions: [{ 
-                    type: 'GENERATE_RESPONSE', 
-                    payload: { text: "לחתונה ואירועים אני ממליץ על:\n💌 הזמנות (מנייר פנינה/מט)\n🔖 כרטיסי הושבה\n📜 תפריטים לשולחן\n🥡 מדבקות למזכרות\n\nעם מה נתחיל?" } 
-                }] 
-            };
-        }
+    // 2. זיהוי אם אנחנו בתוך תהליך הזמנה (Wizard Mode)
+    if (session.currentProduct && productsDB[session.currentProduct]) {
+        const productConfig = productsDB[session.currentProduct];
+        const currentAttributes = { ...session.draftAttributes };
 
-        // CHAT BARRIER
-        if (intentData.intent === 'chat') {
-            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "נשמע טוב! אני בוט דפוס 🤖. תרצה להוסיף משהו לעגלה?" } }] };
-        }
-    }
-    // ==========================================
-
-    // Scope Checks
-    if (intentData.product === 'out_of_scope') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "וואו, זה גדול עלינו. אני מתמחה בדפוס דיגיטלי ופורמט רחב סטנדרטי." } }] };
-    if (intentData.product === 'impossible') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "אממ... זה בלתי אפשרי טכנית להדפיס על זה. 😅" } }] };
-
-    // --- 3. PRODUCT ENGINE ---
-    let currentProductKey = intentData.product || session.currentProduct;
-    
-    // Restore context for update
-    if ((intentData.intent === 'update' || intentData.intent === 'quote') && !currentProductKey && session.cart.length > 0) {
-        currentProductKey = session.cart[session.cart.length - 1].product;
-    }
-
-    if (!currentProductKey) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, כרטיסים, רולאפ...)" } }] };
-    }
-
-    const productConfig = productsDB[currentProductKey];
-    if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "המוצר הזה לא קיים במערכת כרגע." } }] };
-
-    const newParams = intentData.extractedParams || {};
-    
-    // נרמול "סטנדרטי"
-    if (newParams.size && (newParams.size === 'standard' || newParams.size === 'סטנדרטי')) {
-        if (currentProductKey === 'invitation') newParams.size = '12x17';
-        if (currentProductKey === 'bc') newParams.size = '9x5';
-        if (currentProductKey === 'rollup') newParams.size = '85x200';
-    }
-
-    if (productConfig.engine === 'wide' && newParams.paper_type) newParams.material = newParams.paper_type;
-
-    const validNewParams = {};
-    Object.keys(newParams).forEach(key => {
-        if (newParams[key] !== null && newParams[key] !== undefined) validNewParams[key] = newParams[key];
-    });
-
-    const newDraft = (intentData.intent === 'quote') 
-        ? validNewParams 
-        : { ...session.draftAttributes, ...validNewParams };
-    
-    if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
-
-    let missingParam = null;
-    let questionToAsk = null;
-
-    if (productConfig.questions) {
-        for (const q of productConfig.questions) {
-            if (!newDraft[q.key]) { missingParam = q.key; questionToAsk = q; break; }
-        }
-    }
-
-    if (missingParam) {
-        actions.push({
-            type: 'PRESENT_OPTIONS',
-            question: questionToAsk.question_he,
-            options: questionToAsk.options || [],
-            product: currentProductKey,
-            saveDraft: newDraft
-        });
-    } else {
-        try {
-            const calculationParams = { ...newDraft, product: currentProductKey };
-            const calcResult = calculate_custom_job(session.cart, calculationParams);
+        // אם המשתמש ענה תשובה (מספר או בחירה מכפתור)
+        // ננסה לשייך את התשובה לשאלה הפתוחה
+        if (intent === 'answer' || intent === 'new_order') {
             
-            actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
-            actions.push({ type: 'GENERATE_RESPONSE', template: 'quote_success', payload: { item: calcResult.lastAdded } });
-        } catch (err) {
-            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: `שגיאה: ${err.message}` } });
+            // מציאת השאלה הראשונה שעדיין אין לה תשובה
+            let missingKey = null;
+            for (const q of productConfig.questions) {
+                if (!currentAttributes[q.key]) {
+                    missingKey = q.key;
+                    
+                    // בדיקה אם ההודעה הנוכחית היא תשובה לשאלה זו
+                    // אם זה מספר והשאלה היא כמות/גודל
+                    if (q.type === 'number' && /^\d+$/.test(userMessage)) {
+                        currentAttributes[q.key] = parseInt(userMessage);
+                    }
+                    // אם זו בחירה מתוך אופציות (הערך נמצא בהודעה)
+                    else if (q.options && q.options.some(o => o.value === userMessage)) {
+                        currentAttributes[q.key] = userMessage;
+                    }
+                    // ניסיון התאמה חלקי (למשל "A5" בתוך "אני רוצה A5")
+                    else if (q.options) {
+                         const match = q.options.find(o => userMessage.includes(o.value) || userMessage.includes(o.label));
+                         if (match) currentAttributes[q.key] = match.value;
+                    }
+                    break;
+                }
+            }
         }
+
+        // 3. בדיקה מחדש: מה חסר עכשיו?
+        let nextQuestion = null;
+        for (const q of productConfig.questions) {
+            if (!currentAttributes[q.key]) {
+                nextQuestion = q;
+                break;
+            }
+        }
+
+        if (nextQuestion) {
+            // חסר מידע -> שואלים את השאלה הבאה
+            actions.push({
+                type: 'PRESENT_OPTIONS',
+                question: nextQuestion.question_he,
+                options: nextQuestion.options || [], // אם זה מספר, זה יהיה ריק והלקוח יקליד
+                saveDraft: currentAttributes
+            });
+        } else {
+            // יש את כל המידע! -> מחשבים ומוסיפים לעגלה
+            const finalPayload = { 
+                product: session.currentProduct, 
+                qty: currentAttributes.qty, 
+                ...currentAttributes 
+            };
+            
+            // מנסים לחשב מחיר
+            try {
+                const calcResult = calculate_custom_job(session.cart, finalPayload);
+                finalPayload.client_price = calcResult.lastAdded.client_price;
+                finalPayload.description = calcResult.lastAdded.description;
+            } catch (e) {
+                finalPayload.client_price = 0; // Fallback
+            }
+
+            actions.push({ type: 'CALCULATE_AND_ADD', payload: finalPayload });
+            
+            // המהלך הקריטי: בדיקה אם יש עוד מוצרים בתור
+            actions.push({ type: 'CHECK_QUEUE' });
+        }
+
+        return { actions };
     }
 
-    return { actions };
+    // 3. אם אין מוצר ואין כוונה ברורה -> תפריט ראשי
+    return { 
+        actions: [{ 
+            type: 'GENERATE_RESPONSE', 
+            payload: { 
+                text: "ברוך הבא לפיני! 🤖\nאני יכול לתת הצעות מחיר לכל מוצרי הדפוס.\nפשוט כתוב לי מה אתה צריך (למשל: '1000 פליירים ורולאפ').",
+                quickReplies: [
+                    { label: 'כרטיסי ביקור', value: 'bc' },
+                    { label: 'פליירים', value: 'flyer' },
+                    { label: 'הזמנות', value: 'invitation' }
+                ]
+            } 
+        }] 
+    };
 }
 
 module.exports = { planActions };

@@ -51,7 +51,7 @@
             }
         }
 
-        /* --- Sidebar (Order Summary - Client Facing) --- */
+        /* --- Sidebar (Order Summary) --- */
         .sidebar {
             width: 350px;
             background: var(--sidebar-bg);
@@ -144,7 +144,6 @@
             display: flex;
             flex-direction: column;
             background-color: var(--chat-bg-color);
-            /* WhatsApp default doodle background pattern */
             background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png");
             background-repeat: repeat;
             opacity: 1;
@@ -362,8 +361,6 @@
     </div>
 
     <script>
-        // --- הגדרות API ---
-        // מזהה אוטומטית אם אנחנו ב-Localhost או בענן
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const BASE_URL = isLocal ? 'http://localhost:3000' : 'https://dotandru-pini-print-bot.hf.space';
         
@@ -407,7 +404,7 @@
                 const content = data.text || data.content;
                 if (content) addMsg(content, 'bot');
 
-                // 2. כפתורים (תיקון באג: תמיכה ב-options שמגיע מהשרת החדש)
+                // 2. כפתורים (תומך גם ב-options וגם ב-quickReplies)
                 const buttons = data.options || data.quickReplies || (data.meta && data.meta.quick_replies);
                 if (buttons && buttons.length > 0) addButtons(buttons);
 
@@ -421,12 +418,6 @@
                 console.error('Error:', error);
                 updateStatus('שגיאת חיבור');
                 addMsg('אופס, השרת לא זמין כרגע. נסה שוב בעוד דקה.', 'bot');
-                
-                // במקרה של שגיאה מקומית, נוסיף הערה למפתח
-                if (isLocal) {
-                    addMsg(`[Developer Note]: ודא שהרצת את "node server.js" בטרמינל.`, 'bot');
-                }
-
             } finally {
                 isProcessing = false;
                 scrollToBottom();
@@ -452,7 +443,7 @@
             options.forEach(opt => {
                 const btn = document.createElement('div');
                 btn.className = 'chip';
-                // תמיכה באובייקט או במחרוזת
+                // תמיכה באובייקט או במחרוזת (חשוב למודל החדש)
                 const label = opt.label || opt.text || opt;
                 const val = opt.value || opt;
                 
@@ -482,8 +473,7 @@
                 </div>`;
             } else {
                 cart.forEach(item => {
-                    // מיפוי נתונים מהשרת החדש (V10)
-                    const title = item.product || 'מוצר'; // key (e.g., flyer)
+                    const title = item.product || 'מוצר'; 
                     const desc = item.description || 'פריט מותאם אישית';
                     const price = item.client_price || 0;
                     
@@ -502,7 +492,7 @@
             totalDisplay.innerText = '₪' + total.toLocaleString();
         }
         
-        // עזר לתרגום מפתחות מוצרים לשמות יפים
+        // תרגום שמות מוצרים לעברית בעגלה (מעודכן עם הכל)
         function getHebrewName(key) {
             const map = {
                 'flyer': 'פליירים',
@@ -511,7 +501,10 @@
                 'sticker': 'מדבקות',
                 'canvas': 'קנבס',
                 'invitation': 'הזמנות',
-                'envelope': 'מעטפות'
+                'envelope': 'מעטפות',
+                'booklet': 'חוברות',
+                'poster': 'פוסטרים',
+                'folder': 'פולדרים'
             };
             return map[key] || key;
         }

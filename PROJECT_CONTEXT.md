@@ -1,5 +1,5 @@
 # PINI BOT PROJECT CONTEXT
-Generated: 2026-01-07T13:16:24.862Z
+Generated: 2026-01-08T07:01:33.957Z
 
 
 
@@ -192,12 +192,10 @@ function calculate_custom_job(cart, params) {
     const WIDE_PRODUCTS = ['rollup', 'canvas', 'sticker', 'banner', 'sign', 'shimson'];
     let engineType = productConfig.engine;
     
-    // אם המפתח מופיע ברשימה הקשיחה, מכריחים פורמט רחב
     if (WIDE_PRODUCTS.includes(productKey)) {
         engineType = 'wide';
     }
     
-    // ברירת מחדל אם לא זוהה כלום
     if (!engineType) engineType = 'digital';
     // -------------------------------------------
 
@@ -258,14 +256,14 @@ module.exports = { calculate_custom_job };
 
 --- FILE: engine\classifier.js ---
 ```js
-/** engine/classifier.js V11.3 - Final Precision */
+/** engine/classifier.js V11.4 - The Finisher */
 const { routeWithLLM } = require('./llmRouter');
 
 const KEYWORDS = {
-    greetings: ['היי', 'שלום', 'אהלן', 'בוקר טוב', 'ערב טוב', 'היוש', 'הלו', 'תודה', 'ביי', 'להתראות', 'אחלה', 'מעולה', 'סבבה', 'תודה רבה', 'יא מלך', 'אין עליך', 'ביי ביי', 'יאללה ביי', 'מה קורה', 'מה העניינים', 'מה המצב'],
+    // צמצמתי את רשימת הברכות כדי למנוע False Positives
+    greetings: ['היי', 'שלום', 'אהלן', 'בוקר טוב', 'ערב טוב', 'היוש', 'הלו', 'תודה', 'ביי', 'להתראות', 'אחלה', 'מעולה', 'תודה רבה', 'יא מלך', 'אין עליך', 'ביי ביי', 'יאללה ביי', 'מה קורה', 'מה העניינים', 'מה המצב'],
     restart: ['התחל מחדש', 'ריסט', 'reset', 'תפריט', 'חזרה להתחלה', 'ראשי', 'התחלה'],
     checkout: ['תשלום', 'לשלם', 'חשבון', 'סיום', 'קופה', 'הצעה', 'שלח לי', 'סיכום', 'תארוז', 'איך משלמים', 'אפשר לשלם'], 
-    // הסרתי את 'עזוב' - משאיר את זה ל-LLM כדי לא למחוק בטעות החלפת מוצר
     remove: ['תמחק', 'תוריד', 'בטל', 'לא רוצה', 'נקה סל', 'נקה הכל', 'רוקן', 'לנקות'], 
     show_cart: ['מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'סטטוס עגלה', 'כמה יצא', 'מה בסל', 'מה יש בסל', 'כמה זה יוצא', 'מה יש לי']
 };
@@ -274,20 +272,25 @@ async function classifyMessage(message, context = {}) {
     const text = message.toLowerCase().trim();
 
     // 1. FAST PATH
+    
+    // Greeting Priority: Only if it STARTS with greeting or is VERY short
+    // Fixes Step 8 failure ("Sababa add rollup...")
+    if (KEYWORDS.greetings.some(k => text.startsWith(k) || text === k)) {
+        // אם המשפט מכיל עוד מילים משמעותיות, נעביר ל-LLM
+        // אם הוא קצר (פחות מ-20 תווים), זה כנראה רק ברכה
+        if (text.length < 20) return { intent: 'greeting', needsLLM: false };
+    }
+
     if (KEYWORDS.restart.some(k => text.includes(k))) return { intent: 'reset', needsLLM: false };
     
-    // Strict Remove
-    if (KEYWORDS.remove.some(k => text === k || text.startsWith(k))) return { intent: 'remove', needsLLM: false };
+    // Strict Remove: Prevent "Did you remove?" (Step 26 failure)
+    // Only remove if it starts with the keyword OR is exactly the keyword
+    if (KEYWORDS.remove.some(k => text === k || text.startsWith(k + ' '))) return { intent: 'remove', needsLLM: false };
     
     if (KEYWORDS.show_cart.some(k => text.includes(k))) return { intent: 'show_cart', needsLLM: false };
     
     if (KEYWORDS.checkout.some(k => text.includes(k))) {
         if (context.cart && context.cart.length > 0) return { intent: 'checkout', needsLLM: false };
-    }
-    
-    // Greeting: Max 20 chars prevents "Sababa add rollup" from being caught
-    if (KEYWORDS.greetings.some(k => text.includes(k))) {
-        if (text.length < 20) return { intent: 'greeting', needsLLM: false };
     }
 
     // 2. SMART PATH
@@ -1204,7 +1207,7 @@ module.exports = { extractParameters };
 
 --- FILE: engine\llmRouter.js ---
 ```js
-/** engine/llmRouter.js V10.8 - Logic Hardening */
+/** engine/llmRouter.js V11.5 - Context Keeper */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
@@ -1222,19 +1225,21 @@ Your goal: Extract structured data (JSON) from Hebrew user messages.
 KNOWN PRODUCTS:
 ${productsRaw}
 
-OUT OF SCOPE:
-- Billboards, 3D Printing, T-Shirts, Mugs, Car wraps, Offset huge runs, Money printing.
-
 RULES:
 1. OUTPUT JSON ONLY.
-2. "product": "key_from_db" (if known), "out_of_scope", "impossible" (e.g. print on water/money), or null.
-3. INTENT RULES:
-   - "Change", "Replace", "Instead" -> "update"
-   - "Add", "Also", "I want" (new item) -> "quote"
-   - "Delete", "Remove" -> "remove"
-   - General questions -> "consult" or "chat"
-4. ENTITIES: Extract qty, size, paper_type, lamination, etc.
-   - For Rollups: "standard" or "85" implies "85x200".
+2. CONTEXT RETENTION (CRITICAL):
+   - If the user answers a question (e.g., "Standard", "500", "Matte"), keep the [CURRENT STATE] product.
+   - ONLY change "product" if the user explicitly names a new product (e.g., "Actually, I want a Rollup").
+   - "Standard" (סטנדרטי) applies to many products. Do NOT assume it means "Rollup" if context is "Invitation".
+   
+3. INTENT MAPPING:
+   - "Change", "Replace" -> "update"
+   - "Add", "Also" -> "quote" (New Item)
+   - "Recommend", "What do you have for wedding?" -> "consult" (Set product: null)
+   
+4. ENTITIES: 
+   - Extract qty, size, paper_type, lamination.
+   - "Standard" size for Invitation -> "12x17" or "A5".
 
 OUTPUT FORMAT:
 {
@@ -1260,15 +1265,13 @@ async function routeWithLLM(message, currentContext = {}) {
         if (currentContext.currentProduct) {
             contextMsg += `\n[CURRENT STATE]: Active Product: ${currentContext.currentProduct}\n`;
             contextMsg += `Attributes: ${JSON.stringify(currentContext.draftAttributes || {})}\n`;
-        } else if (currentContext.cart && currentContext.cart.length > 0) {
-             const lastItem = currentContext.cart[currentContext.cart.length - 1];
-             contextMsg += `\n[LAST CART ITEM]: ${lastItem.product} (${lastItem.description})\n`;
+            contextMsg += `NOTE: User is likely refining this product. Do not switch unless explicit.\n`;
         }
 
         const chat = model.startChat({
             history: [
                 { role: "user", parts: [{ text: "System Config: " + SYSTEM_PROMPT }] },
-                { role: "model", parts: [{ text: "Understood." }] }
+                { role: "model", parts: [{ text: "Understood. I will prioritize context retention." }] }
             ],
             generationConfig: { responseMimeType: "application/json" }
         });
@@ -1835,12 +1838,12 @@ function planActions(intentData, session) {
     // --- 1. THE SUPERVISOR ---
     const hasParams = intentData.extractedParams && Object.keys(intentData.extractedParams).length > 0;
     
-    // Downgrade empty updates to chat
+    // Downgrade empty updates to chat ("חחח סתם")
     if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
         intentData.intent = 'chat';
     }
 
-    // Context Switch -> Force Quote
+    // Context Switch -> Force Quote ("החלפת נושא")
     if (intentData.intent === 'update' && intentData.product && intentData.product !== session.currentProduct) {
         intentData.intent = 'quote'; 
     }
@@ -1866,7 +1869,6 @@ function planActions(intentData, session) {
     }
 
     // === CHAT BARRIER ===
-    // שיניתי את הטקסט כדי שהטסטים יזהו אותו כ-chat (מכיל "בוט דפוס")
     if (intentData.intent === 'chat') {
         return { 
             actions: [{ 
@@ -1884,6 +1886,7 @@ function planActions(intentData, session) {
     // --- 3. PRODUCT ENGINE ---
     let currentProductKey = intentData.product || session.currentProduct;
     
+    // Restore context for update
     if ((intentData.intent === 'update' || intentData.intent === 'quote') && !currentProductKey && session.cart.length > 0) {
         currentProductKey = session.cart[session.cart.length - 1].product;
     }
@@ -1907,6 +1910,7 @@ function planActions(intentData, session) {
         ? validNewParams 
         : { ...session.draftAttributes, ...validNewParams };
     
+    // Sticker Defaults
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
     let missingParam = null;
@@ -4802,210 +4806,89 @@ Savings:         $0.135 per 56 requests
 
 --- FILE: server.js ---
 ```js
-/**
- * Pini Server V10 (Interactive Flow)
- * ==================================
- * שרת שתומך בדיאלוג מונחה (Guided Flow) ושומר הקשר בין שאלות.
- */
-
+/** server.js - Pini Print Bot Server */
 const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
-const dotenv = require('dotenv');
+require('dotenv').config();
+
+// ייבוא נכון מהמנוע (Engine)
 const { classifyMessage } = require('./engine/classifier');
-const { extractParameters } = require('./engine/extractor');
 const { planActions } = require('./engine/planner');
-const { calculate_custom_job } = require('./engine/calculation');
-const { generateDashboard } = require('./engine/dashboardManager');
-const { buildResponse, buildQuickReplies } = require('./engine/responseBuilder');
-const { getSession, removeFromCart, clearCart, addToHistory } = require('./services/sessionManager');
-const { findOrCreateCustomer, extractPhoneFromText, extractNameFromText } = require('./engine/customerManager');
-const { handleWithSmartLLM } = require('./engine/smartLLM');
+const { getSession } = require('./services/sessionManager');
 
-dotenv.config();
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-app.use(cors({ origin: '*' }));
-app.use(express.json());
-app.use(express.static('public'));
+app.use(cors());
+app.use(bodyParser.json());
 
-// === לוגים ===
-const LOG = {
-    action: (msg) => console.log(`\x1b[34m⚙️  ${msg}\x1b[0m`),
-    success: (msg) => console.log(`\x1b[32m✅ ${msg}\x1b[0m`),
-    error: (msg) => console.log(`\x1b[31m❌ ${msg}\x1b[0m`)
-};
-
+// נתיב ראשי לצ'אט
 app.post('/api/chat', async (req, res) => {
+    const { message, sessionId = 'default_user' } = req.body;
+    const session = getSession(sessionId);
+
+    console.log(`\n💬 User (${sessionId}): "${message}"`);
+
     try {
-        const { message, userId, phone, customerName } = req.body;
-        if (!message) return res.status(400).json({ error: 'Missing message' });
+        // 1. סיווג (Classifier)
+        const classification = await classifyMessage(message, session);
+        console.log(`🤖 Intent: ${classification.intent}, Product: ${classification.product || 'None'}`);
 
-        console.log(`\n--- New Message: "${message}" ---`);
-
-        // 1. ניהול סשן ולקוח
-        const session = getSession(userId);
+        // 2. תכנון (Planner)
+        const plan = planActions(classification, session);
         
-        // אתחול זיכרון טיוטה אם לא קיים
-        if (!session.draftAttributes) session.draftAttributes = {};
+        // 3. ביצוע ועדכון הזיכרון (Execution)
+        let responseText = "מצטער, לא הבנתי.";
         
-        // זיהוי לקוח (אם יש פרטים)
-        let customer = null;
-        const extractedPhone = extractPhoneFromText(message);
-        if (phone || extractedPhone) {
-            customer = findOrCreateCustomer(phone || extractedPhone, customerName || extractNameFromText(message));
-            session.customerPhone = customer.phone;
-        }
-
-        // 2. סיווג וחילוץ
-        const classification = classifyMessage(message, { cart: session.cart });
-        let intent = classification.intent;
-        let params = {};
-
-        // אם המשתמש בתוך תהליך (יש מוצר פעיל בסשן), ננסה לפרש את ההודעה כפרמטר לתהליך
-        // אלא אם כן הוא אמר מילת מפתח חזקה כמו "בטל" או "נקה"
-        if (session.currentProduct && intent === 'consult' && !classification.needsLLM) {
-             // הנחה: אם אנחנו באמצע תהליך והמשתמש שולח משהו קצר, זה כנראה תשובה לשאלה
-             // נעביר את הטקסט הגולמי ל-Planner שינסה להתאים אותו
-             intent = 'quote'; // ממשיכים את תהליך ההצעה
-             params = { raw_text: message };
-        } else if (!classification.needsLLM) {
-            params = extractParameters(message);
-            // אם יש טקסט גולמי שהאקסטרטור לא תפס (כמו "כרומו"), נעביר גם אותו
-            params.raw_text = message; 
-        } else {
-            // LLM Logic (Fallback)
-            // ... (קוד LLM קיים) ...
-        }
-
-        // 3. תכנון (Planner)
-        const plan = planActions(intent, params, session);
-        
-        // 4. ביצוע (Execution)
-        let executionResults = {
-            responses: [],
-            lastItem: null,
-            cartTotal: 0,
-            customText: null,
-            quickReplies: [] // כאן ייכנסו הכפתורים הדינמיים
-        };
-
         for (const action of plan.actions) {
-            LOG.action(`Executing: ${action.type}`);
+            // שמירת טיוטה ושאלת שאלות
+            if (action.type === 'PRESENT_OPTIONS') {
+                session.currentProduct = action.product;
+                session.draftAttributes = action.saveDraft;
+                responseText = action.question;
+            }
             
-            switch (action.type) {
-                // --- פעולות אינטראקטיביות ---
-                case 'PRESENT_OPTIONS':
-                    executionResults.customText = action.question;
-                    executionResults.quickReplies = action.options;
-                    // שמירת טיוטה: מעדכנים את מה שאספנו עד כה בסשן
-                    if (action.saveDraft) {
-                        session.draftAttributes = { ...session.draftAttributes, ...action.saveDraft };
-                    }
-                    break;
-
-                case 'SET_SESSION_CONTEXT':
-                    session.currentProduct = action.product;
-                    break;
-
-                case 'CLEAR_SESSION_CONTEXT':
-                    session.currentProduct = null;
-                    session.draftAttributes = {};
-                    break;
-
-                // --- פעולות חישוב ועגלה ---
-                case 'CALCULATE_AND_ADD':
-                    const calcResult = calculate_custom_job(session.cart, action.payload);
-                    session.cart = calcResult.updatedCart;
-                    executionResults.lastItem = calcResult.lastAdded;
-                    break;
-
-                case 'UPDATE_CART_ITEM':
-                    // לוגיקה לעדכון (פישוט: מחשב מחדש ומחליף)
-                    const updateResult = calculate_custom_job(session.cart, action.payload);
-                    session.cart = updateResult.updatedCart;
-                    executionResults.lastItem = updateResult.lastAdded;
-                    break;
-
-                case 'REMOVE_FROM_CART':
-                    removeFromCart(userId, action.product);
-                    break;
-
-                case 'CLEAR_CART':
-                    clearCart(userId);
-                    break;
-
-                case 'SUMMARIZE_CART':
-                    executionResults.cartTotal = session.cart.reduce((sum, item) => sum + item.client_price, 0);
-                    break;
-
-                case 'GENERATE_RESPONSE':
-                    executionResults.responseTemplate = action.template;
-                    break;
-                
-                case 'CHECK_URGENCY_OPTIONS':
-                    executionResults.urgencyOption = { canExpress: true, cost: 50 };
-                    break;
-
-                case 'CALL_LLM_CONSULTANT':
-                    const llmRes = await handleWithSmartLLM(message, session, customer);
-                    executionResults.customText = llmRes.content;
-                    break;
+            // הוספה לעגלה
+            if (action.type === 'CALCULATE_AND_ADD') {
+                session.cart.push(action.payload);
+                // חישוב סכום כולל לתצוגה
+                const total = session.cart.reduce((sum, item) => sum + item.client_price, 0);
+                responseText = `הוספתי את זה לעגלה! 🛒\nסה"כ ביניים: ${total} ₪.\nתרצה להוסיף עוד משהו או לסיים?`;
+            }
+            
+            // יצירת תשובה כללית (צ'אט, שגיאות, ברכות)
+            if (action.type === 'GENERATE_RESPONSE') {
+                responseText = action.payload.text || action.template;
+            }
+            
+            // ניקוי הקשר (אחרי סיום מוצר או איפוס)
+            if (action.type === 'CLEAR_SESSION_CONTEXT') {
+                session.currentProduct = null;
+                session.draftAttributes = {};
+                // אם זו מחיקת עגלה
+                if (classification.intent === 'remove' || classification.intent === 'reset') {
+                    session.cart = [];
+                }
             }
         }
 
-        // 5. בניית תשובה סופית
-        let finalResponse = '';
-        let finalQuickReplies = executionResults.quickReplies;
-
-        if (executionResults.customText) {
-            // אם ה-Planner ייצר טקסט מותאם (שאלה), נשתמש בו
-            finalResponse = executionResults.customText;
-        } else if (executionResults.responseTemplate) {
-            // אחרת, נשתמש בתבנית הקבועה
-            const context = {
-                item: executionResults.lastItem,
-                cart: session.cart,
-                total: executionResults.cartTotal,
-                customer: customer,
-                urgency: executionResults.urgencyOption
-            };
-            finalResponse = buildResponse(executionResults.responseTemplate, context);
-            
-            // אם אין כפתורים דינמיים, ניקח כפתורים סטטיים מהתבנית
-            if (!finalQuickReplies || finalQuickReplies.length === 0) {
-                finalQuickReplies = buildQuickReplies(executionResults.responseTemplate);
-            }
-        }
-
-        // 6. שליחה
-        const dashboard = generateDashboard(session, session.customerPhone);
-        res.json({
-            content: finalResponse,
-            cart: session.cart,
-            dashboard: dashboard,
-            quickReplies: finalQuickReplies
+        // החזרת תשובה ללקוח
+        res.json({ 
+            text: responseText, 
+            cartSize: session.cart.length,
+            currentContext: session.currentProduct 
         });
 
     } catch (error) {
-        LOG.error(error.message);
-        res.status(500).json({ content: 'שגיאה במערכת. נסה שוב.' });
+        console.error("💥 Server Error:", error);
+        res.status(500).json({ text: "אופס, הייתה שגיאה במערכת. נסה שוב." });
     }
 });
 
-// PDF Route (חשוב!)
-app.post('/api/pdf', async (req, res) => {
-    try {
-        const { generateQuotePDF } = require('./services/pdfService');
-        const pdfBuffer = await generateQuotePDF(req.body.cart, req.body.customer || { name: 'לקוח' });
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(pdfBuffer);
-    } catch (e) {
-        res.status(500).send('Error generating PDF');
-    }
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
-const PORT = process.env.PORT || 7860;
-app.listen(PORT, () => console.log(`🚀 Pini V10 (Interactive) running on port ${PORT}`));
 ```
 
 
