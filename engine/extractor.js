@@ -1,65 +1,41 @@
-/**
- * Parameter Extractor V2 (Multi-Product & Bilingual)
- * ==================================================
- * מזהה רשימת מוצרים ומכניס אותם לתור.
- * תומך בעברית ואנגלית.
- */
-
+/** Parameter Extractor V3 (Complete) */
 const KEYWORD_MAP = {
-    // כרטיסי ביקור
-    'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc', 
-    'business card': 'bc', 'cards': 'bc',
-    
-    // פליירים
-    'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer', 
-    'flyers': 'flyer', 'leaflet': 'flyer',
-    
-    // הזמנות
-    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 
-    'invites': 'invitation', 'wedding': 'invitation', 'חתונה': 'invitation',
-    
-    // רולאפ
-    'rollup': 'rollup', 'רולאפ': 'rollup', 'רול-אפ': 'rollup', 'roll-up': 'rollup', 
-    'banner': 'rollup', 'באנר': 'rollup',
-    
-    // מעטפות
+    'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
+    'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
+    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 'חתונה': 'invitation',
+    'rollup': 'rollup', 'רולאפ': 'rollup', 'באנר': 'rollup',
     'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
-    
-    // פוסטרים
-    'poster': 'poster', 'פוסטר': 'poster', 'פוסטרים': 'poster',
-    
-    // מדבקות
-    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker', 
-    'labels': 'sticker', 'vinyl': 'sticker',
-    
-    // חוברות
-    'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 
-    'catalog': 'booklet', 'קטלוג': 'booklet'
+    'poster': 'poster', 'פוסטר': 'poster',
+    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
+    'booklet': 'booklet', 'חוברת': 'booklet'
 };
 
 const HEBREW_NUMBERS = {
-    'אחד': 1, 'אחת': 1, 'שני': 2, 'שתי': 2, 'שניים': 2, 'שלושה': 3, 'שלוש': 3,
-    'ארבעה': 4, 'ארבע': 4, 'חמישה': 5, 'חמש': 5, 'שישה': 6, 'שש': 6,
-    'שבעה': 7, 'שבע': 7, 'שמונה': 8, 'תשעה': 9, 'תשע': 9, 'עשרה': 10, 'עשר': 10,
-    'אלף': 1000, 'אלפיים': 2000
+    'אחד': 1, 'אחת': 1, 'שני': 2, 'שתי': 2, 'שלוש': 3, 'שלושה': 3,
+    'ארבע': 4, 'ארבעה': 4, 'חמש': 5, 'חמישה': 5, 'שש': 6, 'שישה': 6,
+    'שבע': 7, 'שמונה': 8, 'תשע': 9, 'עשר': 10, 'מאה': 100, 'אלף': 1000
 };
 
 function extractParameters(text) {
-    let cleanText = text.toLowerCase().replace(/,/g, ''); 
+    let cleanText = text.toLowerCase().replace(/,/g, '');
     
     const result = {
-        products: [], // רשימת מוצרים לטיפול (התור)
-        qty: null,    // כמות גלובלית אם צוינה
-        isReset: false
+        products: [],
+        qty: null,
+        isReset: false,
+        isCartStatus: false
     };
 
-    // 1. בדיקת מילות איפוס
-    if (cleanText.includes('reset') || cleanText.includes('התחל') || cleanText.includes('תפריט')) {
+    if (cleanText.includes('reset') || cleanText.includes('התחל') || cleanText.includes('תפריט') || cleanText.includes('נקה')) {
         result.isReset = true;
         return result;
     }
 
-    // 2. זיהוי מוצרים (תומך בריבוי מוצרים)
+    if (cleanText.includes('cart') || cleanText.includes('עגלה') || cleanText.includes('סיכום') || cleanText.includes('סטטוס')) {
+        result.isCartStatus = true;
+        return result;
+    }
+
     const foundProducts = new Set();
     Object.keys(KEYWORD_MAP).forEach(keyword => {
         if (cleanText.includes(keyword)) {
@@ -68,8 +44,7 @@ function extractParameters(text) {
     });
     result.products = Array.from(foundProducts);
 
-    // 3. חילוץ כמות (מספרים)
-    const kMatch = cleanText.match(/(\d+)k/); // 5k = 5000
+    const kMatch = cleanText.match(/(\d+)k/);
     if (kMatch) {
         result.qty = parseInt(kMatch[1]) * 1000;
     } else {
@@ -77,7 +52,6 @@ function extractParameters(text) {
         if (numMatch) {
             result.qty = parseInt(numMatch[0]);
         } else {
-            // תמיכה במספרים במילים
             for (const [word, val] of Object.entries(HEBREW_NUMBERS)) {
                 if (cleanText.includes(word)) {
                     result.qty = val;
