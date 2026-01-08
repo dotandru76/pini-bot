@@ -5,7 +5,7 @@
     "questions": [
       { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number" },
       { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
-      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "מט (מומלץ)", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] }
+      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "למינציה מט", "value": "lami_matte" }, { "label": "למינציה מבריקה", "value": "lami_gloss" }] }
     ]
   },
   "flyer": {
@@ -24,6 +24,7 @@
       { "key": "qty", "question_he": "כמה עותקים להדפיס?", "type": "number" },
       { "key": "pages", "question_he": "כמה עמודים בחוברת (כולל כריכה)?", "type": "number" },
       { "key": "size", "question_he": "גודל סגור?", "options": [{ "label": "A4", "value": "A4" }, { "label": "A5", "value": "A5" }] },
+      { "key": "paper_type", "question_he": "איזה נייר פנים?", "options": [{ "label": "נטול עץ 80 (רגיל)", "value": "offset_80" }, { "label": "כרומו 135 (מבריק)", "value": "chromo_135" }] },
       { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "הדבקה (ספר)", "value": "perfect_bind" }] }
     ]
   },

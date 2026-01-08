@@ -1,34 +1,14 @@
-/** Parameter Extractor V5 (Expanded Product List) */
+/** Parameter Extractor V6 (With Raw Text) */
 const KEYWORD_MAP = {
-    // כרטיסים
     'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
-    
-    // פליירים
     'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
-    
-    // ספרים וחוברות
-    'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 
-    'ספר': 'booklet', 'ספרים': 'booklet', 'קטלוג': 'booklet', 'מחברת': 'booklet',
-    
-    // הזמנות
-    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 
-    'חתונה': 'invitation', 'בר מצווה': 'invitation',
-    
-    // רולאפ
+    'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 'ספר': 'booklet', 'ספרים': 'booklet', 'קטלוג': 'booklet',
+    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 'חתונה': 'invitation',
     'rollup': 'rollup', 'רולאפ': 'rollup', 'רול': 'rollup', 'באנר': 'rollup',
-    
-    // פוסטרים וקנבס
-    'poster': 'poster', 'פוסטר': 'poster', 'תמונה': 'poster', 
-    'קנבס': 'poster', 'canvas': 'poster', 'הגדלה': 'poster',
-    
-    // מדבקות
-    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker', 'סטיקר': 'sticker',
-    
-    // מעטפות
+    'poster': 'poster', 'פוסטר': 'poster', 'קנבס': 'poster', 'canvas': 'poster',
+    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
     'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
-    
-    // פולדרים
-    'folder': 'folder', 'פולדר': 'folder', 'תיקייה': 'folder'
+    'folder': 'folder', 'פולדר': 'folder'
 };
 
 const HEBREW_NUMBERS = {
@@ -44,9 +24,11 @@ function extractParameters(text) {
         products: [],
         qty: null,
         isReset: false,
-        isCartStatus: false
+        isCartStatus: false,
+        raw_text: text // <--- התיקון הקריטי: העברת הטקסט המקורי
     };
 
+    // בדיקות מיוחדות
     if (cleanText.includes('reset') || cleanText.includes('התחל') || cleanText.includes('תפריט') || cleanText.includes('נקה')) {
         result.isReset = true;
         return result;
@@ -57,6 +39,7 @@ function extractParameters(text) {
         return result;
     }
 
+    // זיהוי מוצרים
     const foundProducts = new Set();
     Object.keys(KEYWORD_MAP).forEach(keyword => {
         if (cleanText.includes(keyword)) {
@@ -65,6 +48,7 @@ function extractParameters(text) {
     });
     result.products = Array.from(foundProducts);
 
+    // זיהוי כמות (שיפור קטן: מתעלמים ממספרים בתוך מילים כמו A5, 300gr אם אפשר, אבל ה-Planner יעשה את התיקון האמיתי)
     const kMatch = cleanText.match(/(\d+)k/);
     if (kMatch) {
         result.qty = parseInt(kMatch[1]) * 1000;
