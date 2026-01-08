@@ -1,5 +1,5 @@
 # PINI BOT PROJECT CONTEXT
-Generated: 2026-01-08T07:01:33.957Z
+Generated: 2026-01-08T12:28:26.128Z
 
 
 
@@ -103,57 +103,86 @@ Generated: 2026-01-08T07:01:33.957Z
 --- FILE: db\products.json ---
 ```json
 {
-  "flyer": {
-    "name": "פליירים",
-    "engine": "digital",
-    "questions": [
-      { "key": "size", "question_he": "באיזה גודל הפלייר?", "options": [{ "label": "A5", "value": "A5" }, { "label": "A4", "value": "A4" }] },
-      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "כרומו 130 (רגיל)", "value": "chromo_130" }, { "label": "כרומו 300 (עבה)", "value": "chromo_300" }] },
-      { "key": "qty", "question_he": "כמה יחידות להדפיס?", "type": "number" }
-    ]
-  },
   "bc": {
     "name": "כרטיסי ביקור",
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number" },
-      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350", "value": "matte_350" }] },
-      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "מט", "value": "matte" }] }
+      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
+      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "למינציה מט", "value": "lami_matte" }, { "label": "למינציה מבריקה", "value": "lami_gloss" }] }
+    ]
+  },
+  "flyer": {
+    "name": "פליירים",
+    "engine": "digital",
+    "questions": [
+      { "key": "qty", "question_he": "כמה פליירים?", "type": "number" },
+      { "key": "size", "question_he": "באיזה גודל?", "options": [{ "label": "A5 (חצי דף)", "value": "A5" }, { "label": "A4 (דף שלם)", "value": "A4" }, { "label": "A6 (גלויה)", "value": "A6" }] },
+      { "key": "paper_type", "question_he": "איזה עובי נייר?", "options": [{ "label": "130 גרם (דק)", "value": "chromo_130" }, { "label": "170 גרם (בינוני)", "value": "chromo_170" }, { "label": "300 גרם (עבה)", "value": "chromo_300" }] }
+    ]
+  },
+  "booklet": {
+    "name": "חוברות וספרים",
+    "engine": "digital",
+    "questions": [
+      { "key": "qty", "question_he": "כמה עותקים להדפיס?", "type": "number" },
+      { "key": "pages", "question_he": "כמה עמודים בחוברת (כולל כריכה)?", "type": "number" },
+      { "key": "size", "question_he": "גודל סגור?", "options": [{ "label": "A4", "value": "A4" }, { "label": "A5", "value": "A5" }] },
+      { "key": "paper_type", "question_he": "איזה נייר פנים?", "options": [{ "label": "נטול עץ 80 (רגיל)", "value": "offset_80" }, { "label": "כרומו 135 (מבריק)", "value": "chromo_135" }] },
+      { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "כריכה רכה (הדבקה)", "value": "perfect_bind" }] }
     ]
   },
   "invitation": {
-    "name": "הזמנות",
+    "name": "הזמנות לאירועים",
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה הזמנות?", "type": "number" },
       { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18", "value": "13x18" }, { "label": "A5", "value": "A5" }] },
-      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה", "value": "pearl_300" }, { "label": "מט", "value": "matte_350" }] }
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט (קלאסי)", "value": "matte_350" }] }
     ]
   },
   "rollup": {
     "name": "רולאפ",
     "engine": "wide",
     "questions": [
-      { "key": "size", "question_he": "מה הגודל הרצוי?", "options": [{ "label": "85x200", "value": "85x200" }, { "label": "100x200", "value": "100x200" }] },
-      { "key": "qty", "question_he": "כמה מתקנים?", "type": "number" }
+      { "key": "qty", "question_he": "כמה רולאפים?", "type": "number" },
+      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "85x200 (סטנדרט)", "value": "85x200" }, { "label": "100x200 (רחב)", "value": "100x200" }] }
     ]
   },
-  "canvas": {
-    "name": "קנבס",
+  "poster": {
+    "name": "פוסטרים",
     "engine": "wide",
     "questions": [
-      { "key": "size", "question_he": "באיזה גודל הקנבס?", "options": [{ "label": "50x70", "value": "50x70" }, { "label": "100x100", "value": "100x100" }] },
-      { "key": "frame", "question_he": "תרצה מתיחה על מסגרת עץ?", "options": [{ "label": "כן", "value": "wood_frame" }, { "label": "לא", "value": "none" }] },
-      { "key": "qty", "question_he": "כמות?", "type": "number" }
+      { "key": "qty", "question_he": "כמה פוסטרים?", "type": "number" },
+      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "50x70", "value": "50x70" }, { "label": "70x100", "value": "70x100" }, { "label": "A3", "value": "A3" }] },
+      { "key": "paper_type", "question_he": "על מה להדפיס?", "options": [{ "label": "נייר פוטו", "value": "paper_photo" }, { "label": "קנבס (בד)", "value": "canvas" }, { "label": "מדבקה", "value": "vinyl_sticker" }] }
+    ]
+  },
+  "envelope": {
+    "name": "מעטפות",
+    "engine": "digital",
+    "questions": [
+      { "key": "qty", "question_he": "כמה מעטפות?", "type": "number" },
+      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "11x23 (סטנדרט)", "value": "env_11x23" }, { "label": "16x23 (להזמנות)", "value": "env_16x23" }] },
+      { "key": "print", "question_he": "הדפסה?", "options": [{ "label": "צבעוני", "value": "color" }, { "label": "שחור לבן", "value": "bw" }] }
     ]
   },
   "sticker": {
     "name": "מדבקות",
     "engine": "wide",
     "questions": [
-      { "key": "material", "question_he": "איזה סוג מדבקה?", "options": [{ "label": "ויניל לבן", "value": "vinyl_white" }, { "label": "שקוף", "value": "vinyl_clear" }] },
       { "key": "qty", "question_he": "כמה מטר רבוע (מ\"ר)?", "type": "number" },
-      { "key": "cut", "question_he": "צריך חיתוך צורני?", "options": [{ "label": "כן", "value": "yes" }, { "label": "לא", "value": "no" }] }
+      { "key": "material", "question_he": "סוג מדבקה?", "options": [{ "label": "ויניל לבן", "value": "vinyl_white" }, { "label": "שקוף", "value": "vinyl_clear" }, { "label": "נייר", "value": "sticker_paper" }] },
+      { "key": "cut", "question_he": "צריך חיתוך צורני?", "options": [{ "label": "כן", "value": "yes" }, { "label": "לא (גליל/דף)", "value": "no" }] }
+    ]
+  },
+  "folder": {
+    "name": "פולדרים",
+    "engine": "digital",
+    "questions": [
+      { "key": "qty", "question_he": "כמה פולדרים?", "type": "number" },
+      { "key": "lamination", "question_he": "סוג למינציה?", "options": [{ "label": "מט", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] },
+      { "key": "pocket", "question_he": "כיס?", "options": [{ "label": "כיס אחד", "value": "one_pocket" }, { "label": "שני כיסים", "value": "two_pockets" }] }
     ]
   }
 }
@@ -256,61 +285,39 @@ module.exports = { calculate_custom_job };
 
 --- FILE: engine\classifier.js ---
 ```js
-/** engine/classifier.js V11.4 - The Finisher */
+/** engine/classifier.js V13.0 - Intelligent Routing */
 const { routeWithLLM } = require('./llmRouter');
+const { extractParameters } = require('./extractor'); // עדיין משתמשים בזה לגיבוי
 
-const KEYWORDS = {
-    // צמצמתי את רשימת הברכות כדי למנוע False Positives
-    greetings: ['היי', 'שלום', 'אהלן', 'בוקר טוב', 'ערב טוב', 'היוש', 'הלו', 'תודה', 'ביי', 'להתראות', 'אחלה', 'מעולה', 'תודה רבה', 'יא מלך', 'אין עליך', 'ביי ביי', 'יאללה ביי', 'מה קורה', 'מה העניינים', 'מה המצב'],
-    restart: ['התחל מחדש', 'ריסט', 'reset', 'תפריט', 'חזרה להתחלה', 'ראשי', 'התחלה'],
-    checkout: ['תשלום', 'לשלם', 'חשבון', 'סיום', 'קופה', 'הצעה', 'שלח לי', 'סיכום', 'תארוז', 'איך משלמים', 'אפשר לשלם'], 
-    remove: ['תמחק', 'תוריד', 'בטל', 'לא רוצה', 'נקה סל', 'נקה הכל', 'רוקן', 'לנקות'], 
-    show_cart: ['מה בעגלה', 'מה יש בעגלה', 'הצג עגלה', 'סטטוס עגלה', 'כמה יצא', 'מה בסל', 'מה יש בסל', 'כמה זה יוצא', 'מה יש לי']
-};
-
-async function classifyMessage(message, context = {}) {
+async function classifyMessage(message, session) {
     const text = message.toLowerCase().trim();
 
-    // 1. FAST PATH
+    // 1. FAST PATH: בדיקות מהירות שלא עולות כסף/זמן
+    // זיהוי איפוס מוחלט
+    if (['reset', 'התחל', 'איפוס', 'ריסט'].includes(text)) {
+        return { intent: 'reset' };
+    }
     
-    // Greeting Priority: Only if it STARTS with greeting or is VERY short
-    // Fixes Step 8 failure ("Sababa add rollup...")
-    if (KEYWORDS.greetings.some(k => text.startsWith(k) || text === k)) {
-        // אם המשפט מכיל עוד מילים משמעותיות, נעביר ל-LLM
-        // אם הוא קצר (פחות מ-20 תווים), זה כנראה רק ברכה
-        if (text.length < 20) return { intent: 'greeting', needsLLM: false };
+    // זיהוי עגלה
+    if (text.includes('עגלה') || text.includes('סיכום')) {
+        return { intent: 'show_cart' };
     }
 
-    if (KEYWORDS.restart.some(k => text.includes(k))) return { intent: 'reset', needsLLM: false };
+    // 2. SMART PATH: שימוש במוח (LLM)
+    // זה פותר את הבעיות: "מה זה גודל סגור?", "כריכה קשה", "סימניה"
+    console.log("🧠 Consulting Gemini...");
+    const llmResult = await routeWithLLM(message, session);
     
-    // Strict Remove: Prevent "Did you remove?" (Step 26 failure)
-    // Only remove if it starts with the keyword OR is exactly the keyword
-    if (KEYWORDS.remove.some(k => text === k || text.startsWith(k + ' '))) return { intent: 'remove', needsLLM: false };
-    
-    if (KEYWORDS.show_cart.some(k => text.includes(k))) return { intent: 'show_cart', needsLLM: false };
-    
-    if (KEYWORDS.checkout.some(k => text.includes(k))) {
-        if (context.cart && context.cart.length > 0) return { intent: 'checkout', needsLLM: false };
-    }
+    console.log("🧠 LLM Result:", JSON.stringify(llmResult));
 
-    // 2. SMART PATH
-    try {
-        let llmResult = await routeWithLLM(message, context);
-        if (Array.isArray(llmResult)) llmResult = llmResult[0];
-
-        return {
-            intent: llmResult.intent || 'consult',
-            product: llmResult.product,
-            extractedParams: llmResult.entities || {},
-            needsLLM: true,
-            confidence: llmResult.confidence,
-            summary: llmResult.entities?.text_summary
-        };
-        
-    } catch (e) {
-        console.error("Classifier Fallback:", e);
-        return { intent: 'consult', needsLLM: true };
-    }
+    // המרת תשובת ה-LLM לפורמט שה-Planner מכיר
+    return {
+        intent: llmResult.intent, // quote, faq, chat...
+        product: llmResult.product,
+        extractedParams: llmResult.mapped_params || {}, // הפרמטרים שנוקו ע"י ה-AI
+        aiResponse: llmResult.answer_text, // התשובה המילולית (ל-FAQ/Chat)
+        raw_text: message
+    };
 }
 
 module.exports = { classifyMessage };
@@ -1125,80 +1132,90 @@ module.exports = {
 
 --- FILE: engine\extractor.js ---
 ```js
-/**
- * Parameter Extractor
- * ===================
- * מחלץ נתונים מובנים מטקסט חופשי ללא שימוש ב-AI.
- * תומך במספרים, כמויות (k), ומוצרים.
- */
-
-const { PRODUCT_MAP } = require('./calculation');
-
-const HEBREW_NUMBERS = {
-    'אחד': 1, 'אחת': 1, 'שני': 2, 'שתי': 2, 'שניים': 2, 'שלושה': 3, 'שלוש': 3,
-    'ארבעה': 4, 'ארבע': 4, 'חמישה': 5, 'חמש': 5, 'שישה': 6, 'שש': 6,
-    'שבעה': 7, 'שבע': 7, 'שמונה': 8, 'תשעה': 9, 'תשע': 9, 'עשרה': 10, 'עשר': 10,
-    'עשרים': 20, 'חמישים': 50, 'מאה': 100, 'מאתיים': 200, 'חמש מאות': 500,
-    'אלף': 1000, 'אלפיים': 2000, 'חמשת אלפים': 5000, 'עשרת אלפים': 10000
+/** engine/extractor.js - With Remove Logic */
+const KEYWORD_MAP = {
+    'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
+    'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
+    'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 'ספר': 'booklet', 'ספרים': 'booklet', 'קטלוג': 'booklet',
+    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 'חתונה': 'invitation',
+    'rollup': 'rollup', 'רולאפ': 'rollup', 'באנר': 'rollup',
+    'poster': 'poster', 'פוסטר': 'poster', 'קנבס': 'poster',
+    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
+    'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
+    'folder': 'folder', 'פולדר': 'folder'
 };
 
-const MODIFIERS = {
-    'דחוף': { urgency: 'high' },
-    'מהר': { urgency: 'high' },
-    'היום': { urgency: 'high' },
-    'מחר': { urgency: 'high' },
-    'אקספרס': { urgency: 'high' },
-    'עכשיו': { urgency: 'high' },
-    'זול': { budget: 'low' },
-    'הכי טוב': { quality: 'high' },
-    'פרימיום': { quality: 'high' }
+const HEBREW_NUMBERS = {
+    'אחד': 1, 'אחת': 1, 'שני': 2, 'שתי': 2, 'שלוש': 3, 'שלושה': 3,
+    'ארבע': 4, 'ארבעה': 4, 'חמש': 5, 'חמישה': 5, 'שש': 6, 'שישה': 6,
+    'שבע': 7, 'שמונה': 8, 'תשע': 9, 'עשר': 10, 'מאה': 100, 'אלף': 1000
 };
 
 function extractParameters(text) {
-    let cleanText = text.toLowerCase().replace(/,/g, ''); // הסרת פסיקים (1,000 -> 1000)
-    const params = {
-        product: null,
+    let cleanText = text.toLowerCase().replace(/,/g, '');
+    
+    const result = {
+        products: [],
         qty: null,
-        attributes: {}
+        isReset: false,
+        isRemove: false, // <--- חדש
+        targetIndex: null, // <--- חדש
+        isCartStatus: false,
+        raw_text: text
     };
 
-    // 1. חילוץ מוצר
-    for (const [keyword, category] of Object.entries(PRODUCT_MAP)) {
-        if (cleanText.includes(keyword)) {
-            params.product = category;
-            break; // מספיק מוצר אחד למשפט פשוט
-        }
+    // 1. זיהוי מחיקה ספציפית
+    const removeKeywords = ['מחק', 'הסר', 'בטל', 'להוריד', 'תוריד'];
+    if (removeKeywords.some(w => cleanText.includes(w))) {
+        result.isRemove = true;
+        // ננסה למצוא מספר (למשל: "מחק את 1")
+        const numMatch = cleanText.match(/(\d+)/);
+        if (numMatch) result.targetIndex = parseInt(numMatch[0]);
+        // אם אין מספר, ננסה למצוא שם מוצר למטה...
     }
 
-    // 2. חילוץ כמות (מספרים)
-    // תמיכה ב-k (1k = 1000)
+    // 2. זיהוי איפוס מלא
+    const resetKeywords = ['reset', 'התחל', 'תפריט', 'נקה הכל', 'איפוס', 'יציאה'];
+    if (resetKeywords.some(word => cleanText.includes(word)) && !result.isRemove) {
+        result.isReset = true;
+        return result;
+    }
+
+    // 3. זיהוי עגלה
+    if (cleanText.includes('cart') || cleanText.includes('עגלה') || cleanText.includes('סיכום') || cleanText.includes('סטטוס')) {
+        result.isCartStatus = true;
+        return result;
+    }
+
+    // 4. זיהוי מוצרים
+    const foundProducts = new Set();
+    Object.keys(KEYWORD_MAP).forEach(keyword => {
+        if (cleanText.includes(keyword)) {
+            foundProducts.add(KEYWORD_MAP[keyword]);
+        }
+    });
+    result.products = Array.from(foundProducts);
+
+    // 5. זיהוי כמות
     const kMatch = cleanText.match(/(\d+)k/);
     if (kMatch) {
-        params.qty = parseInt(kMatch[1]) * 1000;
+        result.qty = parseInt(kMatch[1]) * 1000;
     } else {
-        // מספר רגיל
         const numMatch = cleanText.match(/\d+/);
         if (numMatch) {
-            params.qty = parseInt(numMatch[0]);
+            // אם זה לא מחיקה, ניקח את המספר ככמות
+            if (!result.isRemove) result.qty = parseInt(numMatch[0]);
         } else {
-            // מספר במילים
             for (const [word, val] of Object.entries(HEBREW_NUMBERS)) {
                 if (cleanText.includes(word)) {
-                    params.qty = val;
+                    result.qty = val;
                     break;
                 }
             }
         }
     }
 
-    // 3. חילוץ תכונות נוספות (דחיפות, איכות)
-    for (const [word, attr] of Object.entries(MODIFIERS)) {
-        if (cleanText.includes(word)) {
-            Object.assign(params.attributes, attr);
-        }
-    }
-
-    return params;
+    return result;
 }
 
 module.exports = { extractParameters };
@@ -1207,83 +1224,76 @@ module.exports = { extractParameters };
 
 --- FILE: engine\llmRouter.js ---
 ```js
-/** engine/llmRouter.js V11.5 - Context Keeper */
+/** engine/llmRouter.js V_DEBUG - Verbose Logging & Smart Inference */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// לוג צבעוני לזיהוי קל
+const logAI = (msg, data) => console.log(`\x1b[35m[🧠 AI-BRAIN]\x1b[0m ${msg}`, data ? JSON.stringify(data, null, 2) : '');
 
-let productsRaw = "{}";
-try { productsRaw = fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'); } catch (err) {}
+let genAI = null;
+try { genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); } catch (e) { logAI("⚠️ Error: No API Key"); }
+
+let productsDB = {};
+try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
 const SYSTEM_PROMPT = `
-You are the Router for "Pini Print Bot".
-Your goal: Extract structured data (JSON) from Hebrew user messages.
+You are "Pini", a smart print shop assistant.
+Your goal is to UNDERSTAND the user, even if they speak in slang or hints.
 
-KNOWN PRODUCTS:
-${productsRaw}
+AVAILABLE PRODUCTS (DB KEYS):
+${Object.keys(productsDB).join(', ')}
 
-RULES:
-1. OUTPUT JSON ONLY.
-2. CONTEXT RETENTION (CRITICAL):
-   - If the user answers a question (e.g., "Standard", "500", "Matte"), keep the [CURRENT STATE] product.
-   - ONLY change "product" if the user explicitly names a new product (e.g., "Actually, I want a Rollup").
-   - "Standard" (סטנדרטי) applies to many products. Do NOT assume it means "Rollup" if context is "Invitation".
+*** INFERENCE RULES (USE YOUR BRAIN!) ***
+1. **Implied Products**:
+   - User: "I'm getting married" -> Product: "invitation" (Intent: quote)
+   - User: "New business" -> Product: "bc" or "flyer" (Intent: quote)
+   - User: "Something for the wall" -> Product: "canvas" or "poster"
    
-3. INTENT MAPPING:
-   - "Change", "Replace" -> "update"
-   - "Add", "Also" -> "quote" (New Item)
-   - "Recommend", "What do you have for wedding?" -> "consult" (Set product: null)
-   
-4. ENTITIES: 
-   - Extract qty, size, paper_type, lamination.
-   - "Standard" size for Invitation -> "12x17" or "A5".
+2. **Conversation & Personality**:
+   - If user asks a question ("What is X?"), Intent is "faq".
+   - If user just says "Hi", Intent is "chat".
+   - ALWAYS generate a "answer_text" in Hebrew that fits the persona (Warm, Israeli).
 
-OUTPUT FORMAT:
+3. **OUTPUT JSON ONLY**:
 {
-  "intent": "quote" | "consult" | "chat" | "remove" | "reset" | "update",
-  "product": "product_key" | "out_of_scope" | "impossible" | null,
-  "confidence": 0.0-1.0,
-  "entities": {
-    "qty": number,
-    "paper_type": string,
-    "size": string,
-    "text_summary": "Description"
-  }
+  "intent": "quote" | "consult" | "chat" | "remove" | "reset",
+  "product": "product_key" | null,
+  "answer_text": "Hebrew text here",
+  "mapped_params": { "qty": 100, ... },
+  "confidence": "high" | "low",
+  "reasoning": "Why you chose this product/intent"
 }
 `;
 
-async function routeWithLLM(message, currentContext = {}) {
+async function routeWithLLM(message, session) {
+    logAI(`Analyzing Input: "${message}"`);
+    logAI(`Current Context Product: ${session.currentProduct || 'None'}`);
+
+    if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI" };
+
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         
-        let contextMsg = `User Message: "${message}"\n`;
+        const finalPrompt = SYSTEM_PROMPT 
+            + `\n[CONTEXT]: Active Product: ${session.currentProduct || "None"}`
+            + `\n[USER SAYS]: "${message}"\nJSON Output:`;
+
+        const result = await model.generateContent(finalPrompt);
+        let text = result.response.text().replace(/```json|```/g, '').trim();
         
-        // Context Injection
-        if (currentContext.currentProduct) {
-            contextMsg += `\n[CURRENT STATE]: Active Product: ${currentContext.currentProduct}\n`;
-            contextMsg += `Attributes: ${JSON.stringify(currentContext.draftAttributes || {})}\n`;
-            contextMsg += `NOTE: User is likely refining this product. Do not switch unless explicit.\n`;
-        }
+        logAI("Raw Response from Gemini:", text); // <--- כאן נראה אם ה-AI הבין!
 
-        const chat = model.startChat({
-            history: [
-                { role: "user", parts: [{ text: "System Config: " + SYSTEM_PROMPT }] },
-                { role: "model", parts: [{ text: "Understood. I will prioritize context retention." }] }
-            ],
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        const parsed = JSON.parse(text);
+        logAI("Parsed JSON:", parsed);
 
-        const result = await chat.sendMessage(contextMsg);
-        let text = result.response.text();
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(text);
+        return parsed;
 
     } catch (error) {
-        console.error("Router Error:", error);
-        return { intent: "consult", product: null, entities: {} };
+        console.error("\x1b[31m[🧠 AI ERROR]\x1b[0m", error);
+        return { intent: "chat", answer_text: null };
     }
 }
 
@@ -1825,7 +1835,7 @@ module.exports = {
 
 --- FILE: engine\planner.js ---
 ```js
-/** engine/planner.js V11.3 - Final Polish */
+/** engine/planner.js V28.0 - Server-Side Normalization */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -1833,112 +1843,153 @@ const { calculate_custom_job } = require('./calculation');
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
+// === מילון מונחים לשרת (The Translator) ===
+// ממפה מונחים שה-LLM עשוי להחזיר למפתחות האמיתיים ב-DB
+const PARAM_ALIASES = {
+    'paper': 'paper_type',
+    'stock': 'paper_type',
+    'media': 'paper_type',
+    'material': 'paper_type', // לפעמים בפורמט רחב
+    'coating': 'lamination',
+    'finish': 'finishing',
+    'width': 'size', // אם ה-LLM פירק גודל
+    'height': 'size'
+};
+
 function planActions(intentData, session) {
-    
-    // --- 1. THE SUPERVISOR ---
-    const hasParams = intentData.extractedParams && Object.keys(intentData.extractedParams).length > 0;
-    
-    // Downgrade empty updates to chat ("חחח סתם")
-    if ((intentData.intent === 'update' || intentData.intent === 'consult') && !hasParams && !intentData.product) {
-        intentData.intent = 'chat';
-    }
-
-    // Context Switch -> Force Quote ("החלפת נושא")
-    if (intentData.intent === 'update' && intentData.product && intentData.product !== session.currentProduct) {
-        intentData.intent = 'quote'; 
-    }
-
-    // --- 2. ACTION HANDLERS ---
     const actions = [];
 
-    if (['greeting', 'thank_you', 'bye'].includes(intentData.intent)) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', template: 'greeting', payload: { text: "בכיף! אני כאן אם צריך עוד משהו. 😊" } }] };
-    }
+    // --- 1. פעולות מערכת ---
     if (intentData.intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "איפסתי הכל. מה נדפיס?" } }] };
-    }
-    if (intentData.intent === 'remove') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את העגלה." } }] };
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "דף חלק! 📄 מה נדפיס?" } }] };
     }
     if (intentData.intent === 'show_cart') {
-        const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים בעגלה.` : "העגלה ריקה כרגע.";
+        const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים.` : "העגלה ריקה.";
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: cartText } }] };
     }
-    if (intentData.intent === 'checkout') {
-         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מעולה, אפיק לך הצעת מחיר מסודרת." } }] };
+    if (intentData.intent === 'remove') {
+         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: null } }] }; 
     }
 
-    // === CHAT BARRIER ===
-    if (intentData.intent === 'chat') {
-        return { 
-            actions: [{ 
-                type: 'GENERATE_RESPONSE', 
-                payload: { text: "נשמע טוב! אני רק בוט דפוס 🤖, אז בוא נחזור לעניינים. תרצה להוסיף משהו לעגלה?" } 
-            }] 
-        };
-    }
-    // ====================
-
-    // Scope Checks
-    if (intentData.product === 'out_of_scope') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "וואו, זה גדול עלינו. אני מתמחה בדפוס דיגיטלי ופורמט רחב סטנדרטי." } }] };
-    if (intentData.product === 'impossible') return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "אממ... זה בלתי אפשרי טכנית להדפיס על זה. 😅" } }] };
-
-    // --- 3. PRODUCT ENGINE ---
+    // --- 2. טיפול בשיחה ללא מוצר ---
     let currentProductKey = intentData.product || session.currentProduct;
     
-    // Restore context for update
-    if ((intentData.intent === 'update' || intentData.intent === 'quote') && !currentProductKey && session.cart.length > 0) {
-        currentProductKey = session.cart[session.cart.length - 1].product;
+    // ניהול שינוי מוצר
+    if (intentData.product && intentData.product !== session.currentProduct) {
+        session.currentProduct = intentData.product;
+        currentProductKey = intentData.product;
+        if (intentData.product !== session.currentProduct) session.draftAttributes = {}; 
     }
 
     if (!currentProductKey) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, כרטיסים, רולאפ...)" } }] };
+        // אם אין מוצר וזו סתם שיחה
+        if (['chat', 'consult', 'faq'].includes(intentData.intent)) {
+            return { 
+                actions: [{ 
+                    type: 'GENERATE_RESPONSE', 
+                    payload: { 
+                        text: intentData.aiResponse || "אני כאן לכל שאלה על דפוס! 😊",
+                        quickReplies: [{ label: 'תפריט ראשי', value: 'reset' }]
+                    } 
+                }] 
+            };
+        }
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, כרטיסים...)" } }] };
     }
 
     const productConfig = productsDB[currentProductKey];
-    if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "המוצר הזה לא קיים במערכת כרגע." } }] };
+    if (!productConfig) {
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה לא קיים במערכת." } }] };
+    }
 
-    const newParams = intentData.extractedParams || {};
-    if (productConfig.engine === 'wide' && newParams.paper_type) newParams.material = newParams.paper_type;
-
-    const validNewParams = {};
-    Object.keys(newParams).forEach(key => {
-        if (newParams[key] !== null && newParams[key] !== undefined) validNewParams[key] = newParams[key];
+    // --- 3. נרמול הנתונים (הקסם של השרת) ---
+    // כאן השרת לוקח פיקוד ומתקן את מה שה-LLM שלח
+    
+    let rawParams = intentData.extractedParams || {};
+    
+    // א. מיפוי שמות (Aliases)
+    let normalizedParams = {};
+    Object.keys(rawParams).forEach(key => {
+        const dbKey = PARAM_ALIASES[key] || key; // תרגום: paper -> paper_type
+        normalizedParams[dbKey] = rawParams[key];
     });
 
-    const newDraft = (intentData.intent === 'quote') 
-        ? validNewParams 
-        : { ...session.draftAttributes, ...validNewParams };
+    // ב. התאמת ערכים (Value Matching)
+    // אם ה-LLM שלח "מט" אבל ב-DB כתוב "matte_350", השרת ימצא את זה
+    if (productConfig.questions) {
+        productConfig.questions.forEach(q => {
+            const val = normalizedParams[q.key];
+            if (val && q.options) {
+                // נסה למצוא התאמה בתוך האופציות
+                const match = q.options.find(opt => 
+                    opt.value.toLowerCase() === val.toString().toLowerCase() || 
+                    opt.label.includes(val) ||
+                    val.toString().includes(opt.value) // אם ה-LLM החזיר "matte_350" והערך הוא "matte"
+                );
+                
+                if (match) {
+                    normalizedParams[q.key] = match.value; // נעלנו על הערך התקין מה-DB
+                }
+            }
+        });
+    }
+
+    // מיזוג לתוך הזיכרון
+    const newDraft = { ...session.draftAttributes, ...normalizedParams };
     
-    // Sticker Defaults
+    // ברירות מחדל טכניות
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
+    // --- 4. מה חסר? ---
     let missingParam = null;
     let questionToAsk = null;
 
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            if (!newDraft[q.key]) { missingParam = q.key; questionToAsk = q; break; }
+            if (!newDraft[q.key]) { 
+                missingParam = q.key; 
+                questionToAsk = q; 
+                break; 
+            }
         }
     }
 
+    // --- 5. בניית התשובה ---
     if (missingParam) {
+        let finalResponse = "";
+        
+        // טקסט מה-LLM (אם יש)
+        if (intentData.aiResponse) {
+            finalResponse += intentData.aiResponse + "\n\n";
+        } else if (Object.keys(newDraft).length === 0) {
+            finalResponse += `בכיף, בוא נגדיר את ה${productConfig.name}. 👌\n`;
+        }
+
+        // השאלה הטכנית (מהכפתורים)
+        finalResponse += questionToAsk.question_he;
+
         actions.push({
             type: 'PRESENT_OPTIONS',
-            question: questionToAsk.question_he,
+            question: finalResponse,
             options: questionToAsk.options || [],
             product: currentProductKey,
             saveDraft: newDraft
         });
     } else {
+        // חישוב
         try {
-            const calculationParams = { ...newDraft, product: currentProductKey };
-            const calcResult = calculate_custom_job(session.cart, calculationParams);
+            const calcParams = { ...newDraft, product: currentProductKey };
+            const calcResult = calculate_custom_job(session.cart, calcParams);
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
-            actions.push({ type: 'GENERATE_RESPONSE', template: 'quote_success', payload: { item: calcResult.lastAdded } });
-        } catch (err) {
-            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: `שגיאה: ${err.message}` } });
+            actions.push({ 
+                type: 'GENERATE_RESPONSE', 
+                template: 'quote_success', 
+                payload: { item: calcResult.lastAdded, textPrefix: intentData.aiResponse } 
+            });
+            actions.push({ type: 'CHECK_QUEUE' }); 
+        } catch (e) {
+            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "נתקלתי בבעיה בחישוב. נסה לשנות פרמטרים." } });
         }
     }
 
@@ -2708,172 +2759,30 @@ module.exports = {
 
 --- FILE: engine\responseBuilder.js ---
 ```js
-/**
- * Pini Response Builder V9 (Complete Edition)
- * ===========================================
- * המנוע שהופך נתונים יבשים לטקסט אנושי וזורם.
- * כולל:
- * - תמיכה בכל סוגי התבניות של ה-Planner.
- * - גיוון בניסוחים (כדי לא להישמע רובוטי).
- * - טיפול באפשרויות דחיפות (Upsell).
- */
-
-// עזר: בחירה רנדומלית ממערך לגיוון התשובות
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
+/** engine/responseBuilder.js */
 const RESPONSES = {
-    // --- הוספה ועדכון ---
-    quote_added: (ctx) => {
-        const item = ctx.item;
-        const openers = ['מעולה!', 'אחלה בחירה.', 'רשמתי.', 'אין בעיה.'];
-        const opener = pick(openers);
-        
-        return `${opener} הוספתי לעגלה: ${item.qty} יח' ${item.product_name}.\n` +
-               `💰 מחיר: ₪${item.client_price}\n` +
-               `💡 מפרט: ${item.paper_type || 'סטנדרט'} | ${item.print_type || 'צבעוני'}`;
-    },
+    ask_quantity: () => `בשמחה! איזו כמות נדפיס?`,
     
-    quote_updated: (ctx) => {
-        const item = ctx.item;
-        return `עדכנתי את הכמות! 👍\n` +
-               `עכשיו יש לך ${item.qty} יח' של ${item.product_name}.\n` +
-               `המחיר המעודכן: ₪${item.client_price}`;
-    },
-
-    quote_premium_suggestion: (ctx) => {
-        const item = ctx.item;
-        return `הבנתי שאתה מחפש משהו ברמה גבוהה. ✨\n` +
-               `שמתי לך ${item.product_name} על נייר ${item.paper_type} (פרימיום).\n` +
-               `זה יוצא ₪${item.client_price} ל-${item.qty} יחידות.\nאיך זה נשמע?`;
-    },
-
-    // --- שאלות והבהרות ---
-    ask_quantity: (ctx) => {
-        const prod = ctx.item?.product_name || "את המוצר";
-        const questions = [
-            `בשמחה! איזו כמות של ${prod} תרצה להדפיס?`,
-            `כמה יחידות של ${prod} להכין לך?`,
-            `אין בעיה. מה הכמות הדרושה ל-${prod}?`
-        ];
-        return pick(questions) + " (למשל: 100, 1000...)";
-    },
-
-    ask_general: (ctx) => {
-        // ברירת מחדל כשהשרת צריך לשאול משהו כללי
-        return "חסרים לי קצת פרטים כדי לתת מחיר מדויק. 🤔\nאיזה מוצר וכמות אתה צריך?";
-    },
-
-    ask_clarification: () => {
-        return "סליחה, לא הייתי בטוח למה התכוונת. 😅\nתוכל לפרט איזה מוצר וכמות? (למשל: '1000 פליירים')";
-    },
-
-    // --- ניהול עגלה ---
-    item_removed: () => {
-        return "אין בעיה, מחקתי את הפריט מהעגלה. 🗑️\nצריך משהו אחר במקום?";
-    },
-
-    cart_cleared: () => {
-        return "ניקיתי את העגלה! דף חלק. 📄\nמה נדפיס עכשיו?";
-    },
-
-    cart_empty_error: () => {
-        return "העגלה ריקה כרגע, אז אין לי מה לעדכן או למחוק. 🤷‍♂️\nמה תרצה להזמין?";
-    },
-
+    // ברכה מומחית
+    greeting: () => "היי! אני פיני, מומחה הדפוס של בית יצחק. 👨‍🎨\nאני כאן לייעץ ולתת הצעות מחיר.\nאיך אוכל לעזור היום?",
+    
     cart_status: (ctx) => {
-        if (!ctx.cart || ctx.cart.length === 0) return "העגלה שלך ריקה כרגע 🛒. בוא נמלא אותה!";
-        
-        let msg = "🛒 **המצב בעגלה:**\n";
-        let total = 0;
-        ctx.cart.forEach((item, i) => {
-            msg += `${i+1}. ${item.product_name} (${item.qty} יח') - ₪${item.client_price}\n`;
-            total += item.client_price;
-        });
-        msg += `\n💰 **סה"כ לתשלום: ₪${total}**`;
-        return msg;
+        if (!ctx.cart || ctx.cart.length === 0) return "העגלה ריקה כרגע. בוא נתחיל!";
+        return `📂 **סיכום ביניים:**\nיש לך ${ctx.cart.length} פריטים בעגלה.\nסה"כ: ₪${ctx.cart.reduce((s, i) => s + i.client_price, 0)}`;
     },
-
-    // --- סיום ---
-    send_quote: (ctx) => {
-        const total = ctx.total || ctx.cart.reduce((sum, item) => sum + item.client_price, 0);
-        return `סיכום הזמנה מסודר: 📝\n` +
-               `סה"כ לתשלום: ₪${total}\n` +
-               `האם לשלוח לך לינק לתשלום והעלאת קבצים?`;
-    },
-
-    greeting: () => {
-        const hours = new Date().getHours();
-        let timeGreeting = "שלום!";
-        if (hours >= 5 && hours < 12) timeGreeting = "בוקר טוב! ☀️";
-        else if (hours >= 12 && hours < 18) timeGreeting = "צהריים טובים! 🌤️";
-        else if (hours >= 18) timeGreeting = "ערב טוב! 🌙";
-
-        return `${timeGreeting} אני פיני מבית יצחק. 🤖\nאפשר לבקש ממני הצעות מחיר, לבדוק סטטוס, או סתם להתייעץ.\nמה נדפיס היום?`;
-    }
-};
-
-// --- כפתורים מהירים (Quick Replies) ---
-const QUICK_REPLIES = {
-    quote_added: [
-        { text: 'סגור הזמנה', value: 'שלח חשבונית' },
-        { text: 'הוסף עוד פריט', value: 'תפריט' },
-        { text: 'נקה עגלה', value: 'נקה הכל' }
-    ],
-    ask_quantity: [
-        { text: '100', value: '100' },
-        { text: '500', value: '500' },
-        { text: '1000', value: '1000' },
-        { text: '5000', value: '5000' }
-    ],
-    greeting: [
-        { text: 'כרטיסי ביקור', value: 'כרטיסי ביקור' },
-        { text: 'פליירים', value: 'פליירים' },
-        { text: 'רולאפ', value: 'רולאפ' },
-        { text: 'הזמנות', value: 'הזמנות' }
-    ],
-    cart_status: [
-        { text: 'סיים הזמנה', value: 'checkout' },
-        { text: 'נקה הכל', value: 'clear' },
-        { text: 'הוסף פריט', value: 'menu' }
-    ],
-    send_quote: [
-        { text: '👍 שלח לינק', value: 'אשר' },
-        { text: 'רגע, רוצה לשנות', value: 'status' }
-    ],
-    ask_general: [
-        { text: 'כרטיסי ביקור', value: 'כרטיסי ביקור' },
-        { text: 'פליירים', value: 'פליירים' }
-    ]
-};
-
-/**
- * הפונקציה הראשית שבונה את התשובה
- */
-function buildResponse(templateName, context = {}) {
-    const builder = RESPONSES[templateName];
     
-    // אם התבנית לא קיימת, מחזירים הודעת ברירת מחדל (Fallback)
-    if (!builder) {
-        console.error(`Missing template: ${templateName}`);
-        return "קיבלתי, אבל משהו לא הסתדר לי בתצוגה. 😅";
-    }
+    send_quote: () => "הפקתי לך הצעת מחיר מסודרת. 👇",
+    
+    unknown: () => "אני איתך. כדי שאוכל לתת הצעה, תגיד לי איזה מוצר אתה צריך (למשל: פליירים, כרטיסים, רולאפ)."
+};
 
-    let responseText = builder(context);
+const QUICK_REPLIES = {
+    greeting: [], // ריק! לא דוחפים מוצרים
+    send_quote: [{ label: 'תודה', value: 'reset' }]
+};
 
-    // --- הוספת דחיפות (Upsell Logic) ---
-    // אם השרת חישב אופציית דחיפות, אנחנו מוסיפים את הטקסט כאן
-    if (context.urgency && context.urgency.canExpress) {
-        responseText += `\n\n🚀 **ראיתי שזה דחוף!**\n` +
-                        `אפשר להריץ את זה במסלול אקספרס בתוספת ₪${context.urgency.cost}.\n` +
-                        `לאשר אקספרס?`;
-    }
-
-    return responseText;
-}
-
-function buildQuickReplies(templateName) {
-    return QUICK_REPLIES[templateName] || [];
-}
+function buildResponse(key, ctx) { return RESPONSES[key] ? RESPONSES[key](ctx) : RESPONSES.unknown(); }
+function buildQuickReplies(key) { return QUICK_REPLIES[key] || []; }
 
 module.exports = { buildResponse, buildQuickReplies };
 ```
@@ -4111,7 +4020,7 @@ module.exports = { findOptimalSetup, calculateUps };
             --sidebar-bg: #ffffff;
             --user-msg-bg: #d9fdd3;
             --bot-msg-bg: #ffffff;
-            --primary-color: #008069; /* WhatsApp Green */
+            --primary-color: #008069;
             --text-primary: #111b21;
             --text-secondary: #667781;
         }
@@ -4127,7 +4036,6 @@ module.exports = { findOptimalSetup, calculateUps };
             color: var(--text-primary);
         }
 
-        /* --- Main Container --- */
         .app-container {
             display: flex;
             width: 100%;
@@ -4140,14 +4048,9 @@ module.exports = { findOptimalSetup, calculateUps };
         }
 
         @media (min-width: 1400px) {
-            .app-container {
-                height: 95vh;
-                width: 95vw;
-                border-radius: 0;
-            }
+            .app-container { height: 95vh; width: 95vw; }
         }
 
-        /* --- Sidebar (Order Summary - Client Facing) --- */
         .sidebar {
             width: 350px;
             background: var(--sidebar-bg);
@@ -4166,7 +4069,6 @@ module.exports = { findOptimalSetup, calculateUps };
             justify-content: space-between;
             border-bottom: 1px solid #e9edef;
             font-weight: bold;
-            color: var(--text-primary);
             font-size: 1.1rem;
         }
 
@@ -4192,7 +4094,6 @@ module.exports = { findOptimalSetup, calculateUps };
             border-bottom: 1px solid #f0f2f5;
             padding: 12px 0;
             margin-bottom: 5px;
-            position: relative;
         }
 
         .cart-item-title { font-weight: bold; font-size: 0.95rem; }
@@ -4231,19 +4132,15 @@ module.exports = { findOptimalSetup, calculateUps };
             color: white;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
-
         .action-btn:hover { background-color: #006b56; }
 
-        /* --- Chat Area --- */
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             background-color: var(--chat-bg-color);
-            /* WhatsApp default doodle background pattern */
             background-image: url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png");
             background-repeat: repeat;
-            opacity: 1;
             position: relative;
         }
 
@@ -4258,17 +4155,11 @@ module.exports = { findOptimalSetup, calculateUps };
         }
 
         .avatar {
-            width: 40px;
-            height: 40px;
-            background: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            color: var(--primary-color);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            width: 45px; height: 45px;
+            background: white; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
             overflow: hidden;
+            border: 1px solid #ddd;
         }
         
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -4278,13 +4169,9 @@ module.exports = { findOptimalSetup, calculateUps };
         .chat-status { font-size: 0.8rem; color: var(--text-secondary); }
 
         .header-actions {
-            color: #54656f;
-            cursor: pointer;
-            font-size: 1.2rem;
-            padding: 10px;
+            color: #54656f; cursor: pointer; font-size: 1.2rem; padding: 10px;
         }
 
-        /* --- Messages --- */
         .messages {
             flex: 1;
             padding: 20px 50px;
@@ -4305,97 +4192,43 @@ module.exports = { findOptimalSetup, calculateUps };
             white-space: pre-wrap;
         }
 
-        .message.bot {
-            background: var(--bot-msg-bg);
-            align-self: flex-start;
-            border-top-right-radius: 0;
-        }
-
-        .message.user {
-            background: var(--user-msg-bg);
-            align-self: flex-end;
-            border-top-left-radius: 0;
-        }
+        .message.bot { background: var(--bot-msg-bg); align-self: flex-start; border-top-right-radius: 0; }
+        .message.user { background: var(--user-msg-bg); align-self: flex-end; border-top-left-radius: 0; }
 
         .msg-time {
-            font-size: 0.7rem;
-            color: #999;
-            text-align: left;
-            margin-top: 4px;
-            float: left;
+            font-size: 0.7rem; color: #999; text-align: left; margin-top: 4px; float: left;
         }
 
-        /* --- Input Area --- */
         .input-area {
-            height: 62px;
-            background: #f0f2f5;
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            height: 62px; background: #f0f2f5; padding: 0 16px;
+            display: flex; align-items: center; gap: 10px;
         }
 
-        .icon-btn {
-            color: #54656f;
-            cursor: pointer;
-            font-size: 1.4rem;
-            padding: 5px;
-        }
+        .icon-btn { color: #54656f; cursor: pointer; font-size: 1.4rem; padding: 5px; }
 
         .input-wrapper {
-            flex: 1;
-            background: white;
-            border-radius: 8px;
-            padding: 9px 12px;
-            display: flex;
-            align-items: center;
+            flex: 1; background: white; border-radius: 8px; padding: 9px 12px;
+            display: flex; align-items: center;
         }
 
-        input {
-            border: none;
-            width: 100%;
-            outline: none;
-            font-size: 1rem;
-            font-family: inherit;
-        }
+        input { border: none; width: 100%; outline: none; font-size: 1rem; font-family: inherit; }
 
-        /* --- Quick Replies --- */
         .quick-replies {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            margin-top: 10px;
-            flex-wrap: wrap;
-            padding-bottom: 10px;
+            display: flex; gap: 8px; justify-content: center;
+            margin-top: 10px; flex-wrap: wrap; padding-bottom: 10px;
         }
 
         .chip {
-            background: white;
-            border: 1px solid #e9edef;
-            color: var(--primary-color);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: bold;
-            cursor: pointer;
+            background: white; border: 1px solid #e9edef; color: var(--primary-color);
+            padding: 8px 16px; border-radius: 20px; font-size: 0.9rem;
+            font-weight: bold; cursor: pointer; transition: 0.2s;
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            transition: 0.2s;
         }
-        
-        .chip:hover {
-            background: #f0fdf4;
-            transform: translateY(-1px);
-        }
+        .chip:hover { background: #f0fdf4; transform: translateY(-1px); }
 
         @media (max-width: 768px) {
             .app-container { flex-direction: column; }
-            .sidebar { 
-                width: 100%; 
-                height: 30%; 
-                border-left: none; 
-                border-top: 1px solid #ccc;
-                order: 2; 
-            }
+            .sidebar { width: 100%; height: 30%; border-left: none; border-top: 1px solid #ccc; order: 2; }
             .chat-area { height: 70%; order: 1; }
             .messages { padding: 10px; }
         }
@@ -4404,11 +4237,10 @@ module.exports = { findOptimalSetup, calculateUps };
 <body>
 
     <div class="app-container">
-        
         <div class="chat-area">
             <div class="chat-header">
                 <div class="avatar">
-                    <i class="fas fa-robot"></i>
+                    <img src="pini.png" alt="פיני" onerror="this.src='https://cdn-icons-png.flaticon.com/512/4712/4712027.png'">
                 </div>
                 <div class="chat-info">
                     <div class="chat-name">פיני - דפוס בית יצחק</div>
@@ -4454,80 +4286,43 @@ module.exports = { findOptimalSetup, calculateUps };
                 </button>
             </div>
         </div>
-
     </div>
 
     <script>
-        // --- הגדרות API ---
-        // מזהה אוטומטית אם אנחנו ב-Localhost או בענן
+        // --- הגדרות חיבור לשרת (התיקון הקריטי) ---
+        
+        // 1. האם אנחנו רצים במחשב שלך?
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const BASE_URL = isLocal ? 'http://localhost:3000' : 'https://dotandru-pini-print-bot.hf.space';
+        
+        // 2. כתובת השרת ב-Hugging Face (שמנו אותה כאן קבועה כדי למנוע טעויות)
+        // אם תשנה את השם של ה-Space, עדכן כאן!
+        const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space'; 
+        
+        // 3. בחירת הכתובת הנכונה אוטומטית
+        const BASE_URL = isLocal ? 'http://localhost:7860' : REMOTE_SERVER;
         
         const API_URL = `${BASE_URL}/api/chat`;
         const PDF_URL = `${BASE_URL}/api/pdf`;
+
+        // ------------------------------------------
 
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
 
-        async function sendMessage(text = null) {
-            if (isProcessing) return;
-
-            const inputField = document.getElementById('user-input');
-            const message = text || inputField.value.trim();
-            
-            if (!message) return;
-
-            // עדכון UI למשתמש
-            addMsg(message, 'user');
-            inputField.value = '';
-            removeQuickReplies();
-            
-            isProcessing = true;
-            updateStatus('פיני מקליד...');
-
-            try {
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, userId: userId })
-                });
-
-                if (!res.ok) throw new Error(`Server status: ${res.status}`);
-
-                const data = await res.json();
-                
-                updateStatus('מחובר');
-                
-                // 1. טקסט
-                const content = data.text || data.content;
-                if (content) addMsg(content, 'bot');
-
-                // 2. כפתורים (תיקון באג: תמיכה ב-options שמגיע מהשרת החדש)
-                const buttons = data.options || data.quickReplies || (data.meta && data.meta.quick_replies);
-                if (buttons && buttons.length > 0) addButtons(buttons);
-
-                // 3. עגלה
-                if (data.cart) {
-                    currentCart = data.cart;
-                    updateCartUI(data.cart);
-                }
-
-            } catch (error) {
-                console.error('Error:', error);
-                updateStatus('שגיאת חיבור');
-                addMsg('אופס, השרת לא זמין כרגע. נסה שוב בעוד דקה.', 'bot');
-                
-                // במקרה של שגיאה מקומית, נוסיף הערה למפתח
-                if (isLocal) {
-                    addMsg(`[Developer Note]: ודא שהרצת את "node server.js" בטרמינל.`, 'bot');
-                }
-
-            } finally {
-                isProcessing = false;
-                scrollToBottom();
-                inputField.focus();
+        // --- Helper Functions ---
+        
+        function updateStatus(text) {
+            const el = document.getElementById('connection-status');
+            if(el) {
+                el.innerText = text;
+                el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
             }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages-container');
+            if(container) container.scrollTop = container.scrollHeight;
         }
 
         function addMsg(text, sender) {
@@ -4541,6 +4336,10 @@ module.exports = { findOptimalSetup, calculateUps };
             scrollToBottom();
         }
 
+        function removeQuickReplies() {
+            document.querySelectorAll('.quick-replies').forEach(el => el.remove());
+        }
+
         function addButtons(options) {
             const container = document.getElementById('messages-container');
             const qrDiv = document.createElement('div');
@@ -4548,20 +4347,14 @@ module.exports = { findOptimalSetup, calculateUps };
             options.forEach(opt => {
                 const btn = document.createElement('div');
                 btn.className = 'chip';
-                // תמיכה באובייקט או במחרוזת
                 const label = opt.label || opt.text || opt;
                 const val = opt.value || opt;
-                
                 btn.innerText = label;
                 btn.onclick = () => sendMessage(val);
                 qrDiv.appendChild(btn);
             });
             container.appendChild(qrDiv);
             scrollToBottom();
-        }
-
-        function removeQuickReplies() {
-            document.querySelectorAll('.quick-replies').forEach(el => el.remove());
         }
 
         function updateCartUI(cart) {
@@ -4578,8 +4371,7 @@ module.exports = { findOptimalSetup, calculateUps };
                 </div>`;
             } else {
                 cart.forEach(item => {
-                    // מיפוי נתונים מהשרת החדש (V10)
-                    const title = item.product || 'מוצר'; // key (e.g., flyer)
+                    const title = item.product || 'מוצר'; 
                     const desc = item.description || 'פריט מותאם אישית';
                     const price = item.client_price || 0;
                     
@@ -4598,7 +4390,6 @@ module.exports = { findOptimalSetup, calculateUps };
             totalDisplay.innerText = '₪' + total.toLocaleString();
         }
         
-        // עזר לתרגום מפתחות מוצרים לשמות יפים
         function getHebrewName(key) {
             const map = {
                 'flyer': 'פליירים',
@@ -4606,8 +4397,11 @@ module.exports = { findOptimalSetup, calculateUps };
                 'rollup': 'רולאפ',
                 'sticker': 'מדבקות',
                 'canvas': 'קנבס',
-                'invitation': 'הזמנות',
-                'envelope': 'מעטפות'
+                'invitation': 'הזמנות לאירועים',
+                'envelope': 'מעטפות',
+                'booklet': 'חוברות / ספרים',
+                'poster': 'פוסטרים / קנבס',
+                'folder': 'פולדרים'
             };
             return map[key] || key;
         }
@@ -4615,14 +4409,12 @@ module.exports = { findOptimalSetup, calculateUps };
         async function downloadPDF() {
             if (currentCart.length === 0) return alert('העגלה ריקה');
             addMsg("מפיק מסמך PDF... ⏳", "bot");
-            
             try {
                 const res = await fetch(PDF_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח' } })
                 });
-                
                 if (res.ok) {
                     const blob = await res.blob();
                     const url = window.URL.createObjectURL(blob);
@@ -4635,40 +4427,79 @@ module.exports = { findOptimalSetup, calculateUps };
                 } else {
                     addMsg("שגיאה בהפקת PDF ❌", "bot");
                 }
-            } catch (e) {
-                console.error(e);
-                addMsg("שגיאה בתקשורת ❌", "bot");
-            }
+            } catch (e) { console.error(e); addMsg("שגיאה בתקשורת ❌", "bot"); }
         }
 
-        function updateStatus(text) {
-            const el = document.getElementById('connection-status');
-            el.innerText = text;
-            el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
-        }
-
-        function scrollToBottom() {
-            const container = document.getElementById('messages-container');
-            container.scrollTop = container.scrollHeight;
-        }
-        
         function toggleMenu() {
             addButtons([{ label: 'נקה עגלה', value: 'clear' }, { label: 'תפריט ראשי', value: 'reset' }]);
+        }
+
+        // --- Core Function ---
+        async function sendMessage(text = null) {
+            if (isProcessing) return;
+
+            const inputField = document.getElementById('user-input');
+            const message = text || inputField.value.trim();
+            
+            if (!message) return;
+
+            addMsg(message, 'user');
+            inputField.value = '';
+            removeQuickReplies();
+            
+            isProcessing = true;
+            updateStatus('פיני מקליד...');
+
+            try {
+                // שימוש בכתובת המלאה (BASE_URL)
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message, userId: userId })
+                });
+
+                if (!res.ok) throw new Error(`Server status: ${res.status}`);
+
+                const data = await res.json();
+                updateStatus('מחובר');
+                
+                const content = data.text || data.content;
+                if (content) addMsg(content, 'bot');
+
+                const buttons = data.options || data.quickReplies;
+                if (buttons && buttons.length > 0) addButtons(buttons);
+
+                if (data.cart) {
+                    currentCart = data.cart;
+                    updateCartUI(data.cart);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('שגיאת חיבור');
+                addMsg('אופס, לא הצלחתי להתחבר לשרת. בדוק את החיבור.', 'bot');
+                
+                if (isLocal) {
+                    addMsg('טיפ: וודא ש-server.js רץ בפורט 7860.', 'bot');
+                }
+            } finally {
+                isProcessing = false;
+                scrollToBottom();
+                inputField.focus();
+            }
         }
 
         document.getElementById('user-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // הודעת פתיחה
+        // --- Init ---
         window.onload = function() {
             setTimeout(() => {
-                addMsg("אהלן! אני פיני. 👋<br>אני כאן לתת הצעות מחיר מהירות.", 'bot');
-                addButtons([
-                    { label: 'כרטיסי ביקור', value: 'כמה עולה 1000 כרטיסי ביקור?' }, 
-                    { label: 'פליירים', value: 'צריך פליירים דחוף' },
-                    { label: 'רולאפ', value: 'מחיר לרולאפ' }
-                ]);
+                addMsg("אהלן! נעים להכיר, אני פיני. 👨‍🎨", 'bot');
+                setTimeout(() => {
+                    addMsg("אני המומחה לדפוס של 'בית יצחק'.\nהמטרה שלי היא לעזור לך להפיק מוצרים מדוייקים, איכותיים ובזמן.\n\nספר לי, מה אנחנו מדפיסים היום?", 'bot');
+                }, 800);
             }, 500);
         };
     </script>
@@ -4806,89 +4637,73 @@ Savings:         $0.135 per 56 requests
 
 --- FILE: server.js ---
 ```js
-/** server.js - Pini Print Bot Server */
+/** server.js V_DEBUG */
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 require('dotenv').config();
 
-// ייבוא נכון מהמנוע (Engine)
 const { classifyMessage } = require('./engine/classifier');
 const { planActions } = require('./engine/planner');
 const { getSession } = require('./services/sessionManager');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7860;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// נתיב ראשי לצ'אט
 app.post('/api/chat', async (req, res) => {
-    const { message, sessionId = 'default_user' } = req.body;
-    const session = getSession(sessionId);
+    const { message, userId } = req.body;
+    const sessionID = userId || 'debug_user';
+    const session = getSession(sessionID);
 
-    console.log(`\n💬 User (${sessionId}): "${message}"`);
+    console.log(`\n\n🔵 --- NEW MESSAGE [${sessionID}] ---`);
+    console.log(`📩 User Input: "${message}"`);
 
     try {
-        // 1. סיווג (Classifier)
+        // 1. Classifier (Calls LLM Router)
         const classification = await classifyMessage(message, session);
-        console.log(`🤖 Intent: ${classification.intent}, Product: ${classification.product || 'None'}`);
-
-        // 2. תכנון (Planner)
+        
+        // 2. Planner
         const plan = planActions(classification, session);
         
-        // 3. ביצוע ועדכון הזיכרון (Execution)
-        let responseText = "מצטער, לא הבנתי.";
-        
+        // 3. Execution
+        let responseText = "";
+        let quickReplies = [];
+
         for (const action of plan.actions) {
-            // שמירת טיוטה ושאלת שאלות
             if (action.type === 'PRESENT_OPTIONS') {
-                session.currentProduct = action.product;
+                session.currentProduct = action.product; 
                 session.draftAttributes = action.saveDraft;
                 responseText = action.question;
+                quickReplies = action.options;
             }
-            
-            // הוספה לעגלה
-            if (action.type === 'CALCULATE_AND_ADD') {
+            else if (action.type === 'CALCULATE_AND_ADD') {
                 session.cart.push(action.payload);
-                // חישוב סכום כולל לתצוגה
-                const total = session.cart.reduce((sum, item) => sum + item.client_price, 0);
-                responseText = `הוספתי את זה לעגלה! 🛒\nסה"כ ביניים: ${total} ₪.\nתרצה להוסיף עוד משהו או לסיים?`;
             }
-            
-            // יצירת תשובה כללית (צ'אט, שגיאות, ברכות)
-            if (action.type === 'GENERATE_RESPONSE') {
+            else if (action.type === 'GENERATE_RESPONSE') {
                 responseText = action.payload.text || action.template;
+                if (action.payload.quickReplies) quickReplies = action.payload.quickReplies;
             }
-            
-            // ניקוי הקשר (אחרי סיום מוצר או איפוס)
-            if (action.type === 'CLEAR_SESSION_CONTEXT') {
+            else if (action.type === 'CLEAR_SESSION_CONTEXT') {
                 session.currentProduct = null;
                 session.draftAttributes = {};
-                // אם זו מחיקת עגלה
-                if (classification.intent === 'remove' || classification.intent === 'reset') {
-                    session.cart = [];
-                }
             }
         }
 
-        // החזרת תשובה ללקוח
-        res.json({ 
-            text: responseText, 
-            cartSize: session.cart.length,
-            currentContext: session.currentProduct 
-        });
+        console.log(`📤 Bot Output: "${responseText}"`);
+        console.log(`🏁 -------------------------------\n`);
+
+        res.json({ text: responseText, options: quickReplies, cart: session.cart });
 
     } catch (error) {
-        console.error("💥 Server Error:", error);
-        res.status(500).json({ text: "אופס, הייתה שגיאה במערכת. נסה שוב." });
+        console.error("💥 CRITICAL ERROR:", error);
+        res.status(500).json({ text: "תקלה בשרת. בדוק לוגים." });
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 DEBUG SERVER running on port ${PORT}`));
 ```
 
 
@@ -5490,6 +5305,183 @@ function checkExpectation(expect, actualType, classification) {
 }
 
 runFullQA();
+```
+
+
+--- FILE: tests\test_qa_master.js ---
+```js
+/**
+ * tests/test_qa_master.js
+ * בדיקת איכות מקיפה (QA) - פיני הבוט
+ * ====================================
+ * מריץ תרחישי שיחה שלמים ובודק שהלוגיקה לא נשברת.
+ * כולל בדיקות לזיהוי ספרים, החלפת נושא, ומחיקת פריטים.
+ */
+
+const { planActions } = require('../engine/planner');
+const { extractParameters } = require('../engine/extractor');
+const { getSession, clearSession } = require('../services/sessionManager');
+require('dotenv').config();
+
+// צבעים ללוגים בטרמינל
+const c = { reset: "\x1b[0m", green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m", bold: "\x1b[1m", cyan: "\x1b[36m" };
+
+const SCENARIOS = [
+    {
+        name: "📚 זרימת ספרים (בדיקת לוגיקה מספרית)",
+        steps: [
+            { user: "אני רוצה להדפיס ספר", expectType: "question", expectText: "כמה" },
+            { user: "100 עותקים", expectType: "question", expectText: "עמודים" }, // מוודא ש-100 נתפס ככמות
+            { user: "300", expectType: "question", expectText: "גודל" }, // מוודא ש-300 נתפס כעמודים ולא דורס כמות
+            { user: "A5", expectType: "question", expectText: "נייר" },
+            { user: "נטול עץ", expectType: "question", expectText: "כריכה" },
+            { user: "כריכה רכה", expectType: "calculate" }
+        ]
+    },
+    {
+        name: "🃏 זרימה מהירה (כרטיסי ביקור + התנגשות 'מט')",
+        steps: [
+            { user: "כרטיסי ביקור", expectType: "question", expectText: "כמה" },
+            { user: "1000", expectType: "question", expectText: "נייר" },
+            { user: "מט 350", expectType: "question", expectText: "למינציה" }, // מוודא ש'מט' זוהה כחלק מהנייר ולא כלמינציה מוקדמת
+            { user: "מט", expectType: "calculate" } // מוודא ש'מט' כאן מזוהה כלמינציה
+        ]
+    },
+    {
+        name: "🔄 החלפת נושא (רולאפ)",
+        steps: [
+            { user: "פליירים", expectType: "question", expectText: "כמה" }, // מתחיל פלייר
+            { user: "בעצם לא, תביא לי רולאפ", expectType: "question", expectText: "כמה" }, // מחליף לרולאפ
+            { user: "1", expectType: "question", expectText: "גודל" },
+            { user: "85x200", expectType: "calculate" }
+        ]
+    },
+    {
+        name: "🗑️ בדיקת מחיקת פריט בודד",
+        steps: [
+            // 1. הוספת פריט לעגלה
+            { user: "רולאפ", expectType: "question", expectText: "כמה" },
+            { user: "1", expectType: "question", expectText: "גודל" },
+            { user: "85x200", expectType: "calculate" }, 
+            
+            // 2. בדיקת מחיקה
+            { user: "תמחק את פריט 1", expectType: "remove" }, // מצפה לפעולת מחיקה
+            
+            // 3. וידוא שהמערכת חוזרת לשגרה
+            { user: "היי", expectType: "response", expectText: "מה תרצה להדפיס" } 
+        ]
+    }
+];
+
+async function runTests() {
+    console.log(`${c.bold}${c.cyan}🤖 PINI BOT MASTER QA TEST${c.reset}\n`);
+    
+    const sessionId = 'qa_tester';
+    let totalErrors = 0;
+
+    for (const scenario of SCENARIOS) {
+        console.log(`${c.yellow}📂 ${scenario.name}${c.reset}`);
+        clearSession(sessionId); // התחלה נקייה לכל תרחיש
+        const session = getSession(sessionId);
+
+        for (const step of scenario.steps) {
+            try {
+                // 1. סימולציה: חילוץ פרמטרים (כמו בשרת)
+                const extraction = extractParameters(step.user);
+                
+                // 2. סימולציה: קביעת כוונה (Intent Detection logic from server.js)
+                let intent = 'chat';
+                
+                if (extraction.isReset) intent = 'reset';
+                else if (extraction.isRemove) intent = 'remove_item'; // <--- התוספת החשובה לטסט
+                else if (extraction.isCartStatus) intent = 'show_cart';
+                
+                else if (session.currentProduct) {
+                     // אם הוזכר מוצר חדש בזמן שיש מוצר פעיל -> החלפת נושא
+                     if (extraction.products.length > 0 && !extraction.products.includes(session.currentProduct)) {
+                         intent = 'new_order';
+                         session.currentProduct = extraction.products[0];
+                         session.draftAttributes = {}; // איפוס טיוטה
+                     } else {
+                         intent = 'answer';
+                     }
+                }
+                else if (extraction.products.length > 0) {
+                    intent = 'new_order';
+                    session.currentProduct = extraction.products[0];
+                }
+
+                // 3. הרצת המוח (Planner)
+                const plan = planActions({ 
+                    intent, 
+                    extractedParams: extraction, 
+                    product: session.currentProduct 
+                }, session);
+                
+                const action = plan.actions[0]; // לוקחים את הפעולה הראשית
+                
+                // 4. פענוח סוג הפעולה שהתקבלה לבדיקה
+                let type = 'unknown';
+                let responseText = '';
+
+                if (action.type === 'PRESENT_OPTIONS') {
+                    type = 'question';
+                    responseText = action.question;
+                    // עדכון סטייט בסימולטור
+                    session.currentProduct = action.product;
+                    session.draftAttributes = action.saveDraft;
+
+                } else if (action.type === 'CALCULATE_AND_ADD') {
+                    type = 'calculate';
+                    session.cart.push(action.payload);
+                    session.currentProduct = null;
+                    session.draftAttributes = {};
+
+                } else if (action.type === 'REMOVE_FROM_CART') {
+                    type = 'remove';
+                    // סימולציית מחיקה (פשטנית לטסט)
+                    if (session.cart.length > 0) session.cart.pop();
+
+                } else if (action.type === 'CLEAR_SESSION_CONTEXT') {
+                    type = 'reset';
+                    session.cart = [];
+                    session.currentProduct = null;
+
+                } else if (action.type === 'GENERATE_RESPONSE') {
+                    type = 'response';
+                    responseText = action.payload.text;
+                }
+
+                // 5. בדיקה האם התוצאה תואמת לציפייה
+                const textMatch = !step.expectText || (responseText && responseText.includes(step.expectText));
+                const typeMatch = type === step.expectType;
+
+                if (typeMatch && textMatch) {
+                    console.log(`   ✅ "${step.user}" -> ${type}`);
+                } else {
+                    console.log(`   ❌ "${step.user}"`);
+                    console.log(`      Received: [${type}] "${responseText || ''}"`);
+                    console.log(`      Expected: [${step.expectType}] "${step.expectText || ''}"`);
+                    console.log(`      Draft State: ${JSON.stringify(session.draftAttributes)}`);
+                    totalErrors++;
+                }
+
+            } catch (e) { 
+                console.log(`   💥 Error processing "${step.user}": ${e.message}`); 
+                totalErrors++;
+            }
+        }
+        console.log(""); // שורה ריקה בין תרחישים
+    }
+
+    if (totalErrors === 0) {
+        console.log(`${c.green}${c.bold}🎉 כל הבדיקות עברו בהצלחה! המערכת יציבה.${c.reset}`);
+    } else {
+        console.log(`${c.red}${c.bold}⚠️ סיכום: נמצאו ${totalErrors} שגיאות.${c.reset}`);
+    }
+}
+
+runTests();
 ```
 
 
