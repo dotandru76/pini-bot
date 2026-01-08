@@ -1,62 +1,72 @@
-/** engine/llmRouter.js V17.0 - Personality Engine */
+/** engine/llmRouter.js V_DEBUG - Verbose Logging & Smart Inference */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// לוג צבעוני לזיהוי קל
+const logAI = (msg, data) => console.log(`\x1b[35m[🧠 AI-BRAIN]\x1b[0m ${msg}`, data ? JSON.stringify(data, null, 2) : '');
+
 let genAI = null;
-try { genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); } catch (e) {}
+try { genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); } catch (e) { logAI("⚠️ Error: No API Key"); }
 
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
 const SYSTEM_PROMPT = `
-You are "Pini" (פיני), a veteran print shop expert from "Beit Yitzhak".
-Your personality: Warm, professional, helpful, slightly humorous, uses emojis 🇮🇱.
-You NEVER invent prices. You only help the user navigate.
+You are "Pini", a smart print shop assistant.
+Your goal is to UNDERSTAND the user, even if they speak in slang or hints.
 
-GOAL: Analyze user input and provide JSON output.
+AVAILABLE PRODUCTS (DB KEYS):
+${Object.keys(productsDB).join(', ')}
 
-AVAILABLE PRODUCTS: ${Object.keys(productsDB).join(', ')}
-
-RULES:
-1. **IDENTIFY INTENT**:
-   - "Wedding" -> Intent: "quote", Product: "invitation"
-   - "How much is X?" -> Intent: "consult" (Consultation about price/specs)
-   - "What is Chromo?" -> Intent: "faq" (Educational question)
+*** INFERENCE RULES (USE YOUR BRAIN!) ***
+1. **Implied Products**:
+   - User: "I'm getting married" -> Product: "invitation" (Intent: quote)
+   - User: "New business" -> Product: "bc" or "flyer" (Intent: quote)
+   - User: "Something for the wall" -> Product: "canvas" or "poster"
    
-2. **GENERATE HUMAN RESPONSE (answer_text)**:
-   - For 'quote': Write a warm opening sentence related to the event. 
-     (e.g., "Wedding? Mazal Tov! 💍 I'd love to help with invitations.")
-   - For 'faq': Explain the concept simply in Hebrew.
-     (e.g., "Chromo is a glossy paper, great for flyers because colors pop! ✨")
-   - For 'chat': Be friendly but steer back to printing.
+2. **Conversation & Personality**:
+   - If user asks a question ("What is X?"), Intent is "faq".
+   - If user just says "Hi", Intent is "chat".
+   - ALWAYS generate a "answer_text" in Hebrew that fits the persona (Warm, Israeli).
 
-3. **OUTPUT FORMAT (JSON)**:
+3. **OUTPUT JSON ONLY**:
 {
-  "intent": "quote" | "consult" | "faq" | "chat" | "remove" | "reset",
+  "intent": "quote" | "consult" | "chat" | "remove" | "reset",
   "product": "product_key" | null,
+  "answer_text": "Hebrew text here",
   "mapped_params": { "qty": 100, ... },
-  "answer_text": "Hebrew response text"
+  "confidence": "high" | "low",
+  "reasoning": "Why you chose this product/intent"
 }
 `;
 
 async function routeWithLLM(message, session) {
-    if (!genAI) return { intent: 'chat', answer_text: null };
+    logAI(`Analyzing Input: "${message}"`);
+    logAI(`Current Context Product: ${session.currentProduct || 'None'}`);
+
+    if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI" };
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         
         const finalPrompt = SYSTEM_PROMPT 
-            + `\n[CURRENT CONTEXT]: Product=${session.currentProduct || "None"}`
-            + `\n[USER INPUT]: "${message}"\nJSON Output:`;
+            + `\n[CONTEXT]: Active Product: ${session.currentProduct || "None"}`
+            + `\n[USER SAYS]: "${message}"\nJSON Output:`;
 
         const result = await model.generateContent(finalPrompt);
         let text = result.response.text().replace(/```json|```/g, '').trim();
-        return JSON.parse(text);
+        
+        logAI("Raw Response from Gemini:", text); // <--- כאן נראה אם ה-AI הבין!
+
+        const parsed = JSON.parse(text);
+        logAI("Parsed JSON:", parsed);
+
+        return parsed;
 
     } catch (error) {
-        console.error("🧠 LLM Error:", error);
+        console.error("\x1b[31m[🧠 AI ERROR]\x1b[0m", error);
         return { intent: "chat", answer_text: null };
     }
 }
