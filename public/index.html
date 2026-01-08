@@ -46,6 +46,7 @@
             .app-container { height: 95vh; width: 95vw; }
         }
 
+        /* --- Sidebar Styles --- */
         .sidebar {
             width: 350px;
             background: var(--sidebar-bg);
@@ -129,6 +130,7 @@
         }
         .action-btn:hover { background-color: #006b56; }
 
+        /* --- Chat Styles --- */
         .chat-area {
             flex: 1;
             display: flex;
@@ -223,8 +225,8 @@
 
         @media (max-width: 768px) {
             .app-container { flex-direction: column; }
-            .sidebar { width: 100%; height: 30%; border-left: none; border-top: 1px solid #ccc; order: 2; }
-            .chat-area { height: 70%; order: 1; }
+            .sidebar { width: 100%; height: 35%; border-left: none; border-top: 1px solid #ccc; order: 2; }
+            .chat-area { height: 65%; order: 1; }
             .messages { padding: 10px; }
         }
     </style>
@@ -284,29 +286,19 @@
     </div>
 
     <script>
-        // --- הגדרות חיבור לשרת (התיקון הקריטי) ---
-        
-        // 1. האם אנחנו רצים במחשב שלך?
+        // --- הגדרות חיבור לשרת ---
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // 2. כתובת השרת ב-Hugging Face (שמנו אותה כאן קבועה כדי למנוע טעויות)
-        // אם תשנה את השם של ה-Space, עדכן כאן!
         const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space'; 
-        
-        // 3. בחירת הכתובת הנכונה אוטומטית
         const BASE_URL = isLocal ? 'http://localhost:7860' : REMOTE_SERVER;
         
         const API_URL = `${BASE_URL}/api/chat`;
         const PDF_URL = `${BASE_URL}/api/pdf`;
 
-        // ------------------------------------------
-
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
 
-        // --- Helper Functions ---
-        
+        // --- UI Helpers ---
         function updateStatus(text) {
             const el = document.getElementById('connection-status');
             if(el) {
@@ -353,6 +345,7 @@
         }
 
         function updateCartUI(cart) {
+            currentCart = cart;
             const container = document.getElementById('cart-items');
             const totalDisplay = document.getElementById('cart-total-display');
             container.innerHTML = '';
@@ -366,17 +359,14 @@
                 </div>`;
             } else {
                 cart.forEach(item => {
-                    const title = item.product || 'מוצר'; 
-                    const desc = item.description || 'פריט מותאם אישית';
                     const price = item.client_price || 0;
-                    
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'cart-item';
                     itemDiv.innerHTML = `
-                        <div class="cart-item-title">${getHebrewName(title)} (${item.qty} יח')</div>
+                        <div class="cart-item-title">${item.product_name || item.product || 'פריט'} (${item.qty} יח')</div>
                         <div class="cart-item-price">₪${price}</div>
                         <div style="clear:both;"></div>
-                        <div class="cart-item-details">${desc}</div>
+                        <div class="cart-item-details">${item.description || ''}</div>
                     `;
                     container.appendChild(itemDiv);
                     total += price;
@@ -384,23 +374,8 @@
             }
             totalDisplay.innerText = '₪' + total.toLocaleString();
         }
-        
-        function getHebrewName(key) {
-            const map = {
-                'flyer': 'פליירים',
-                'bc': 'כרטיסי ביקור',
-                'rollup': 'רולאפ',
-                'sticker': 'מדבקות',
-                'canvas': 'קנבס',
-                'invitation': 'הזמנות לאירועים',
-                'envelope': 'מעטפות',
-                'booklet': 'חוברות / ספרים',
-                'poster': 'פוסטרים / קנבס',
-                'folder': 'פולדרים'
-            };
-            return map[key] || key;
-        }
 
+        // --- Core Functions ---
         async function downloadPDF() {
             if (currentCart.length === 0) return alert('העגלה ריקה');
             addMsg("מפיק מסמך PDF... ⏳", "bot");
@@ -408,16 +383,17 @@
                 const res = await fetch(PDF_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח' } })
+                    body: JSON.stringify({ userId: userId, cart: currentCart })
                 });
                 if (res.ok) {
                     const blob = await res.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = "Quote.pdf";
+                    a.download = "Quote_Pini_Print.pdf";
                     document.body.appendChild(a);
                     a.click();
+                    window.URL.revokeObjectURL(url);
                     addMsg("המסמך ירד בהצלחה! ✅", "bot");
                 } else {
                     addMsg("שגיאה בהפקת PDF ❌", "bot");
@@ -426,16 +402,14 @@
         }
 
         function toggleMenu() {
-            addButtons([{ label: 'נקה עגלה', value: 'clear' }, { label: 'תפריט ראשי', value: 'reset' }]);
+            sendMessage("תפריט");
         }
 
-        // --- Core Function ---
         async function sendMessage(text = null) {
             if (isProcessing) return;
 
             const inputField = document.getElementById('user-input');
             const message = text || inputField.value.trim();
-            
             if (!message) return;
 
             addMsg(message, 'user');
@@ -446,7 +420,6 @@
             updateStatus('פיני מקליד...');
 
             try {
-                // שימוש בכתובת המלאה (BASE_URL)
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -454,46 +427,34 @@
                 });
 
                 if (!res.ok) throw new Error(`Server status: ${res.status}`);
-
                 const data = await res.json();
                 updateStatus('מחובר');
                 
-                const content = data.text || data.content;
-                if (content) addMsg(content, 'bot');
-
+                if (data.text) addMsg(data.text, 'bot');
+                
                 const buttons = data.options || data.quickReplies;
                 if (buttons && buttons.length > 0) addButtons(buttons);
 
-                if (data.cart) {
-                    currentCart = data.cart;
-                    updateCartUI(data.cart);
-                }
+                if (data.cart) updateCartUI(data.cart);
 
             } catch (error) {
                 console.error('Error:', error);
                 updateStatus('שגיאת חיבור');
-                addMsg('אופס, לא הצלחתי להתחבר לשרת. בדוק את החיבור.', 'bot');
-                
-                if (isLocal) {
-                    addMsg('טיפ: וודא ש-server.js רץ בפורט 7860.', 'bot');
-                }
+                addMsg('אופס, לא הצלחתי להתחבר לשרת. נסה שוב בעוד רגע.', 'bot');
             } finally {
                 isProcessing = false;
-                scrollToBottom();
-                inputField.focus();
             }
         }
 
-        document.getElementById('user-input').addEventListener('keypress', function (e) {
+        document.getElementById('user-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // --- Init ---
         window.onload = function() {
             setTimeout(() => {
-                addMsg("אהלן! נעים להכיר, אני פיני. 👨‍🎨", 'bot');
+                addMsg("אהלן! אני פיני 👨‍🎨, מומחה הדפוס של 'בית יצחק'.", 'bot');
                 setTimeout(() => {
-                    addMsg("אני המומחה לדפוס של 'בית יצחק'.\nהמטרה שלי היא לעזור לך להפיק מוצרים מדוייקים, איכותיים ובזמן.\n\nספר לי, מה אנחנו מדפיסים היום?", 'bot');
+                    addMsg("אני כאן כדי לעזור לך לקבל הצעות מחיר מהירות ומדוייקות.\nמה נדפיס היום?", 'bot');
                 }, 800);
             }, 500);
         };

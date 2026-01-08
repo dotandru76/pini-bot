@@ -1,42 +1,39 @@
-/** engine/classifier.js V13.0 - Intelligent Routing */
+/** engine/classifier.js V31.0 - Hybrid Intelligence */
 const { routeWithLLM } = require('./llmRouter');
+
+const KEYWORDS = {
+    // מילים שמפעילות פעולה מידית ללא AI
+    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט', 'ראשי'],
+    cart: ['עגלה', 'סיכום', 'מה יש', 'status'],
+    remove: ['מחק', 'הסר']
+};
 
 async function classifyMessage(message, session) {
     const text = message.toLowerCase().trim();
 
-    // 1. FAST PATH: בדיקות מהירות (0ms latency)
-    // זיהוי איפוס מוחלט
-    if (['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט'].includes(text)) {
-        return { intent: 'reset' };
-    }
-    
-    // זיהוי עגלה
-    if (text.includes('עגלה') || text.includes('סיכום') || text === 'מה יש') {
-        return { intent: 'show_cart' };
-    }
-    
-    // זיהוי מחיקה (רק אם זה מפורש ומדויק)
-    if (text === 'מחק' || text === 'מחק אחרון' || text === 'הסר') {
-        return { intent: 'remove' };
-    }
+    // 1. FAST PATH (בדיקות מהירות)
+    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset' };
+    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart' };
+    if (KEYWORDS.remove.some(k => text === k)) return { intent: 'remove' };
 
-    // 2. SMART PATH: שימוש במוח (LLM)
-    // ה-LLM יבין: "אני צריך פליירים לחתונה", "נייר עבה", "בעצם לא"
+    // 2. SMART PATH (שימוש ב-Gemini)
     console.log("🧠 Consulting Gemini...");
-    
-    // קריאה ל-LLM Router (הקובץ שכבר קיים אצלך)
-    const llmResult = await routeWithLLM(message, session);
-    
-    console.log("🧠 LLM Decision:", llmResult.intent, llmResult.product);
+    try {
+        const llmResult = await routeWithLLM(message, session);
+        
+        console.log("🧠 LLM Decision:", llmResult.intent, llmResult.product);
 
-    // המרת תשובת ה-LLM לפורמט שה-Planner מכיר
-    return {
-        intent: llmResult.intent || 'chat', // ברירת מחדל
-        product: llmResult.product,         // המוצר שזוהה (flyer, bc...)
-        extractedParams: llmResult.mapped_params || {}, // פרמטרים שחולצו (qty: 500)
-        aiResponse: llmResult.answer_text,  // התשובה המילולית של ה-AI ("בטח, מזל טוב!")
-        raw_text: message
-    };
+        return {
+            intent: llmResult.intent || 'chat',
+            product: llmResult.product,
+            extractedParams: llmResult.mapped_params || {}, 
+            aiResponse: llmResult.answer_text, 
+            raw_text: message
+        };
+    } catch (e) {
+        console.error("Classifier Fallback:", e);
+        return { intent: 'chat', aiResponse: "סליחה, אני קצת עמוס. נסה שוב." };
+    }
 }
 
 module.exports = { classifyMessage };
