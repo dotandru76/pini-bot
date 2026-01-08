@@ -284,15 +284,28 @@
     </div>
 
     <script>
-        // --- הגדרות ---
+        // --- הגדרות חיבור לשרת (התיקון הקריטי) ---
+        
+        // 1. האם אנחנו רצים במחשב שלך?
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API_URL = '/api/chat';
-        const PDF_URL = '/api/pdf';
+        
+        // 2. כתובת השרת ב-Hugging Face (שמנו אותה כאן קבועה כדי למנוע טעויות)
+        // אם תשנה את השם של ה-Space, עדכן כאן!
+        const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space'; 
+        
+        // 3. בחירת הכתובת הנכונה אוטומטית
+        const BASE_URL = isLocal ? 'http://localhost:7860' : REMOTE_SERVER;
+        
+        const API_URL = `${BASE_URL}/api/chat`;
+        const PDF_URL = `${BASE_URL}/api/pdf`;
+
+        // ------------------------------------------
+
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
 
-        // --- Helper Functions FIRST (למנוע ReferenceError) ---
+        // --- Helper Functions ---
         
         function updateStatus(text) {
             const el = document.getElementById('connection-status');
@@ -423,9 +436,10 @@
             removeQuickReplies();
             
             isProcessing = true;
-            updateStatus('פיני מקליד...'); // כעת זה יעבוד כי הפונקציה מוגדרת למעלה
+            updateStatus('פיני מקליד...');
 
             try {
+                // שימוש בכתובת המלאה (BASE_URL)
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -451,7 +465,11 @@
             } catch (error) {
                 console.error('Error:', error);
                 updateStatus('שגיאת חיבור');
-                addMsg('אופס, השרת לא זמין כרגע.', 'bot');
+                addMsg('אופס, לא הצלחתי להתחבר לשרת. בדוק את החיבור.', 'bot');
+                
+                if (isLocal) {
+                    addMsg('טיפ: וודא ש-server.js רץ בפורט 7860.', 'bot');
+                }
             } finally {
                 isProcessing = false;
                 scrollToBottom();
