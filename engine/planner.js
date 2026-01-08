@@ -1,4 +1,4 @@
-/** engine/planner.js V25.0 - The Merger */
+/** engine/planner.js V26.0 - Human Touch */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -9,29 +9,46 @@ try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/produc
 function planActions(intentData, session) {
     const actions = [];
 
-    // 1. קביעת המוצר (השרת מקשיב ל-LLM)
+    // --- 1. מחיקה ואיפוס ---
+    if (intentData.intent === 'reset') {
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "בכיף, דף חלק! 📄 מה נדפיס עכשיו?" } }] };
+    }
+    if (intentData.intent === 'remove') {
+         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: null } }] }; 
+    }
+
+    // --- 2. טיפול בשיחה חופשית / שאלות ידע (FAQ) ---
+    // אם ה-LLM זיהה שזו שאלה ("מה זה כרומו?") הוא כבר ניסח תשובה.
+    // אנחנו נציג אותה ונציע חזרה לעניינים.
+    if (['faq', 'chat', 'consult'].includes(intentData.intent) && intentData.aiResponse) {
+        return { 
+            actions: [{ 
+                type: 'GENERATE_RESPONSE', 
+                payload: { 
+                    text: intentData.aiResponse,
+                    quickReplies: session.currentProduct ? 
+                        [{ label: 'המשך בהזמנה', value: 'continue' }] : 
+                        [{ label: 'תפריט ראשי', value: 'reset' }]
+                } 
+            }] 
+        };
+    }
+
+    // --- 3. מסלול הזמנה (Quote) ---
     let currentProductKey = intentData.product || session.currentProduct;
     
-    // אם ה-LLM זיהה מוצר חדש, נועלים עליו
+    // זיהוי מוצר חדש מה-LLM
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
         currentProductKey = intentData.product;
-        // לא מאפסים את ה-Draft אם זה אותו מוצר, אבל אם זה מוצר חדש כן
+        // לא מאפסים את ה-Draft אם זה רק עדכון, אבל אם זה מוצר חדש כן
         if (intentData.product !== session.currentProduct) {
              session.draftAttributes = {}; 
         }
     }
 
-    // 2. בדיקות מערכת (איפוס/מחיקה)
-    if (intentData.intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "התחלנו מחדש. מה נדפיס?" } }] };
-    }
-
-    // 3. מסלול הזמנה (השילוב!)
     if (currentProductKey && productsDB[currentProductKey]) {
         const productConfig = productsDB[currentProductKey];
-        
-        // מיזוג פרמטרים טכניים
         const newParams = intentData.extractedParams || {};
         const newDraft = { ...session.draftAttributes, ...newParams };
         
@@ -47,49 +64,52 @@ function planActions(intentData, session) {
             }
         }
 
-        // --- נקודת המיזוג (The Merge Point) ---
-        // הטקסט מה-LLM ("מזל טוב!") + השאלה מהשרת ("כמה הזמנות?")
+        // --- השילוב האנושי ---
         let finalQuestionText = "";
         
+        // אם יש טקסט מה-AI ("מזל טוב!"), הוא יבוא קודם
         if (intentData.aiResponse) {
-            finalQuestionText += intentData.aiResponse + "\n\n"; // הברכה
+            finalQuestionText += intentData.aiResponse + "\n\n";
         }
         
         if (missingParam) {
-            finalQuestionText += questionToAsk.question_he; // השאלה הטכנית
+            // אם אין טקסט מה-AI, וזו תחילת השיחה, נוסיף פתיח קטן
+            if (!intentData.aiResponse && Object.keys(newDraft).length === 0) {
+                finalQuestionText += `בשמחה, בוא נתקתק את זה. 👌\n`;
+            }
+            
+            finalQuestionText += questionToAsk.question_he;
             
             actions.push({
                 type: 'PRESENT_OPTIONS',
-                question: finalQuestionText, // הטקסט המשולב
-                options: questionToAsk.options || [], // הכפתורים מהשרת
+                question: finalQuestionText, 
+                options: questionToAsk.options || [],
                 product: currentProductKey,
                 saveDraft: newDraft
             });
         } else {
-            // הכל מלא - חישוב
+            // חישוב
             try {
                 const calcParams = { ...newDraft, product: currentProductKey };
                 const calcResult = calculate_custom_job(session.cart, calcParams);
+                
+                // הודעת סיום אנושית יותר (תבנית quote_success תטפל בזה)
                 actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
                 actions.push({ 
                     type: 'GENERATE_RESPONSE', 
                     template: 'quote_success', 
                     payload: { item: calcResult.lastAdded, textPrefix: intentData.aiResponse } 
                 });
+                actions.push({ type: 'CHECK_QUEUE' }); 
             } catch (e) {
-                actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב." } });
+                actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "אופס, משהו בחישוב הסתבך לי. בוא ננסה שוב." } });
             }
         }
         return { actions };
     }
 
-    // 4. אם אין מוצר, וה-LLM נתן תשובה (סתם שיחה)
-    if (intentData.aiResponse) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse } }] };
-    }
-
-    // 5. Fallback
-    return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס?" } }] };
+    // Fallback
+    return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (כרטיסים, פליירים...)" } }] };
 }
 
 module.exports = { planActions };
