@@ -1,15 +1,34 @@
-/** Parameter Extractor V4 (Fix: Book Recognition) */
+/** Parameter Extractor V5 (Expanded Product List) */
 const KEYWORD_MAP = {
+    // כרטיסים
     'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
-    'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
-    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 'חתונה': 'invitation',
-    'rollup': 'rollup', 'רולאפ': 'rollup', 'באנר': 'rollup',
-    'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
-    'poster': 'poster', 'פוסטר': 'poster',
-    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
     
-    // --- התיקון כאן ---
-    'booklet': 'booklet', 'חוברת': 'booklet', 'ספר': 'booklet', 'חוברות': 'booklet', 'ספרים': 'booklet'
+    // פליירים
+    'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
+    
+    // ספרים וחוברות
+    'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 
+    'ספר': 'booklet', 'ספרים': 'booklet', 'קטלוג': 'booklet', 'מחברת': 'booklet',
+    
+    // הזמנות
+    'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 
+    'חתונה': 'invitation', 'בר מצווה': 'invitation',
+    
+    // רולאפ
+    'rollup': 'rollup', 'רולאפ': 'rollup', 'רול': 'rollup', 'באנר': 'rollup',
+    
+    // פוסטרים וקנבס
+    'poster': 'poster', 'פוסטר': 'poster', 'תמונה': 'poster', 
+    'קנבס': 'poster', 'canvas': 'poster', 'הגדלה': 'poster',
+    
+    // מדבקות
+    'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker', 'סטיקר': 'sticker',
+    
+    // מעטפות
+    'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
+    
+    // פולדרים
+    'folder': 'folder', 'פולדר': 'folder', 'תיקייה': 'folder'
 };
 
 const HEBREW_NUMBERS = {
