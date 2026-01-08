@@ -1,80 +1,90 @@
-/** engine/llmRouter.js V11.5 - Context Keeper */
+/** engine/llmRouter.js V12.0 - The Hybrid Brain */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// אתחול המודל
+let genAI = null;
+try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+} catch (e) {
+    console.error("⚠️ Gemini API Key missing or invalid");
+}
 
-let productsRaw = "{}";
-try { productsRaw = fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'); } catch (err) {}
+// טעינת הקטלוג כדי שהמוח ידע מה קיים
+let productsDB = {};
+try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
 const SYSTEM_PROMPT = `
-You are the Router for "Pini Print Bot".
-Your goal: Extract structured data (JSON) from Hebrew user messages.
+You are the brain of "Pini Print Bot".
+Your job is to translate Hebrew user input into structured JSON commands.
 
-KNOWN PRODUCTS:
-${productsRaw}
+CONTEXT:
+- You are strictly a translator/classifier. DO NOT calculate prices.
+- Current Product Context: {{CURRENT_PRODUCT}}
+- Valid Options for this product: {{VALID_OPTIONS}}
 
-RULES:
-1. OUTPUT JSON ONLY.
-2. CONTEXT RETENTION (CRITICAL):
-   - If the user answers a question (e.g., "Standard", "500", "Matte"), keep the [CURRENT STATE] product.
-   - ONLY change "product" if the user explicitly names a new product (e.g., "Actually, I want a Rollup").
-   - "Standard" (סטנדרטי) applies to many products. Do NOT assume it means "Rollup" if context is "Invitation".
-   
-3. INTENT MAPPING:
-   - "Change", "Replace" -> "update"
-   - "Add", "Also" -> "quote" (New Item)
-   - "Recommend", "What do you have for wedding?" -> "consult" (Set product: null)
-   
-4. ENTITIES: 
-   - Extract qty, size, paper_type, lamination.
-   - "Standard" size for Invitation -> "12x17" or "A5".
+INTENTS:
+1. "quote" - User wants to order/update parameters (e.g., "100 copies", "A5", "hard cover").
+2. "faq" - User asks a general question (e.g., "What is closed size?", "Where are you located?").
+3. "remove" - User wants to delete item/reset.
+4. "consult" - User needs help choosing a product.
+5. "chat" - Small talk.
 
-OUTPUT FORMAT:
+RULES for "quote":
+- Map user terms to VALID option keys provided in context.
+- Example: If user says "Hard cover" (כריכה קשה) and valid options are ['staple', 'perfect_bind'], map to 'perfect_bind' (closest match) or null if no match.
+- Extract: qty, product_type, and any product-specific attributes.
+
+RESPONSE FORMAT (JSON ONLY):
 {
-  "intent": "quote" | "consult" | "chat" | "remove" | "reset" | "update",
-  "product": "product_key" | "out_of_scope" | "impossible" | null,
-  "confidence": 0.0-1.0,
-  "entities": {
-    "qty": number,
-    "paper_type": string,
-    "size": string,
-    "text_summary": "Description"
-  }
+  "intent": "quote" | "faq" | "remove" | "consult" | "chat",
+  "product": "product_key" | null,
+  "mapped_params": { "qty": 100, "cover_type": "perfect_bind", ... },
+  "answer_text": "Only for FAQ/Chat/Consult - write a helpful Hebrew response here"
 }
 `;
 
-async function routeWithLLM(message, currentContext = {}) {
+async function routeWithLLM(message, session) {
+    if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI" };
+
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // מודל מהיר וזול
         
-        let contextMsg = `User Message: "${message}"\n`;
+        // 1. בניית הקשר דינמי (מה מותר לבחור עכשיו?)
+        let currentProductContext = "None";
+        let validOptions = "None";
         
-        // Context Injection
-        if (currentContext.currentProduct) {
-            contextMsg += `\n[CURRENT STATE]: Active Product: ${currentContext.currentProduct}\n`;
-            contextMsg += `Attributes: ${JSON.stringify(currentContext.draftAttributes || {})}\n`;
-            contextMsg += `NOTE: User is likely refining this product. Do not switch unless explicit.\n`;
+        if (session.currentProduct && productsDB[session.currentProduct]) {
+            currentProductContext = session.currentProduct;
+            const prod = productsDB[session.currentProduct];
+            // מכינים רשימה של שאלות ואופציות חוקיות
+            validOptions = prod.questions.map(q => {
+                const opts = q.options ? q.options.map(o => `${o.label} (${o.value})`).join(', ') : "Open Number";
+                return `${q.key}: [${opts}]`;
+            }).join('\n');
         }
 
-        const chat = model.startChat({
-            history: [
-                { role: "user", parts: [{ text: "System Config: " + SYSTEM_PROMPT }] },
-                { role: "model", parts: [{ text: "Understood. I will prioritize context retention." }] }
-            ],
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        // 2. הזרקת ההקשר לפרומפט
+        const finalPrompt = SYSTEM_PROMPT
+            .replace('{{CURRENT_PRODUCT}}', currentProductContext)
+            .replace('{{VALID_OPTIONS}}', validOptions)
+            + `\nUser Input: "${message}"\nJSON Output:`;
 
-        const result = await chat.sendMessage(contextMsg);
+        // 3. שליחה ל-Gemini
+        const result = await model.generateContent(finalPrompt);
         let text = result.response.text();
+        
+        // ניקוי ה-JSON (לפעמים המודל מוסיף ```json)
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        
         return JSON.parse(text);
 
     } catch (error) {
-        console.error("Router Error:", error);
-        return { intent: "consult", product: null, entities: {} };
+        console.error("🧠 Brain Freeze (LLM Error):", error);
+        // Fallback למקרה של תקלה
+        return { intent: "chat", answer_text: "סליחה, נתקעתי לרגע. תוכל לחזור על זה?" };
     }
 }
 
