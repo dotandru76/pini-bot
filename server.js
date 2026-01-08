@@ -1,11 +1,10 @@
-/** server.js - Verbose Logging Edition */
+/** server.js - With Remove Item Capability */
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
-const { classifyMessage } = require('./engine/classifier');
 const { planActions } = require('./engine/planner');
 const { extractParameters } = require('./engine/extractor');
 const { getSession } = require('./services/sessionManager');
@@ -24,112 +23,125 @@ app.post('/api/chat', async (req, res) => {
     console.log(`\n🔵 INCOMING MSG [${userId}]: "${message}"`);
 
     try {
-        // 1. Extractor - חילוץ נתונים
         const extraction = extractParameters(message);
-        console.log(`🔍 Extractor Found: Products=${JSON.stringify(extraction.products)}, Qty=${extraction.qty}, Reset=${extraction.isReset}`);
-
         let intent = 'chat';
+        let candidateProduct = null;
 
-        // סדר עדיפויות לכוונות
         if (extraction.isReset) intent = 'reset';
+        else if (extraction.isRemove) intent = 'remove_item'; // <--- כוונה חדשה
         else if (extraction.isCartStatus) intent = 'show_cart';
+        
         else if (session.currentProduct) {
-            intent = 'answer';
-            console.log(`🔄 Continuing conversation about: ${session.currentProduct}`);
+            if (extraction.products.length > 0) {
+                if (extraction.products.includes(session.currentProduct)) {
+                    intent = 'answer';
+                } else {
+                    intent = 'new_order';
+                    candidateProduct = extraction.products[0];
+                    session.draftAttributes = {};
+                }
+            } else {
+                intent = 'answer';
+            }
         }
         else if (extraction.products.length > 0) {
             intent = 'new_order';
-            session.currentProduct = extraction.products[0];
-            session.pendingProducts = extraction.products.slice(1);
-            
-            console.log(`✨ New Product Identified: ${session.currentProduct}`);
-            if (session.pendingProducts.length > 0) console.log(`📋 Queue: ${JSON.stringify(session.pendingProducts)}`);
-
+            candidateProduct = extraction.products[0];
             if (extraction.qty) session.draftAttributes = { qty: extraction.qty };
             else session.draftAttributes = {};
         }
 
-        console.log(`🎯 Determined Intent: ${intent}`);
-
-        // 2. Planner
-        const plan = planActions(intent, session, message);
-        console.log(`📋 Planned Actions: ${plan.actions.map(a => a.type).join(' -> ')}`);
+        const plan = planActions({ 
+            intent, 
+            extractedParams: extraction, 
+            product: candidateProduct || session.currentProduct 
+        }, session);
         
         let responseText = "";
         let quickReplies = [];
 
-        // 3. Execution
         for (const action of plan.actions) {
             if (action.type === 'PRESENT_OPTIONS') {
-                session.currentProduct = action.product;
-                session.draftAttributes = action.saveDraft; // איחוד תשובות קודמות עם חדשות
+                session.currentProduct = action.product; 
+                session.draftAttributes = action.saveDraft;
                 responseText = action.question;
                 quickReplies = action.options;
-                console.log(`❓ Asking: "${action.question}"`);
             }
+            
             if (action.type === 'CALCULATE_AND_ADD') {
                 session.cart.push(action.payload);
-                responseText = `✅ הוספתי ${action.payload.qty} יח' ${getHebrewName(action.payload.product)} לעגלה.`;
-                console.log(`💰 Added to cart: ${action.payload.product} (${action.payload.qty})`);
+                responseText = `✅ הוספתי לעגלה: ${action.payload.qty} יח' ${getHebrewName(action.payload.product)}.`;
             }
+
+            // --- לוגיקת מחיקה ---
+            if (action.type === 'REMOVE_FROM_CART') {
+                const targetIndex = action.payload.index;
+                const targetProduct = action.payload.product;
+                
+                let removedItem = null;
+
+                // אופציה א: מחיקה לפי אינדקס (1, 2, 3...)
+                if (targetIndex && targetIndex > 0 && targetIndex <= session.cart.length) {
+                    removedItem = session.cart.splice(targetIndex - 1, 1)[0];
+                } 
+                // אופציה ב: מחיקה לפי שם (האחרון ברשימה שמתאים לשם)
+                else if (targetProduct) {
+                    const idx = session.cart.findLastIndex(item => item.product === targetProduct);
+                    if (idx !== -1) {
+                        removedItem = session.cart.splice(idx, 1)[0];
+                    }
+                }
+
+                if (removedItem) {
+                    responseText = `🗑️ מחקתי את ה${getHebrewName(removedItem.product)} מהעגלה.`;
+                } else {
+                    responseText = `לא מצאתי את הפריט הזה בעגלה. נסה להגיד "מחק את פריט 1".`;
+                }
+            }
+            // --------------------
+            
             if (action.type === 'CHECK_QUEUE') {
                 if (session.pendingProducts && session.pendingProducts.length > 0) {
                     const nextProduct = session.pendingProducts.shift();
-                    session.currentProduct = nextProduct;
-                    session.draftAttributes = {};
-                    console.log(`⏭️ Moving to next in queue: ${nextProduct}`);
-                    
-                    const nextPlan = planActions('new_order', session, "");
+                    const nextPlan = planActions({ intent: 'new_order', product: nextProduct }, session);
                     if (nextPlan.actions[0]?.type === 'PRESENT_OPTIONS') {
+                        session.currentProduct = nextProduct;
+                        session.draftAttributes = {};
                         responseText += `\n\nעוברים ל-${getHebrewName(nextProduct)}. ${nextPlan.actions[0].question}`;
                         quickReplies = nextPlan.actions[0].options;
                     }
                 } else {
                     session.currentProduct = null;
-                    responseText += `\n\nסיימנו! מה תרצה לעשות עכשיו?`;
-                    quickReplies = [
-                        { label: 'הצג עגלה', value: 'show_cart' },
-                        { label: 'הוסף עוד מוצר', value: 'menu' }
-                    ];
-                    console.log(`🏁 Queue finished.`);
+                    responseText += `\n\nסיימנו! מה תרצה לעשות?`;
+                    quickReplies = [{ label: 'הצג עגלה', value: 'show_cart' }, { label: 'הוסף עוד', value: 'menu' }];
                 }
             }
+            
             if (action.type === 'GENERATE_RESPONSE') {
                 responseText = action.payload.text;
                 if (action.payload.quickReplies) quickReplies = action.payload.quickReplies;
             }
+            
             if (action.type === 'CLEAR_SESSION_CONTEXT') {
                 session.currentProduct = null;
-                session.pendingProducts = [];
                 session.draftAttributes = {};
-                if (intent === 'reset') {
-                    session.cart = [];
-                    console.log(`🧹 Session Reset`);
-                }
+                session.pendingProducts = [];
+                if (intent === 'reset') session.cart = [];
             }
         }
-
-        console.log(`📤 Sending Response: "${responseText.substring(0, 50)}..."`);
 
         res.json({ text: responseText, options: quickReplies, cart: session.cart });
 
     } catch (error) {
-        console.error("💥 Server Critical Error:", error);
-        res.status(500).json({ text: "סליחה, קרתה שגיאה בשרת." });
+        console.error("Error:", error);
+        res.status(500).json({ text: "אופס, שגיאה בשרת." });
     }
 });
 
 app.post('/api/pdf', async (req, res) => {
-    console.log(`📄 PDF Generation Requested`);
-    try {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=quote.pdf');
-        res.send(Buffer.from('%PDF-1.4... (Mock PDF Data)'));
-        console.log(`✅ PDF Sent`);
-    } catch (e) {
-        console.error(e);
-        res.status(500).send("Error");
-    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=quote.pdf');
+    res.send(Buffer.from('%PDF-1.4...'));
 });
 
 function getHebrewName(key) {
@@ -139,4 +151,4 @@ function getHebrewName(key) {
     } catch (e) { return key; }
 }
 
-app.listen(PORT, () => console.log(`🚀 Server Log Mode running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

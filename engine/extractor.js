@@ -1,11 +1,11 @@
-/** Parameter Extractor V6 (With Raw Text) */
+/** engine/extractor.js - With Remove Logic */
 const KEYWORD_MAP = {
     'bc': 'bc', 'כרטיס': 'bc', 'כרטיסים': 'bc', 'ביקור': 'bc',
     'flyer': 'flyer', 'פלייר': 'flyer', 'פליירים': 'flyer', 'עלון': 'flyer',
     'booklet': 'booklet', 'חוברת': 'booklet', 'חוברות': 'booklet', 'ספר': 'booklet', 'ספרים': 'booklet', 'קטלוג': 'booklet',
     'invitation': 'invitation', 'הזמנה': 'invitation', 'הזמנות': 'invitation', 'חתונה': 'invitation',
-    'rollup': 'rollup', 'רולאפ': 'rollup', 'רול': 'rollup', 'באנר': 'rollup',
-    'poster': 'poster', 'פוסטר': 'poster', 'קנבס': 'poster', 'canvas': 'poster',
+    'rollup': 'rollup', 'רולאפ': 'rollup', 'באנר': 'rollup',
+    'poster': 'poster', 'פוסטר': 'poster', 'קנבס': 'poster',
     'sticker': 'sticker', 'מדבקה': 'sticker', 'מדבקות': 'sticker',
     'envelope': 'envelope', 'מעטפה': 'envelope', 'מעטפות': 'envelope',
     'folder': 'folder', 'פולדר': 'folder'
@@ -24,22 +24,36 @@ function extractParameters(text) {
         products: [],
         qty: null,
         isReset: false,
+        isRemove: false, // <--- חדש
+        targetIndex: null, // <--- חדש
         isCartStatus: false,
-        raw_text: text // <--- התיקון הקריטי: העברת הטקסט המקורי
+        raw_text: text
     };
 
-    // בדיקות מיוחדות
-    if (cleanText.includes('reset') || cleanText.includes('התחל') || cleanText.includes('תפריט') || cleanText.includes('נקה')) {
+    // 1. זיהוי מחיקה ספציפית
+    const removeKeywords = ['מחק', 'הסר', 'בטל', 'להוריד', 'תוריד'];
+    if (removeKeywords.some(w => cleanText.includes(w))) {
+        result.isRemove = true;
+        // ננסה למצוא מספר (למשל: "מחק את 1")
+        const numMatch = cleanText.match(/(\d+)/);
+        if (numMatch) result.targetIndex = parseInt(numMatch[0]);
+        // אם אין מספר, ננסה למצוא שם מוצר למטה...
+    }
+
+    // 2. זיהוי איפוס מלא
+    const resetKeywords = ['reset', 'התחל', 'תפריט', 'נקה הכל', 'איפוס', 'יציאה'];
+    if (resetKeywords.some(word => cleanText.includes(word)) && !result.isRemove) {
         result.isReset = true;
         return result;
     }
 
+    // 3. זיהוי עגלה
     if (cleanText.includes('cart') || cleanText.includes('עגלה') || cleanText.includes('סיכום') || cleanText.includes('סטטוס')) {
         result.isCartStatus = true;
         return result;
     }
 
-    // זיהוי מוצרים
+    // 4. זיהוי מוצרים
     const foundProducts = new Set();
     Object.keys(KEYWORD_MAP).forEach(keyword => {
         if (cleanText.includes(keyword)) {
@@ -48,14 +62,15 @@ function extractParameters(text) {
     });
     result.products = Array.from(foundProducts);
 
-    // זיהוי כמות (שיפור קטן: מתעלמים ממספרים בתוך מילים כמו A5, 300gr אם אפשר, אבל ה-Planner יעשה את התיקון האמיתי)
+    // 5. זיהוי כמות
     const kMatch = cleanText.match(/(\d+)k/);
     if (kMatch) {
         result.qty = parseInt(kMatch[1]) * 1000;
     } else {
         const numMatch = cleanText.match(/\d+/);
         if (numMatch) {
-            result.qty = parseInt(numMatch[0]);
+            // אם זה לא מחיקה, ניקח את המספר ככמות
+            if (!result.isRemove) result.qty = parseInt(numMatch[0]);
         } else {
             for (const [word, val] of Object.entries(HEBREW_NUMBERS)) {
                 if (cleanText.includes(word)) {

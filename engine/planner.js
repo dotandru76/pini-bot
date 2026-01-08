@@ -1,4 +1,4 @@
-/** engine/planner.js V17.0 - Short Words & Regex Fix */
+/** engine/planner.js V22.0 - Final Polish */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -9,7 +9,23 @@ try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/produc
 function planActions(intentData, session) {
     const actions = [];
 
-    // 1. גלובלי
+    // --- טיפול במחיקה ---
+    if (intentData.intent === 'remove_item') {
+        const params = intentData.extractedParams || {};
+        const productToRemove = (params.products && params.products.length > 0) ? params.products[0] : null;
+        
+        return {
+            actions: [{
+                type: 'REMOVE_FROM_CART',
+                payload: {
+                    index: params.targetIndex,
+                    product: productToRemove
+                }
+            }]
+        };
+    }
+
+    // --- פעולות גלובליות ---
     if (intentData.intent === 'reset') {
         return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "איפסתי הכל. מה נדפיס?" } }] };
     }
@@ -17,11 +33,13 @@ function planActions(intentData, session) {
         const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים בעגלה.` : "העגלה ריקה כרגע.";
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: cartText } }] };
     }
+    
+    // תיקון הטסט: איחוד התשובה לשיחת חולין עם התשובה המכירתית
     if (intentData.intent === 'chat' && !session.currentProduct) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "אני איתך. איך אני יכול לעזור עם הדפסות היום?" } }] };
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "אני איתך. מה תרצה להדפיס? (פליירים, ספרים, רולאפ...)" } }] };
     }
 
-    // 2. ניהול מוצר
+    // --- ניהול הקשר מוצר ---
     let currentProductKey = intentData.product || session.currentProduct;
     if (!currentProductKey) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, ספרים, רולאפ...)" } }] };
@@ -30,40 +48,29 @@ function planActions(intentData, session) {
     const productConfig = productsDB[currentProductKey];
     if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "המוצר הזה לא קיים במערכת כרגע." } }] };
 
-    // 3. פענוח חכם (Smart Matching V4)
+    // --- פענוח חכם (Smart Parsing) ---
     let newParams = intentData.extractedParams || {};
     const userText = (newParams.raw_text || "").toLowerCase().trim();
+    
+    const isPureNumber = /^\d+$/.test(userText.replace(/,/g, ''));
 
-    // רשימת התאמות פוטנציאליות
+    // זיהוי אופציות (Text Matching)
     let potentialMatches = [];
 
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            // התעלם משאלות שכבר נענו בטיוטה (אלא אם זו הזמנה חדשה)
-            if (session.draftAttributes[q.key] && intentData.intent !== 'new_order') continue;
-
+            const isMissing = !session.draftAttributes[q.key]; 
+            
             if (q.options) {
                 for (const opt of q.options) {
                     const val = opt.value.toLowerCase();
                     const label = opt.label.toLowerCase();
+                    const cleanLabel = label.replace(/\s*\(.*?\)\s*/g, '').trim(); 
                     
-                    // ניקוי אגרסיבי: מסיר סוגריים, ומנקה רווחים בקצוות
-                    const cleanLabel = label.replace(/\(.*\)/g, '').trim(); 
-                    
-                    // בדיקות התאמה
                     let matchType = null;
-                    
-                    // התאמה מלאה לערך הטכני
                     if (userText.includes(val)) matchType = 'val_exact';
-                    
-                    // התאמה לתווית המלאה
                     else if (userText.includes(label)) matchType = 'label_exact';
-                    
-                    // התאמה לתווית נקייה (למשל "כריכה רכה" מתוך "כריכה רכה (הדבקה)")
-                    else if (userText.includes(cleanLabel) && cleanLabel.length > 1) matchType = 'label_clean';
-                    
-                    // התאמה חלקית הפוכה (המשתמש כתב "מט", התווית היא "למינציה מט")
-                    // התיקון: הורדתי את הרף ל-2 תווים כדי לתפוס "מט"
+                    else if (cleanLabel.length > 1 && userText.includes(cleanLabel)) matchType = 'label_clean';
                     else if (label.includes(userText) && userText.length >= 2) matchType = 'user_partial'; 
 
                     if (matchType) {
@@ -71,7 +78,7 @@ function planActions(intentData, session) {
                             key: q.key,
                             value: opt.value,
                             text: matchType === 'val_exact' ? val : (matchType === 'user_partial' ? userText : cleanLabel),
-                            score: matchType === 'val_exact' ? 10 : 5
+                            score: (matchType === 'val_exact' ? 20 : 10) + (isMissing ? 50 : 0)
                         });
                     }
                 }
@@ -79,13 +86,11 @@ function planActions(intentData, session) {
         }
     }
 
-    // סינון כפילויות (De-Duplication)
-    potentialMatches.sort((a, b) => b.text.length - a.text.length);
-    
+    // מיון וסינון
+    potentialMatches.sort((a, b) => b.score - a.score);
     const finalMatches = [];
+    
     for (const match of potentialMatches) {
-        // האם הטקסט הזה כבר נתפס ע"י התאמה "חזקה" יותר באותה הודעה?
-        // למשל: אם תפסנו "מט 350", לא נרצה לתפוס גם את "מט" כשדה נפרד
         const isSubstring = finalMatches.some(approved => 
             approved.text.includes(match.text) && approved.key !== match.key
         );
@@ -93,17 +98,14 @@ function planActions(intentData, session) {
         if (!isSubstring) {
             finalMatches.push(match);
             newParams[match.key] = match.value;
-            console.log(`🎯 Smart Match Approved: ${match.key} = ${match.value} (Based on "${match.text}")`);
             
-            // ביטול Qty שגוי שנגזר מהאופציה
             if (newParams.qty && match.text.includes(newParams.qty.toString())) {
-                 console.log(`🔧 Conflict Fix: Dropping qty=${newParams.qty} (belongs to ${match.text})`);
                  delete newParams.qty;
             }
         }
     }
 
-    // --- תיקון "מלכודת הכמות" (Quantity Trap) ---
+    // --- תיקון "מלכודת הכמות" ---
     if (intentData.intent === 'answer' || session.currentProduct) {
         let pendingQuestion = null;
         for (const q of productConfig.questions) {
@@ -113,11 +115,14 @@ function planActions(intentData, session) {
             }
         }
 
-        if (pendingQuestion && pendingQuestion.type === 'number' && pendingQuestion.key !== 'qty') {
-            if (newParams.qty) {
-                console.log(`🔧 Planner Fix: Remapping qty=${newParams.qty} to ${pendingQuestion.key}`);
-                newParams[pendingQuestion.key] = newParams.qty;
+        if (pendingQuestion && pendingQuestion.type === 'number' && isPureNumber) {
+            const numVal = parseInt(userText.replace(/,/g, ''));
+            
+            if (pendingQuestion.key !== 'qty') {
+                newParams[pendingQuestion.key] = numVal;
                 delete newParams.qty;
+            } else {
+                newParams.qty = numVal;
             }
         }
     }
@@ -134,10 +139,9 @@ function planActions(intentData, session) {
         ? validNewParams 
         : { ...session.draftAttributes, ...validNewParams };
     
-    // ברירות מחדל
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
-    // 4. מה חסר?
+    // --- מה חסר? ---
     let missingParam = null;
     let questionToAsk = null;
 

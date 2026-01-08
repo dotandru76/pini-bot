@@ -25,7 +25,16 @@
       { "key": "pages", "question_he": "כמה עמודים בחוברת (כולל כריכה)?", "type": "number" },
       { "key": "size", "question_he": "גודל סגור?", "options": [{ "label": "A4", "value": "A4" }, { "label": "A5", "value": "A5" }] },
       { "key": "paper_type", "question_he": "איזה נייר פנים?", "options": [{ "label": "נטול עץ 80 (רגיל)", "value": "offset_80" }, { "label": "כרומו 135 (מבריק)", "value": "chromo_135" }] },
-      { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "הדבקה (ספר)", "value": "perfect_bind" }] }
+      { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "כריכה רכה (הדבקה)", "value": "perfect_bind" }] }
+    ]
+  },
+  "invitation": {
+    "name": "הזמנות לאירועים",
+    "engine": "digital",
+    "questions": [
+      { "key": "qty", "question_he": "כמה הזמנות?", "type": "number" },
+      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18", "value": "13x18" }, { "label": "A5", "value": "A5" }] },
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט (קלאסי)", "value": "matte_350" }] }
     ]
   },
   "rollup": {
