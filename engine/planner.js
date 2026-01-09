@@ -1,4 +1,4 @@
-/** engine/planner.js V38.0 - The Loop Killer */
+/** engine/planner.js V45.0 - Context King & Chat Fix */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -10,20 +10,21 @@ try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/produc
 const PARAM_ALIASES = {
     'paper': 'paper_type', 'stock': 'paper_type', 
     'coating': 'lamination', 'finish': 'finishing', 'width': 'size', 
-    'amount': 'qty', 'quantity': 'qty', 'print': 'print', 'type': 'book_type'
+    'amount': 'qty', 'quantity': 'qty', 'print': 'print', 'type': 'book_type',
+    'cut': 'cut'
 };
 
 function planActions(intentData, session) {
     const actions = [];
-    const rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
+    const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
     
     // 1. System Actions
     if (intentData.intent === 'reset') {
         return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}] } }] };
     }
     if (intentData.intent === 'show_cart') {
-        const total = session.cart.reduce((sum, i) => sum + i.client_price, 0);
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ: ₪${total}` : "עגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
+        const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
     if (intentData.intent === 'remove') {
          return { actions: [{ type: 'REMOVE_FROM_CART', payload: {} }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את הפריט האחרון.", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
@@ -31,6 +32,12 @@ function planActions(intentData, session) {
 
     // 2. Context Management
     let currentProductKey = intentData.product || session.currentProduct;
+
+    // TIKUN CHAT: אם זה צ'אט, מנקים מוצר ונותנים לזרום לתפריט הראשי
+    if (intentData.intent === 'chat') {
+        currentProductKey = null;
+    }
+
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
         currentProductKey = intentData.product;
@@ -38,46 +45,95 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse || "מה נדפיס?", quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}, {label:'ספרים', value:'booklet'}] } }] };
+        // אם יש תשובה חכמה מה-AI, נציג אותה
+        if (intentData.aiResponse && !intentData.aiResponse.includes("לא בטוח")) {
+             return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse } }] };
+        }
+        // אחרת - תפריט ראשי
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}, {label:'ספרים', value:'booklet'}] } }] };
     }
 
     const productConfig = productsDB[currentProductKey];
     if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה בבנייה." } }] };
 
-    // --- 3. Params Update Logic (התיקון הגדול) ---
+    // 3. Params Mapping
     let newParams = intentData.extractedParams || {};
     let normalizedParams = {};
-    
-    // א. נרמול פרמטרים רגיל
     Object.keys(newParams).forEach(key => {
         const dbKey = PARAM_ALIASES[key] || key; 
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // ב. מנגנון תפיסת כפתורים (Direct Match) - התיקון ללופ!
-    // אנחנו בודקים איזו שאלה אנחנו כרגע שואלים את המשתמש
+    // === FORCE MATCH + CONTEXT PRIORITY ===
+    // קודם מזהים מה השאלה שחסרה *עכשיו* לפי הזיכרון בלבד
+    let activeQuestion = null;
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            // אם זו השאלה שחסרה כרגע ב-Draft
-            if (session.draftAttributes[q.key] == null && normalizedParams[q.key] == null) {
-                // נבדוק אם הקלט הגולמי (rawInput) תואם בדיוק לאחד הכפתורים של השאלה הזו
-                if (q.options) {
-                    const directMatch = q.options.find(opt => 
-                        opt.value === rawInput || // התאמה לערך (perfect_bind)
-                        opt.label === rawInput    // התאמה לתווית (כריכה רכה)
-                    );
-                    
-                    if (directMatch) {
-                        console.log(`🎯 Direct Button Match found: ${q.key} = ${directMatch.value}`);
-                        normalizedParams[q.key] = directMatch.value; // בום! תפסנו את התשובה
-                    }
-                }
-                break; // מספיק למצוא את השאלה הראשונה הפתוחה
+            if (session.draftAttributes[q.key] == null) {
+                activeQuestion = q;
+                break;
             }
         }
     }
 
-    // ג. מיפוי ערכים חכם (המשך הלוגיקה הרגילה)
+    if (activeQuestion) {
+        let matchFound = false;
+
+        // A. זיהוי מידות
+        if (activeQuestion.key === 'size') {
+            const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
+            if (sizeMatch) {
+                const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
+                console.log(`🎯 Force Match: Size "${val}"`);
+                normalizedParams[activeQuestion.key] = val;
+                matchFound = true;
+            } else if (/^[a-zA-Z]+\d+$/.test(rawInput)) { 
+                normalizedParams[activeQuestion.key] = rawInput.toUpperCase();
+                matchFound = true;
+            }
+        }
+
+        // B. כפתורים (Fuzzy Match זהיר)
+        if (!matchFound && activeQuestion.options) {
+            const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי']; 
+            const match = activeQuestion.options.find(opt => {
+                const label = opt.label.toLowerCase();
+                const val = opt.value.toLowerCase();
+                if (rawInput === val || rawInput === label) return true;
+                if (rawInput.length > 2 && !STOP_WORDS.includes(rawInput) && label.includes(rawInput)) return true;
+                return false;
+            });
+            if (match) {
+                console.log(`🎯 Force Match: Option "${match.value}"`);
+                normalizedParams[activeQuestion.key] = match.value;
+                matchFound = true;
+            }
+        }
+        
+        // C. מספרים
+        if (!matchFound && activeQuestion.type === 'number') {
+            const numMatch = rawInput.match(/(\d+)/);
+            if (numMatch) {
+                console.log(`🎯 Force Match: Number "${numMatch[0]}" for ${activeQuestion.key}`);
+                normalizedParams[activeQuestion.key] = parseInt(numMatch[0]);
+                matchFound = true;
+            }
+        }
+
+        // === CONTEXT PRIORITY FIX ===
+        // אם מצאנו תשובה לשאלה הספציפית הזו (למשל Pages), 
+        // אבל המחלץ הגנרי זיהה גם Qty (כי הוא רואה מספר),
+        // אנחנו חייבים למחוק את ה-Qty הגנרי כדי שלא ידרוס את הכמות שכבר יש בזיכרון!
+        if (matchFound) {
+            if (activeQuestion.key !== 'qty' && normalizedParams.qty) {
+                console.log(`🧹 Cleaning conflicting 'qty' because matched specific '${activeQuestion.key}'`);
+                delete normalizedParams.qty;
+            }
+        }
+    }
+    // ===============================
+
+    // מיפוי רגיל ליתר השאלות
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -91,11 +147,9 @@ function planActions(intentData, session) {
     }
 
     const newDraft = { ...session.draftAttributes, ...normalizedParams };
-    
-    // Defaults
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
-    // 4. The Funnel (What's next?)
+    // 4. Funnel
     let missingParam = null;
     let questionToAsk = null;
 
@@ -113,7 +167,7 @@ function planActions(intentData, session) {
     if (missingParam) {
         let buttons = questionToAsk.options || [];
         if (questionToAsk.key === 'qty' && !buttons.length) {
-            buttons = [{label:'100', value:'100'}, {label:'500', value:'500'}, {label:'1000', value:'1000'}];
+            buttons = [{label:'100', value:'100'}, {label:'500', value:'500'}];
         }
         
         actions.push({
@@ -124,14 +178,13 @@ function planActions(intentData, session) {
             saveDraft: newDraft
         });
     } else {
-        // --- 6. Calc ---
+        // 6. Calc
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
             const item = calcResult.lastAdded;
             
             let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
-
-            // Upsell Logic
+            
             try {
                 const doubleQty = item.qty * 2;
                 const upsellDraft = { ...newDraft, qty: doubleQty };
@@ -151,10 +204,7 @@ function planActions(intentData, session) {
                 type: 'GENERATE_RESPONSE', 
                 payload: { 
                     text: successText,
-                    quickReplies: [
-                        { label: 'סיום והזמנה', value: 'checkout' },
-                        { label: 'עוד מוצר', value: 'reset' }
-                    ]
+                    quickReplies: [{ label: 'סיום והזמנה', value: 'checkout' }, { label: 'עוד מוצר', value: 'reset' }]
                 } 
             });
             actions.push({ type: 'CHECK_QUEUE' }); 

@@ -1,4 +1,4 @@
-/** engine/validator.js V37.1 - Safe Guard */
+/** engine/validator.js V44.0 - Checkout Logic Added */
 const fs = require('fs');
 
 const PRODUCT_KEYWORDS = {
@@ -15,21 +15,18 @@ function validateLLMResult(llmResult, rawText, session) {
     let validated = { ...llmResult };
     validated.mapped_params = validated.mapped_params || {};
 
-    // 1. זיהוי נייר ספציפי
+    // 1. זיהוי פרידה/סיום
+    const chatTriggers = ['ביי', 'להתראות', 'תודה', 'אחלה', 'סיימנו', 'קפה', 'מים', 'מי בנה'];
+    if (chatTriggers.some(w => text.includes(w)) && !validated.product) {
+        validated.intent = 'chat';
+        validated.product = null;
+    }
+
+    // 2. זיהוי נייר
     if (text.includes('כרומו')) {
         if (text.includes('300') || text.includes('עבה')) validated.mapped_params.paper_type = 'chromo_300';
         if (text.includes('130') || text.includes('דק')) validated.mapped_params.paper_type = 'chromo_130';
-        if (text.includes('170')) validated.mapped_params.paper_type = 'chromo_170';
         if (validated.intent === 'chat') validated.intent = 'update';
-    }
-
-    // 2. זיהוי פרידה (התיקון: רק פרידה מפורשת מוחקת הקשר!)
-    const byeWords = ['ביי', 'להתראות', 'יאללה ביי', 'נדבר מחר', 'סיימנו'];
-    if (byeWords.some(w => text === w || text.includes(' ' + w) || text.startsWith(w + ' '))) {
-        console.log(`🛡️ [VALIDATOR] Explicit Goodbye -> Clearing context`);
-        validated.intent = 'chat';
-        validated.product = null;
-        validated.answer_text = "שמחתי לעזור! אני כאן אם תצטרך עוד משהו. 👋";
     }
 
     // 3. הגנת שלילה
@@ -39,12 +36,9 @@ function validateLLMResult(llmResult, rawText, session) {
         const hasProductKeyword = Object.keys(PRODUCT_KEYWORDS).some(k => text.includes(k));
 
         if (negationWords.some(w => text.includes(w)) && featureWords.some(w => text.includes(w)) && !hasProductKeyword) {
-            console.log(`🛡️ [VALIDATOR] Blocked Remove -> Converting to Update`);
             validated.intent = 'update';
             if (text.includes('הדפסה')) validated.mapped_params.print = 'none';
             if (text.includes('למינציה')) validated.mapped_params.lamination = 'none';
-            if (text.includes('עיצוב')) validated.mapped_params.design = 'none';
-            if (text.includes('גימור')) validated.mapped_params.finishing = 'none';
         }
     }
 
@@ -55,13 +49,11 @@ function validateLLMResult(llmResult, rawText, session) {
         if (validated.intent === 'chat') validated.intent = 'update';
     }
 
-    // 5. ניתוב קשיח (Hard Routing)
+    // 5. ניתוב קשיח (מוצרים)
     for (const [key, val] of Object.entries(PRODUCT_KEYWORDS)) {
         if (text.includes(key)) {
             if (validated.product !== val) {
-                console.log(`🛡️ [VALIDATOR] Fixed Product: "${key}" -> ${val}`);
                 validated.product = val;
-                
                 const numMatch = text.match(/(\d+)/);
                 if (numMatch && parseInt(numMatch[0]) > 0 && !text.includes('מחק')) {
                     validated.intent = 'quote';
@@ -70,6 +62,16 @@ function validateLLMResult(llmResult, rawText, session) {
                     validated.intent = 'quote';
                 }
             }
+        }
+    }
+
+    // 6. === תיקון CHECKOUT ===
+    // אם הלקוח מבקש הצעה/מחיר ויש לו משהו בעגלה -> שלח אותו לסיום
+    if (validated.intent === 'quote' && session.cart && session.cart.length > 0) {
+        const checkoutWords = ['הצעת מחיר', 'הצעה', 'שלח לי', 'סיכום', 'כמה לתשלום', 'חשבון'];
+        if (checkoutWords.some(w => text.includes(w)) && !validated.product) {
+            console.log(`🛡️ [VALIDATOR] Detected Checkout Request -> Converting to show_cart`);
+            validated.intent = 'show_cart';
         }
     }
 
