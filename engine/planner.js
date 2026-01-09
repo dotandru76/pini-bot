@@ -1,4 +1,4 @@
-/** engine/planner.js V32.0 - The Wizard Monster */
+/** engine/planner.js V37.1 - Upsell & Wizard */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -7,63 +7,29 @@ const { getMainMenu } = require('./productCatalog');
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
-// מילון נרמול פרמטרים
 const PARAM_ALIASES = {
-    'paper': 'paper_type', 'stock': 'paper_type', 'media': 'paper_type', 
+    'paper': 'paper_type', 'stock': 'paper_type', 
     'coating': 'lamination', 'finish': 'finishing', 'width': 'size', 
-    'amount': 'qty', 'quantity': 'qty', 'copies': 'qty'
+    'amount': 'qty', 'quantity': 'qty', 'print': 'print', 'type': 'book_type'
 };
 
 function planActions(intentData, session) {
     const actions = [];
-    const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase() : "";
-
-    // === 1. The Wizard Guard (הגנה מפני מחיקה בטעות) ===
-    // אם ה-LLM חשב שזה 'remove' אבל המשתמש דיבר על פרמטר ('בלי הדפסה')
-    if (intentData.intent === 'remove') {
-        const negationKeywords = ['הדפסה', 'למינציה', 'בלי', 'ללא', 'צבע', 'שחור'];
-        if (negationKeywords.some(kw => rawInput.includes(kw))) {
-            console.log("🛡️ Wizard Guard: Intercepted accidental remove. Converting to Update.");
-            intentData.intent = 'update';
-            // אם זיהינו על מה מדובר, נעדכן ידנית
-            if (rawInput.includes('הדפסה')) intentData.extractedParams.print = 'none';
-            if (rawInput.includes('למינציה')) intentData.extractedParams.lamination = 'none';
-        }
-    }
-
-    // === 2. כוונות מערכת ===
+    
+    // 1. System Actions
     if (intentData.intent === 'reset') {
-        return { 
-            actions: [
-                { type: 'CLEAR_SESSION_CONTEXT' }, 
-                { 
-                    type: 'GENERATE_RESPONSE', 
-                    payload: { 
-                        text: getMainMenu(),
-                        quickReplies: [{label:'כרטיסי ביקור', value:'bc'}, {label:'פליירים', value:'flyer'}]
-                    } 
-                }
-            ] 
-        };
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}] } }] };
     }
-
     if (intentData.intent === 'show_cart') {
         const total = session.cart.reduce((sum, i) => sum + i.client_price, 0);
-        return { 
-            actions: [{ 
-                type: 'GENERATE_RESPONSE', 
-                payload: { 
-                    text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה.",
-                    quickReplies: session.cart.length ? [{label:'הורד הצעת מחיר', value:'checkout'}] : [{label:'תפריט', value:'reset'}]
-                } 
-            }] 
-        };
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ: ₪${total}` : "עגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
+    }
+    if (intentData.intent === 'remove') {
+         return { actions: [{ type: 'REMOVE_FROM_CART', payload: {} }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את הפריט האחרון.", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
-    // === 3. ניהול ה-Wizard ===
+    // 2. Context
     let currentProductKey = intentData.product || session.currentProduct;
-    
-    // החלפת מוצר
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
         currentProductKey = intentData.product;
@@ -71,20 +37,13 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
-        return { 
-            actions: [{ 
-                type: 'GENERATE_RESPONSE', 
-                payload: { 
-                    text: "מה תרצה להדפיס?",
-                    quickReplies: [{label:'כרטיסי ביקור', value:'bc'}, {label:'הזמנות', value:'invitation'}, {label:'רולאפ', value:'rollup'}]
-                } 
-            }] 
-        };
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse || "מה נדפיס?", quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}, {label:'ספרים', value:'booklet'}] } }] };
     }
 
     const productConfig = productsDB[currentProductKey];
-    
-    // נרמול פרמטרים שהגיעו מה-LLM
+    if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה בבנייה." } }] };
+
+    // 3. Update Params
     let newParams = intentData.extractedParams || {};
     let normalizedParams = {};
     Object.keys(newParams).forEach(key => {
@@ -92,34 +51,28 @@ function planActions(intentData, session) {
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // מיפוי ערכים חכם (למשל 'מט' -> 'matte_350')
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
             if (val && q.options) {
                 const match = q.options.find(opt => 
-                    opt.value.toLowerCase() === val.toString().toLowerCase() || 
-                    opt.label.includes(val)
+                    opt.value == val || opt.label.includes(val) || (val === 'none' && opt.value === 'none')
                 );
                 if (match) normalizedParams[q.key] = match.value;
             }
         });
     }
 
-    // עדכון ה-State
     const newDraft = { ...session.draftAttributes, ...normalizedParams };
-    
-    // ברירות מחדל קשיחות
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
-    // === 4. מציאת השאלה הבאה (The Funnel) ===
+    // 4. The Funnel
     let missingParam = null;
     let questionToAsk = null;
 
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            // אם הפרמטר חסר (undefined/null)
-            if (newDraft[q.key] == null) {
+            if (newDraft[q.key] == null) { 
                 missingParam = q.key;
                 questionToAsk = q;
                 break;
@@ -127,28 +80,46 @@ function planActions(intentData, session) {
         }
     }
 
-    // === 5. תשובה למשתמש ===
+    // 5. Output
     if (missingParam) {
-        // בניית כפתורים חכמה
         let buttons = questionToAsk.options || [];
-        if (questionToAsk.key === 'qty') {
+        if (questionToAsk.key === 'qty' && !buttons.length) {
             buttons = [{label:'100', value:'100'}, {label:'500', value:'500'}, {label:'1000', value:'1000'}];
         }
-
+        
         actions.push({
             type: 'PRESENT_OPTIONS',
             question: questionToAsk.question_he,
-            options: buttons, // חובה כפתורים!
+            options: buttons, 
             product: currentProductKey,
             saveDraft: newDraft
         });
     } else {
-        // הכל מלא -> חישוב
+        // --- 6. Calc & Upsell ---
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
             const item = calcResult.lastAdded;
             
-            const successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}\n\nמה עכשיו?`;
+            let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
+
+            // === מנוע ה-Upsell ===
+            try {
+                // חישוב היפותטי לכמות כפולה
+                const doubleQty = item.qty * 2;
+                const upsellDraft = { ...newDraft, qty: doubleQty };
+                const upsellResult = calculate_custom_job([], { ...upsellDraft, product: currentProductKey });
+                
+                const currentUnitPrice = item.client_price / item.qty;
+                const nextUnitPrice = upsellResult.lastAdded.client_price / doubleQty;
+
+                // אם המחיר ליחידה יורד ב-15% לפחות
+                if (nextUnitPrice < currentUnitPrice * 0.85) {
+                     successText += `\n\n💡 **טיפ:** אם תיקח ${doubleQty} יח', המחיר ליחידה ירד משמעותית! (₪${upsellResult.lastAdded.client_price} סה"כ)`;
+                }
+            } catch (e) { /* התעלמות משגיאות Upsell */ }
+            // ======================
+
+            successText += `\n\nמה עכשיו?`;
 
             actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
             actions.push({ 
@@ -156,14 +127,14 @@ function planActions(intentData, session) {
                 payload: { 
                     text: successText,
                     quickReplies: [
-                        { label: 'הורד הצעת מחיר', value: 'checkout' },
-                        { label: 'הוסף עוד פריט', value: 'reset' }
+                        { label: 'סיום והזמנה', value: 'checkout' },
+                        { label: 'עוד מוצר', value: 'reset' }
                     ]
                 } 
             });
             actions.push({ type: 'CHECK_QUEUE' }); 
         } catch (e) {
-            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב. נסה כמות אחרת." } });
+            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב.", quickReplies: [{label:'חזרה', value:'reset'}] } });
         }
     }
 

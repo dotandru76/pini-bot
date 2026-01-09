@@ -1,39 +1,33 @@
-/** engine/classifier.js V31.0 - Hybrid Intelligence */
+/** engine/classifier.js V37.1 */
 const { routeWithLLM } = require('./llmRouter');
+const { validateLLMResult } = require('./validator');
 
 const KEYWORDS = {
-    // מילים שמפעילות פעולה מידית ללא AI
     reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט', 'ראשי'],
     cart: ['עגלה', 'סיכום', 'מה יש', 'status'],
-    remove: ['מחק', 'הסר']
+    remove_all: ['מחק הכל', 'רוקן עגלה']
 };
 
 async function classifyMessage(message, session) {
     const text = message.toLowerCase().trim();
+    
+    // Fast Path
+    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset', raw_text: message };
+    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart', raw_text: message };
+    if (KEYWORDS.remove_all.some(k => text === k)) return { intent: 'remove_all', raw_text: message };
 
-    // 1. FAST PATH (בדיקות מהירות)
-    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset' };
-    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart' };
-    if (KEYWORDS.remove.some(k => text === k)) return { intent: 'remove' };
-
-    // 2. SMART PATH (שימוש ב-Gemini)
+    // Pipeline
     console.log("🧠 Consulting Gemini...");
-    try {
-        const llmResult = await routeWithLLM(message, session);
-        
-        console.log("🧠 LLM Decision:", llmResult.intent, llmResult.product);
+    let result = await routeWithLLM(message, session);
+    result = validateLLMResult(result, message, session);
 
-        return {
-            intent: llmResult.intent || 'chat',
-            product: llmResult.product,
-            extractedParams: llmResult.mapped_params || {}, 
-            aiResponse: llmResult.answer_text, 
-            raw_text: message
-        };
-    } catch (e) {
-        console.error("Classifier Fallback:", e);
-        return { intent: 'chat', aiResponse: "סליחה, אני קצת עמוס. נסה שוב." };
-    }
+    return {
+        intent: result.intent || 'chat',
+        product: result.product,
+        extractedParams: result.mapped_params || {}, 
+        aiResponse: result.answer_text, 
+        raw_text: message 
+    };
 }
 
 module.exports = { classifyMessage };
