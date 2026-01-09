@@ -1,11 +1,11 @@
-/** engine/planner.js V48.0 - Always-On Menu */
+/** engine/planner.js V52.0 - Contract Grade & Robust Delete */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
 const { getMainMenu } = require('./productCatalog');
 
 let productsDB = {};
-try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
+try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) { console.error("⚠️ Failed to load productsDB:", e.message); }
 
 const PARAM_ALIASES = {
     'paper': 'paper_type', 'stock': 'paper_type', 
@@ -14,7 +14,11 @@ const PARAM_ALIASES = {
     'cut': 'cut'
 };
 
-// כפתורים קבועים שיופיעו בהתחלה
+const PRODUCT_NAMES_HE = {
+    'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות/ספרים',
+    'rollup': 'רולאפ', 'sticker': 'מדבקות', 'invitation': 'הזמנות'
+};
+
 const MAIN_MENU_BUTTONS = [
     { label: '📋 תפריט ראשי', value: 'reset' },
     { label: 'כרטיסי ביקור', value: 'bc' },
@@ -22,52 +26,91 @@ const MAIN_MENU_BUTTONS = [
     { label: 'פליירים', value: 'flyer' }
 ];
 
+function generateTechnicalSpec(params, productConfig) {
+    let specs = [];
+    if (productConfig && productConfig.questions) {
+        productConfig.questions.forEach(q => {
+            const val = params[q.key];
+            if (val && q.key !== 'qty') {
+                if (q.options) {
+                    const opt = q.options.find(o => o.value === val);
+                    specs.push(opt ? opt.label : val);
+                } else {
+                    specs.push(val);
+                }
+            }
+        });
+    } else {
+        // Fallback: אם אין קונפיגורציה, נשמור את הערכים הגולמיים כדי שהחיפוש יעבוד
+        Object.entries(params).forEach(([k, v]) => {
+            if (k !== 'qty') specs.push(v);
+        });
+    }
+    return specs.join(', ');
+}
+
 function planActions(intentData, session) {
     const actions = [];
     const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
     
     // --- 1. System Actions ---
     if (intentData.intent === 'reset') {
-        return { 
-            actions: [
-                { type: 'CLEAR_SESSION_CONTEXT' }, 
-                { 
-                    type: 'GENERATE_RESPONSE', 
-                    payload: { 
-                        text: getMainMenu(), 
-                        quickReplies: MAIN_MENU_BUTTONS // <--- הנה הכפתורים שביקשת
-                    } 
-                }
-            ] 
-        };
+        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
     }
-
     if (intentData.intent === 'show_cart') {
         const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
+
+    // === SMART REMOVE LOGIC (Improved) ===
     if (intentData.intent === 'remove') {
-         return { actions: [{ type: 'REMOVE_FROM_CART', payload: {} }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את הפריט האחרון.", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
+        let indexToRemove = session.cart.length - 1; 
+        let itemDesc = "הפריט האחרון";
+
+        if (session.cart.length > 0) {
+            const keywords = rawInput.split(' ').filter(w => 
+                w.length > 1 && !['תמחק', 'את', 'זה', 'רוצה', 'בבקשה', 'לי', 'אחד', 'שהוא', 'של', 'הזה', 'רולאפ', 'הפריט'].includes(w)
+            );
+
+            if (keywords.length > 0) {
+                let bestScore = -1;
+                let bestIndex = -1;
+
+                for (let i = 0; i < session.cart.length; i++) {
+                    const item = session.cart[i];
+                    // חיפוש בתיאור המלא (כולל המפרט שיצרנו)
+                    const itemText = (item.description + " " + (item.fullSpec || "")).toLowerCase();
+                    const score = keywords.reduce((acc, kw) => acc + (itemText.includes(kw) ? 1 : 0), 0);
+                    
+                    if (score >= bestScore) { // LIFO priority on ties
+                        bestScore = score;
+                        bestIndex = i;
+                    }
+                }
+                if (bestScore > 0) indexToRemove = bestIndex;
+            }
+            
+            const item = session.cart[indexToRemove];
+            itemDesc = item.productName || "פריט";
+            if (item.fullSpec) itemDesc += ` (${item.fullSpec})`;
+
+            return { 
+                actions: [
+                    { type: 'REMOVE_FROM_CART', payload: { index: indexToRemove } }, 
+                    { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי את **${itemDesc}** מהעגלה.`, quickReplies: MAIN_MENU_BUTTONS } }
+                ] 
+            };
+        } else {
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "העגלה כבר ריקה.", quickReplies: MAIN_MENU_BUTTONS } }] };
+        }
     }
 
     // --- 2. Context ---
     let currentProductKey = intentData.product || session.currentProduct;
-
-    // CHAT INTENT (היי / שלום / ביי)
     if (intentData.intent === 'chat') {
         currentProductKey = null;
         const response = intentData.aiResponse || "אהלן! אני פיני. מה נדפיס היום?";
-        
-        // כאן התיקון: אנחנו מוסיפים כפתורים גם לתשובות של ה-AI
-        return { 
-            actions: [{ 
-                type: 'GENERATE_RESPONSE', 
-                payload: { 
-                    text: response,
-                    quickReplies: MAIN_MENU_BUTTONS // <--- כפתורים גם ב"היי"
-                } 
-            }] 
-        };
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: response, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
     if (intentData.product && intentData.product !== session.currentProduct) {
@@ -77,7 +120,6 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
-        // Fallback למקרה שאין מוצר
         if (intentData.aiResponse && !intentData.aiResponse.includes("לא בטוח")) {
              return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse, quickReplies: MAIN_MENU_BUTTONS } }] };
         }
@@ -109,7 +151,7 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. Size
+        // A. Size (Regex)
         if (activeQuestion.key === 'size') {
             const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
             if (sizeMatch) {
@@ -123,9 +165,9 @@ function planActions(intentData, session) {
             }
         }
 
-        // B. Buttons
+        // B. Buttons (Fuzzy)
         if (!matchFound && activeQuestion.options) {
-            const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי', 'אני']; 
+            const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי', 'אני', 'את']; 
             const match = activeQuestion.options.find(opt => {
                 const label = opt.label.toLowerCase();
                 const val = opt.value.toLowerCase();
@@ -154,7 +196,6 @@ function planActions(intentData, session) {
             if (activeQuestion.key !== 'qty' && normalizedParams.qty) delete normalizedParams.qty;
         }
     }
-    // ===============================
 
     // MAPPING
     if (productConfig.questions) {
@@ -204,9 +245,20 @@ function planActions(intentData, session) {
         // 6. Calc
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
-            const item = calcResult.lastAdded;
             
-            let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
+            // === יצירת הפריט הסופי לעגלה ול-PDF ===
+            const productName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
+            const fullSpec = generateTechnicalSpec(newDraft, productConfig);
+            
+            const item = { 
+                ...calcResult.lastAdded,
+                productName: productName,
+                fullSpec: fullSpec,
+                // עדכון התיאור כך שיכיל את כל המפרט - קריטי ל-PDF!
+                description: `**${productName}**\n${fullSpec}` 
+            };
+            
+            let successText = `✅ הוספתי לעגלה:\n${item.description}\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item }); 
 

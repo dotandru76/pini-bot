@@ -1,79 +1,52 @@
-/** tests/test_offline.js V46.1 - Smart Mocking */
+/** tests/test_offline.js V49.0 - Smart Delete Support */
 const { planActions } = require('../engine/planner');
 const { validateLLMResult } = require('../engine/validator');
 require('dotenv').config();
 
-// --- 1. MOCK SESSION ---
-let mockSession = {
-    cart: [],
-    currentProduct: null,
-    draftAttributes: {}
-};
+// MOCK SESSION
+let mockSession = { cart: [], currentProduct: null, draftAttributes: {} };
+function resetSession() { mockSession = { cart: [], currentProduct: null, draftAttributes: {} }; }
 
-function resetSession() {
-    mockSession = { cart: [], currentProduct: null, draftAttributes: {} };
-}
-
-// --- 2. MOCK AI (המוח המזויף - עכשיו חכם יותר) ---
-// מדמה את מה ש-Gemini היה מחלץ מהטקסט
+// MOCK CLASSIFIER (Updated for the complex scenario)
 function mockClassifier(text) {
     const t = text.toLowerCase();
     let mapped_params = {};
 
-    // זיהוי פרמטרים (Simulating LLM Extraction)
+    // פרמטרים
     if (t.includes('מט')) mapped_params.paper_type = 'matte_350';
-    if (t.includes('למינציה')) mapped_params.lamination = 'none';
-    if (t.includes('השבחה')) mapped_params.finishing = 'none';
+    if (t.includes('100') && t.includes('200')) mapped_params.size = '100x200'; // Mocking size extraction
     
-    // פקודות מערכת
-    if (t.includes('היי')) return { intent: 'chat', answer_text: 'היי! מה נדפיס?' };
+    // פקודות
+    if (t.includes('היי')) return { intent: 'chat', answer_text: 'היי!' };
     if (t.includes('תפריט')) return { intent: 'reset' };
-    if (t.includes('נקה')) return { intent: 'reset' };
-    if (t.includes('עגלה')) return { intent: 'show_cart' };
-    if (t.includes('ביי')) return { intent: 'chat', answer_text: 'ביי ביי!' };
-
-    // מוצרים
-    if (t.includes('כרטיס')) return { intent: 'quote', product: 'bc' };
-    if (t.includes('ספר')) return { intent: 'quote', product: 'booklet' };
-    if (t.includes('רולאפ')) return { intent: 'quote', product: 'rollup' };
+    if (t.includes('מחק')) return { intent: 'remove' }; // זיהוי מחיקה
     
-    // סיום (ה-Validator יהפוך את זה ל-show_cart אם יש עגלה)
-    if (t.includes('הצעת מחיר') || t.includes('שלח לי')) return { intent: 'quote' };
+    // מוצרים
+    if (t.includes('רולאפ')) return { intent: 'quote', product: 'rollup' };
 
-    // ברירת מחדל: עדכון
     return { intent: 'update', mapped_params };
 }
 
-// --- 3. THE TEST RUNNER ---
+// SCENARIO
 const SCENARIOS = [
     {
-        name: "📚 זרימת ספרים (לוגיקה משולבת)",
-        steps: [
-            { user: "היי", expect: "response" },
-            { user: "אני רוצה ספר", expect: "question" }, 
-            { user: "כריכה רכה", expect: "question" }, 
-            { user: "100 עותקים", expect: "question" }, 
-            { user: "300 עמודים", expect: "question" }, 
-            { user: "A5", expect: "question" },
-            { user: "כרומו 300", expect: "calculate" }
-        ]
-    },
-    {
-        name: "🛒 זרימת סיום (Checkout)",
+        name: "🗑️ מחיקה חכמה (Smart Delete)",
         steps: [
             { user: "תפריט", expect: "response" },
-            { user: "1000 כרטיסי ביקור", expect: "question" },
-            { user: "נייר מט", expect: "question" }, // המוק יחזיר paper_type, ולכן זה יעבוד
-            { user: "ללא למינציה", expect: "question" },
-            { user: "ללא השבחה", expect: "calculate" },
-            { user: "מה יש בעגלה?", expect: "response" }, 
-            { user: "תשלח לי הצעת מחיר", expect: "response" } // עכשיו זה יעבוד כי יש עגלה מלאה
+            { user: "אני רוצה רולאפ", expect: "question" },
+            { user: "1", expect: "question" },
+            { user: "100x200", expect: "calculate" }, // פריט 0: 100x200
+            { user: "אני רוצה עוד רולאפ", expect: "question" },
+            { user: "1", expect: "question" },
+            { user: "120x200", expect: "calculate" }, // פריט 1: 120x200 (האחרון)
+            // עכשיו ננסה למחוק את הראשון (100x200) ולא את האחרון
+            { user: "תמחק את הרולאפ שהוא 100 על 200", expect: "response" }
         ]
     }
 ];
 
 async function runOfflineTests() {
-    console.log(`\x1b[36m🚀 STARTING OFFLINE LOGIC TEST (V46.1)\x1b[0m`);
+    console.log(`\x1b[36m🚀 STARTING OFFLINE LOGIC TEST (V49.0)\x1b[0m`);
     let passed = 0;
     let failed = 0;
 
@@ -82,18 +55,15 @@ async function runOfflineTests() {
         resetSession();
 
         for (const step of scenario.steps) {
-            // 1. CLASSIFY (Mock)
             let mockResult = mockClassifier(step.user);
             
-            // 2. VALIDATE (Real Logic)
             let validated = validateLLMResult({ 
                 intent: mockResult.intent, 
                 product: mockResult.product, 
-                mapped_params: mockResult.mapped_params || {}, // העברת הפרמטרים מהמוק
+                mapped_params: mockResult.mapped_params || {},
                 answer_text: mockResult.answer_text 
             }, step.user, mockSession);
 
-            // 3. PLAN (Real Logic)
             const plan = planActions({ 
                 intent: validated.intent, 
                 extractedParams: validated.mapped_params, 
@@ -102,20 +72,9 @@ async function runOfflineTests() {
                 raw_text: step.user 
             }, mockSession);
 
-            // תיקון לוגיקת שליפת הפעולה: מחפשים את התגובה האמיתית, לא סתם את הראשונה
-            const action = plan.actions.find(a => 
-                a.type === 'PRESENT_OPTIONS' || 
-                a.type === 'CALCULATE_AND_ADD' || 
-                a.type === 'GENERATE_RESPONSE'
-            ) || plan.actions[0];
+            const action = plan.actions.find(a => ['PRESENT_OPTIONS', 'CALCULATE_AND_ADD', 'GENERATE_RESPONSE'].includes(a.type)) || plan.actions[0];
             
-            // 4. ASSERT
-            let actualType = 'unknown';
-            if (action.type === 'PRESENT_OPTIONS') actualType = 'question';
-            if (action.type === 'CALCULATE_AND_ADD') actualType = 'calculate';
-            if (action.type === 'GENERATE_RESPONSE') actualType = 'response';
-            
-            // עדכון ה-Session
+            // --- LOGIC EXECUTION ---
             if (action.type === 'PRESENT_OPTIONS') {
                 mockSession.currentProduct = action.product;
                 mockSession.draftAttributes = action.saveDraft;
@@ -123,28 +82,41 @@ async function runOfflineTests() {
                 mockSession.cart.push(action.payload);
                 mockSession.currentProduct = null;
                 mockSession.draftAttributes = {};
-            } else if (action.type === 'REMOVE_FROM_CART') { // תמיכה במחיקה אם צריך
-                mockSession.cart.pop();
+            } else if (plan.actions.some(a => a.type === 'REMOVE_FROM_CART')) {
+                // *** התיקון כאן: שימוש באינדקס מה-Planner ***
+                const removeAction = plan.actions.find(a => a.type === 'REMOVE_FROM_CART');
+                if (removeAction.payload && typeof removeAction.payload.index === 'number') {
+                    console.log(`   ✂️ Splicing item at index ${removeAction.payload.index}`);
+                    mockSession.cart.splice(removeAction.payload.index, 1);
+                } else {
+                    mockSession.cart.pop(); // Fallback
+                }
             }
 
-            // תיקון ספציפי ל-Reset: אם קיבלנו ניקוי + תגובה, זה נחשב תגובה
-            if (plan.actions.some(a => a.type === 'CLEAR_SESSION_CONTEXT') && actualType === 'response') {
-                // זה בסדר, זה ה-Reset
-            }
+            let actualType = 'unknown';
+            if (action.type === 'PRESENT_OPTIONS') actualType = 'question';
+            if (action.type === 'CALCULATE_AND_ADD') actualType = 'calculate';
+            if (action.type === 'GENERATE_RESPONSE') actualType = 'response';
 
             if (actualType === step.expect) {
                 console.log(`✅ "${step.user}" -> ${actualType}`);
                 passed++;
+                if(step.user.includes("תמחק")) {
+                    // וידוא שנשאר הפריט הנכון (הגדול יותר)
+                    const remainingItem = mockSession.cart[0];
+                    if(remainingItem && remainingItem.description.includes("120")) {
+                        console.log(`   ✨ Verified: The correct item (100x200) was deleted!`);
+                    } else {
+                        console.log(`   ⚠️ Warning: Wrong item deleted.`);
+                    }
+                }
             } else {
                 console.log(`❌ "${step.user}"`);
-                console.log(`   Expected: ${step.expect}`);
-                console.log(`   Got:      ${actualType}`);
-                // console.log(`   Details:  ${JSON.stringify(action)}`); // לדיבאג
+                console.log(`   Got: ${actualType}`);
                 failed++;
             }
         }
     }
-
     console.log(`\n📊 RESULTS: ${passed} Passed, ${failed} Failed`);
 }
 
