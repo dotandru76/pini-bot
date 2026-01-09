@@ -1,4 +1,4 @@
-/** engine/planner.js V37.1 - Upsell & Wizard */
+/** engine/planner.js V38.0 - The Loop Killer */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -15,6 +15,7 @@ const PARAM_ALIASES = {
 
 function planActions(intentData, session) {
     const actions = [];
+    const rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
     
     // 1. System Actions
     if (intentData.intent === 'reset') {
@@ -28,7 +29,7 @@ function planActions(intentData, session) {
          return { actions: [{ type: 'REMOVE_FROM_CART', payload: {} }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את הפריט האחרון.", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
-    // 2. Context
+    // 2. Context Management
     let currentProductKey = intentData.product || session.currentProduct;
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
@@ -43,14 +44,40 @@ function planActions(intentData, session) {
     const productConfig = productsDB[currentProductKey];
     if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה בבנייה." } }] };
 
-    // 3. Update Params
+    // --- 3. Params Update Logic (התיקון הגדול) ---
     let newParams = intentData.extractedParams || {};
     let normalizedParams = {};
+    
+    // א. נרמול פרמטרים רגיל
     Object.keys(newParams).forEach(key => {
         const dbKey = PARAM_ALIASES[key] || key; 
         normalizedParams[dbKey] = newParams[key];
     });
 
+    // ב. מנגנון תפיסת כפתורים (Direct Match) - התיקון ללופ!
+    // אנחנו בודקים איזו שאלה אנחנו כרגע שואלים את המשתמש
+    if (productConfig.questions) {
+        for (const q of productConfig.questions) {
+            // אם זו השאלה שחסרה כרגע ב-Draft
+            if (session.draftAttributes[q.key] == null && normalizedParams[q.key] == null) {
+                // נבדוק אם הקלט הגולמי (rawInput) תואם בדיוק לאחד הכפתורים של השאלה הזו
+                if (q.options) {
+                    const directMatch = q.options.find(opt => 
+                        opt.value === rawInput || // התאמה לערך (perfect_bind)
+                        opt.label === rawInput    // התאמה לתווית (כריכה רכה)
+                    );
+                    
+                    if (directMatch) {
+                        console.log(`🎯 Direct Button Match found: ${q.key} = ${directMatch.value}`);
+                        normalizedParams[q.key] = directMatch.value; // בום! תפסנו את התשובה
+                    }
+                }
+                break; // מספיק למצוא את השאלה הראשונה הפתוחה
+            }
+        }
+    }
+
+    // ג. מיפוי ערכים חכם (המשך הלוגיקה הרגילה)
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -64,9 +91,11 @@ function planActions(intentData, session) {
     }
 
     const newDraft = { ...session.draftAttributes, ...normalizedParams };
+    
+    // Defaults
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
-    // 4. The Funnel
+    // 4. The Funnel (What's next?)
     let missingParam = null;
     let questionToAsk = null;
 
@@ -95,29 +124,25 @@ function planActions(intentData, session) {
             saveDraft: newDraft
         });
     } else {
-        // --- 6. Calc & Upsell ---
+        // --- 6. Calc ---
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
             const item = calcResult.lastAdded;
             
             let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
 
-            // === מנוע ה-Upsell ===
+            // Upsell Logic
             try {
-                // חישוב היפותטי לכמות כפולה
                 const doubleQty = item.qty * 2;
                 const upsellDraft = { ...newDraft, qty: doubleQty };
                 const upsellResult = calculate_custom_job([], { ...upsellDraft, product: currentProductKey });
-                
                 const currentUnitPrice = item.client_price / item.qty;
                 const nextUnitPrice = upsellResult.lastAdded.client_price / doubleQty;
 
-                // אם המחיר ליחידה יורד ב-15% לפחות
                 if (nextUnitPrice < currentUnitPrice * 0.85) {
-                     successText += `\n\n💡 **טיפ:** אם תיקח ${doubleQty} יח', המחיר ליחידה ירד משמעותית! (₪${upsellResult.lastAdded.client_price} סה"כ)`;
+                     successText += `\n\n💡 **טיפ:** ב-${doubleQty} יח', המחיר ליחידה יורד משמעותית!`;
                 }
-            } catch (e) { /* התעלמות משגיאות Upsell */ }
-            // ======================
+            } catch (e) {}
 
             successText += `\n\nמה עכשיו?`;
 
