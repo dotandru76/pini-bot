@@ -1,4 +1,4 @@
-/** engine/validator.js V44.0 - Checkout Logic Added */
+/** engine/validator.js V47.0 - Final Polish */
 const fs = require('fs');
 
 const PRODUCT_KEYWORDS = {
@@ -66,11 +66,12 @@ function validateLLMResult(llmResult, rawText, session) {
     }
 
     // 6. === תיקון CHECKOUT ===
-    // אם הלקוח מבקש הצעה/מחיר ויש לו משהו בעגלה -> שלח אותו לסיום
-    if (validated.intent === 'quote' && session.cart && session.cart.length > 0) {
-        const checkoutWords = ['הצעת מחיר', 'הצעה', 'שלח לי', 'סיכום', 'כמה לתשלום', 'חשבון'];
-        if (checkoutWords.some(w => text.includes(w)) && !validated.product) {
-            console.log(`🛡️ [VALIDATOR] Detected Checkout Request -> Converting to show_cart`);
+    // הוספתי גם את המילה checkout באנגלית ובעברית
+    const checkoutWords = ['הצעת מחיר', 'הצעה', 'שלח לי', 'סיכום', 'חשבון', 'checkout', 'לסיים'];
+    if (checkoutWords.some(w => text.includes(w))) {
+        // אם העגלה לא ריקה, זה בהכרח סיום
+        if (session.cart && session.cart.length > 0) {
+            console.log(`🛡️ [VALIDATOR] Checkout detected -> Converting to show_cart`);
             validated.intent = 'show_cart';
         }
     }

@@ -1,4 +1,4 @@
-/** engine/planner.js V45.0 - Context King & Chat Fix */
+/** engine/planner.js V47.0 - NaN Fix & Size Priority */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -18,11 +18,12 @@ function planActions(intentData, session) {
     const actions = [];
     const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
     
-    // 1. System Actions
+    // --- 1. System Actions ---
     if (intentData.intent === 'reset') {
         return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}] } }] };
     }
     if (intentData.intent === 'show_cart') {
+        // תיקון NaN: מוודאים שיש client_price
         const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
@@ -30,13 +31,9 @@ function planActions(intentData, session) {
          return { actions: [{ type: 'REMOVE_FROM_CART', payload: {} }, { type: 'GENERATE_RESPONSE', payload: { text: "מחקתי את הפריט האחרון.", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
-    // 2. Context Management
+    // --- 2. Context ---
     let currentProductKey = intentData.product || session.currentProduct;
-
-    // TIKUN CHAT: אם זה צ'אט, מנקים מוצר ונותנים לזרום לתפריט הראשי
-    if (intentData.intent === 'chat') {
-        currentProductKey = null;
-    }
+    if (intentData.intent === 'chat') currentProductKey = null;
 
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
@@ -45,18 +42,16 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
-        // אם יש תשובה חכמה מה-AI, נציג אותה
         if (intentData.aiResponse && !intentData.aiResponse.includes("לא בטוח")) {
              return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse } }] };
         }
-        // אחרת - תפריט ראשי
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}, {label:'ספרים', value:'booklet'}] } }] };
     }
 
     const productConfig = productsDB[currentProductKey];
     if (!productConfig) return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה בבנייה." } }] };
 
-    // 3. Params Mapping
+    // --- 3. Params Mapping ---
     let newParams = intentData.extractedParams || {};
     let normalizedParams = {};
     Object.keys(newParams).forEach(key => {
@@ -64,8 +59,7 @@ function planActions(intentData, session) {
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // === FORCE MATCH + CONTEXT PRIORITY ===
-    // קודם מזהים מה השאלה שחסרה *עכשיו* לפי הזיכרון בלבד
+    // === FORCE MATCH LOGIC (PRIORITY FIXED) ===
     let activeQuestion = null;
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
@@ -79,8 +73,9 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. זיהוי מידות
+        // A. זיהוי מידות (עדיפות עליונה!)
         if (activeQuestion.key === 'size') {
+            // Regex משופר שתופס גם "על" בעברית
             const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
             if (sizeMatch) {
                 const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
@@ -93,7 +88,7 @@ function planActions(intentData, session) {
             }
         }
 
-        // B. כפתורים (Fuzzy Match זהיר)
+        // B. כפתורים
         if (!matchFound && activeQuestion.options) {
             const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי']; 
             const match = activeQuestion.options.find(opt => {
@@ -110,7 +105,7 @@ function planActions(intentData, session) {
             }
         }
         
-        // C. מספרים
+        // C. מספרים (רק אם לא מצאנו גודל!)
         if (!matchFound && activeQuestion.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) {
@@ -120,20 +115,14 @@ function planActions(intentData, session) {
             }
         }
 
-        // === CONTEXT PRIORITY FIX ===
-        // אם מצאנו תשובה לשאלה הספציפית הזו (למשל Pages), 
-        // אבל המחלץ הגנרי זיהה גם Qty (כי הוא רואה מספר),
-        // אנחנו חייבים למחוק את ה-Qty הגנרי כדי שלא ידרוס את הכמות שכבר יש בזיכרון!
+        // ניקוי רעשים אם נמצאה התאמה
         if (matchFound) {
-            if (activeQuestion.key !== 'qty' && normalizedParams.qty) {
-                console.log(`🧹 Cleaning conflicting 'qty' because matched specific '${activeQuestion.key}'`);
-                delete normalizedParams.qty;
-            }
+            if (activeQuestion.key !== 'qty' && normalizedParams.qty) delete normalizedParams.qty;
         }
     }
     // ===============================
 
-    // מיפוי רגיל ליתר השאלות
+    // מיפוי רגיל
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -185,21 +174,10 @@ function planActions(intentData, session) {
             
             let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
             
-            try {
-                const doubleQty = item.qty * 2;
-                const upsellDraft = { ...newDraft, qty: doubleQty };
-                const upsellResult = calculate_custom_job([], { ...upsellDraft, product: currentProductKey });
-                const currentUnitPrice = item.client_price / item.qty;
-                const nextUnitPrice = upsellResult.lastAdded.client_price / doubleQty;
+            // --- תיקון NaN: שומרים את האייטם המחושב, לא את הטיוטה! ---
+            actions.push({ type: 'CALCULATE_AND_ADD', payload: item }); 
+            // ---------------------------------------------------------
 
-                if (nextUnitPrice < currentUnitPrice * 0.85) {
-                     successText += `\n\n💡 **טיפ:** ב-${doubleQty} יח', המחיר ליחידה יורד משמעותית!`;
-                }
-            } catch (e) {}
-
-            successText += `\n\nמה עכשיו?`;
-
-            actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
             actions.push({ 
                 type: 'GENERATE_RESPONSE', 
                 payload: { 
