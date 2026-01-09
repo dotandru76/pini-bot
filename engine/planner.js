@@ -1,4 +1,4 @@
-/** engine/planner.js V47.0 - NaN Fix & Size Priority */
+/** engine/planner.js V48.0 - Always-On Menu */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -14,16 +14,35 @@ const PARAM_ALIASES = {
     'cut': 'cut'
 };
 
+// כפתורים קבועים שיופיעו בהתחלה
+const MAIN_MENU_BUTTONS = [
+    { label: '📋 תפריט ראשי', value: 'reset' },
+    { label: 'כרטיסי ביקור', value: 'bc' },
+    { label: 'רולאפ', value: 'rollup' },
+    { label: 'פליירים', value: 'flyer' }
+];
+
 function planActions(intentData, session) {
     const actions = [];
     const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
     
     // --- 1. System Actions ---
     if (intentData.intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}] } }] };
+        return { 
+            actions: [
+                { type: 'CLEAR_SESSION_CONTEXT' }, 
+                { 
+                    type: 'GENERATE_RESPONSE', 
+                    payload: { 
+                        text: getMainMenu(), 
+                        quickReplies: MAIN_MENU_BUTTONS // <--- הנה הכפתורים שביקשת
+                    } 
+                }
+            ] 
+        };
     }
+
     if (intentData.intent === 'show_cart') {
-        // תיקון NaN: מוודאים שיש client_price
         const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
@@ -33,7 +52,23 @@ function planActions(intentData, session) {
 
     // --- 2. Context ---
     let currentProductKey = intentData.product || session.currentProduct;
-    if (intentData.intent === 'chat') currentProductKey = null;
+
+    // CHAT INTENT (היי / שלום / ביי)
+    if (intentData.intent === 'chat') {
+        currentProductKey = null;
+        const response = intentData.aiResponse || "אהלן! אני פיני. מה נדפיס היום?";
+        
+        // כאן התיקון: אנחנו מוסיפים כפתורים גם לתשובות של ה-AI
+        return { 
+            actions: [{ 
+                type: 'GENERATE_RESPONSE', 
+                payload: { 
+                    text: response,
+                    quickReplies: MAIN_MENU_BUTTONS // <--- כפתורים גם ב"היי"
+                } 
+            }] 
+        };
+    }
 
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
@@ -42,10 +77,11 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
+        // Fallback למקרה שאין מוצר
         if (intentData.aiResponse && !intentData.aiResponse.includes("לא בטוח")) {
-             return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse } }] };
+             return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: intentData.aiResponse, quickReplies: MAIN_MENU_BUTTONS } }] };
         }
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: [{label:'כרטיסים', value:'bc'}, {label:'פליירים', value:'flyer'}, {label:'ספרים', value:'booklet'}] } }] };
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
     const productConfig = productsDB[currentProductKey];
@@ -59,7 +95,7 @@ function planActions(intentData, session) {
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // === FORCE MATCH LOGIC (PRIORITY FIXED) ===
+    // === FORCE MATCH LOGIC ===
     let activeQuestion = null;
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
@@ -73,9 +109,8 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. זיהוי מידות (עדיפות עליונה!)
+        // A. Size
         if (activeQuestion.key === 'size') {
-            // Regex משופר שתופס גם "על" בעברית
             const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
             if (sizeMatch) {
                 const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
@@ -88,9 +123,9 @@ function planActions(intentData, session) {
             }
         }
 
-        // B. כפתורים
+        // B. Buttons
         if (!matchFound && activeQuestion.options) {
-            const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי']; 
+            const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי', 'אני']; 
             const match = activeQuestion.options.find(opt => {
                 const label = opt.label.toLowerCase();
                 const val = opt.value.toLowerCase();
@@ -105,7 +140,7 @@ function planActions(intentData, session) {
             }
         }
         
-        // C. מספרים (רק אם לא מצאנו גודל!)
+        // C. Numbers
         if (!matchFound && activeQuestion.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) {
@@ -115,14 +150,13 @@ function planActions(intentData, session) {
             }
         }
 
-        // ניקוי רעשים אם נמצאה התאמה
         if (matchFound) {
             if (activeQuestion.key !== 'qty' && normalizedParams.qty) delete normalizedParams.qty;
         }
     }
     // ===============================
 
-    // מיפוי רגיל
+    // MAPPING
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -174,9 +208,7 @@ function planActions(intentData, session) {
             
             let successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
             
-            // --- תיקון NaN: שומרים את האייטם המחושב, לא את הטיוטה! ---
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item }); 
-            // ---------------------------------------------------------
 
             actions.push({ 
                 type: 'GENERATE_RESPONSE', 
