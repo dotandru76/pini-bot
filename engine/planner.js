@@ -1,4 +1,4 @@
-/** engine/planner.js V52.0 - Contract Grade & Robust Delete */
+/** engine/planner.js V53.0 - PDF Clean Description Fix */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -41,7 +41,6 @@ function generateTechnicalSpec(params, productConfig) {
             }
         });
     } else {
-        // Fallback: אם אין קונפיגורציה, נשמור את הערכים הגולמיים כדי שהחיפוש יעבוד
         Object.entries(params).forEach(([k, v]) => {
             if (k !== 'qty') specs.push(v);
         });
@@ -62,7 +61,7 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
-    // === SMART REMOVE LOGIC (Improved) ===
+    // === SMART REMOVE LOGIC ===
     if (intentData.intent === 'remove') {
         let indexToRemove = session.cart.length - 1; 
         let itemDesc = "הפריט האחרון";
@@ -78,11 +77,10 @@ function planActions(intentData, session) {
 
                 for (let i = 0; i < session.cart.length; i++) {
                     const item = session.cart[i];
-                    // חיפוש בתיאור המלא (כולל המפרט שיצרנו)
-                    const itemText = (item.description + " " + (item.fullSpec || "")).toLowerCase();
+                    const itemText = (item.cleanDescription + " " + (item.fullSpec || "")).toLowerCase();
                     const score = keywords.reduce((acc, kw) => acc + (itemText.includes(kw) ? 1 : 0), 0);
                     
-                    if (score >= bestScore) { // LIFO priority on ties
+                    if (score >= bestScore) {
                         bestScore = score;
                         bestIndex = i;
                     }
@@ -91,8 +89,7 @@ function planActions(intentData, session) {
             }
             
             const item = session.cart[indexToRemove];
-            itemDesc = item.productName || "פריט";
-            if (item.fullSpec) itemDesc += ` (${item.fullSpec})`;
+            itemDesc = item.cleanDescription || "פריט"; // שימוש בתיאור הנקי
 
             return { 
                 actions: [
@@ -151,7 +148,7 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. Size (Regex)
+        // A. Size
         if (activeQuestion.key === 'size') {
             const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
             if (sizeMatch) {
@@ -165,7 +162,7 @@ function planActions(intentData, session) {
             }
         }
 
-        // B. Buttons (Fuzzy)
+        // B. Buttons
         if (!matchFound && activeQuestion.options) {
             const STOP_WORDS = ['ספר', 'חוברת', 'רוצה', 'צריך', 'שלום', 'היי', 'אני', 'את']; 
             const match = activeQuestion.options.find(opt => {
@@ -246,19 +243,27 @@ function planActions(intentData, session) {
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
             
-            // === יצירת הפריט הסופי לעגלה ול-PDF ===
+            // === בניית התיאור המושלם ===
             const productName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
             const fullSpec = generateTechnicalSpec(newDraft, productConfig);
             
+            // תיאור נקי ל-PDF (בלי כוכביות)
+            const cleanDesc = `${productName} - ${fullSpec}`;
+            
+            // תיאור יפה לוואטסאפ (עם כוכביות)
+            const displayDesc = `**${productName}**\n${fullSpec}`;
+
             const item = { 
                 ...calcResult.lastAdded,
                 productName: productName,
                 fullSpec: fullSpec,
-                // עדכון התיאור כך שיכיל את כל המפרט - קריטי ל-PDF!
-                description: `**${productName}**\n${fullSpec}` 
+                description: cleanDesc, // PDF יקח את זה
+                cleanDescription: cleanDesc, // לשימוש במחיקה חכמה
+                displayDescription: displayDesc, // לשימוש בתצוגת צ'אט
+                attributes: newDraft
             };
             
-            let successText = `✅ הוספתי לעגלה:\n${item.description}\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
+            let successText = `✅ הוספתי לעגלה:\n${displayDesc}\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item }); 
 
