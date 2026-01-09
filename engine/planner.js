@@ -1,4 +1,4 @@
-/** engine/planner.js V54.0 - Global Regex Priority */
+/** engine/planner.js V57.0 - Safe Input Cleaning */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -61,13 +61,19 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
+    // === SMART REMOVE LOGIC ===
     if (intentData.intent === 'remove') {
         let indexToRemove = session.cart.length - 1; 
         let itemDesc = "הפריט האחרון";
 
         if (session.cart.length > 0) {
-            const keywords = rawInput.split(' ').filter(w => 
-                w.length > 1 && !['תמחק', 'את', 'זה', 'רוצה', 'בבקשה', 'לי', 'אחד', 'שהוא', 'של', 'הזה', 'רולאפ', 'הפריט'].includes(w)
+            // ניקוי חכם: מסיר "ה-" ממספרים (למשל "ה-85" -> "85")
+            const keywords = rawInput.split(' ').map(w => {
+                let clean = w.replace(/[.,?!'"\-]/g, ''); 
+                if (/^ה\d+$/.test(clean)) clean = clean.substring(1); 
+                return clean;
+            }).filter(w => 
+                w.length > 1 && !['תמחק', 'את', 'זה', 'רוצה', 'בבקשה', 'לי', 'אחד', 'שהוא', 'של', 'הזה', 'רולאפ', 'הפריט', 'הקטן'].includes(w)
             );
 
             if (keywords.length > 0) {
@@ -77,10 +83,17 @@ function planActions(intentData, session) {
                     const item = session.cart[i];
                     const itemText = (item.cleanDescription + " " + (item.fullSpec || "")).toLowerCase();
                     const score = keywords.reduce((acc, kw) => acc + (itemText.includes(kw) ? 1 : 0), 0);
-                    if (score >= bestScore) { bestScore = score; bestIndex = i; }
+                    
+                    if (score > bestScore) { 
+                        bestScore = score; 
+                        bestIndex = i; 
+                    } else if (score === bestScore && score > 0) {
+                         bestIndex = i;
+                    }
                 }
                 if (bestScore > 0) indexToRemove = bestIndex;
             }
+            
             const item = session.cart[indexToRemove];
             itemDesc = item.cleanDescription || "פריט";
             return { 
@@ -126,22 +139,34 @@ function planActions(intentData, session) {
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // === GLOBAL REGEX EXTRACTION (The Fix) ===
-    // אנו שולפים מידות לפני הכל כדי למנוע זיהוי שגוי של מספרים
-    const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
-    if (sizeMatch) {
-        const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
-        console.log(`🎯 Global Regex: Extracted Size "${val}"`);
-        normalizedParams['size'] = val;
-        // מחיקת המידה מהטקסט כדי שלא תזוהה ככמות
-        rawInput = rawInput.replace(sizeMatch[0], ' '); 
+    // === 🛡️ SAFE CLEANING (V57) ===
+    // ניקוי הקלט מתבצע רק אם אנחנו *לא* במצב מחיקה
+    const isEditing = intentData.intent !== 'remove' && intentData.intent !== 'show_cart';
+
+    if (isEditing) {
+        // 1. Global Regex Size
+        const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
+        if (sizeMatch) {
+            const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
+            console.log(`🎯 Global Regex: Extracted Size "${val}"`);
+            normalizedParams['size'] = val;
+            rawInput = rawInput.replace(sizeMatch[0], ' '); 
+        }
+
+        // 2. Qty Cleaning
+        if (normalizedParams.qty) {
+            const qtyRegex = new RegExp(`\\b${normalizedParams.qty}\\b`);
+            if (qtyRegex.test(rawInput)) {
+                 console.log(`🧹 Cleaning extracted qty "${normalizedParams.qty}" from text`);
+                 rawInput = rawInput.replace(qtyRegex, ' ');
+            }
+        }
     }
 
-    // === FORCE MATCH LOGIC (Standard) ===
+    // === FORCE MATCH LOGIC ===
     let activeQuestion = null;
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            // אם כבר מצאנו את המידה ב-Global, ה-Draft שלה יהיה מלא ולא נשאל עליה
             const currentVal = normalizedParams[q.key] || session.draftAttributes[q.key];
             if (currentVal == null) {
                 activeQuestion = q;
@@ -153,7 +178,7 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. Size (Fallback for simple formats)
+        // A. Size (Fallback)
         if (activeQuestion.key === 'size' && !normalizedParams.size) {
              if (/^[a-zA-Z]+\d+$/.test(rawInput)) { 
                 normalizedParams[activeQuestion.key] = rawInput.toUpperCase();
@@ -178,7 +203,7 @@ function planActions(intentData, session) {
             }
         }
         
-        // C. Numbers (Runs on Cleaned Input)
+        // C. Numbers
         if (!matchFound && activeQuestion.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) {
@@ -189,7 +214,7 @@ function planActions(intentData, session) {
         }
     }
 
-    // MAPPING & MERGING
+    // MAPPING
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -236,8 +261,10 @@ function planActions(intentData, session) {
         // 6. Calc
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
-            const productName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
+            
+            const productName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey || "מוצר כללי";
             const fullSpec = generateTechnicalSpec(newDraft, productConfig);
+            
             const cleanDesc = `${productName} - ${fullSpec}`;
             const displayDesc = `**${productName}**\n${fullSpec}`;
 
