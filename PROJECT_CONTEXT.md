@@ -1,5 +1,5 @@
 # PINI BOT PROJECT CONTEXT
-Generated: 2026-01-08T12:28:26.128Z
+Generated: 2026-01-09T07:26:39.517Z
 
 
 
@@ -108,28 +108,9 @@ Generated: 2026-01-08T12:28:26.128Z
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number" },
-      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
-      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "למינציה מט", "value": "lami_matte" }, { "label": "למינציה מבריקה", "value": "lami_gloss" }] }
-    ]
-  },
-  "flyer": {
-    "name": "פליירים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פליירים?", "type": "number" },
-      { "key": "size", "question_he": "באיזה גודל?", "options": [{ "label": "A5 (חצי דף)", "value": "A5" }, { "label": "A4 (דף שלם)", "value": "A4" }, { "label": "A6 (גלויה)", "value": "A6" }] },
-      { "key": "paper_type", "question_he": "איזה עובי נייר?", "options": [{ "label": "130 גרם (דק)", "value": "chromo_130" }, { "label": "170 גרם (בינוני)", "value": "chromo_170" }, { "label": "300 גרם (עבה)", "value": "chromo_300" }] }
-    ]
-  },
-  "booklet": {
-    "name": "חוברות וספרים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה עותקים להדפיס?", "type": "number" },
-      { "key": "pages", "question_he": "כמה עמודים בחוברת (כולל כריכה)?", "type": "number" },
-      { "key": "size", "question_he": "גודל סגור?", "options": [{ "label": "A4", "value": "A4" }, { "label": "A5", "value": "A5" }] },
-      { "key": "paper_type", "question_he": "איזה נייר פנים?", "options": [{ "label": "נטול עץ 80 (רגיל)", "value": "offset_80" }, { "label": "כרומו 135 (מבריק)", "value": "chromo_135" }] },
-      { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "כריכה רכה (הדבקה)", "value": "perfect_bind" }] }
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
+      { "key": "lamination", "question_he": "ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "מט (מומלץ)", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] },
+      { "key": "finishing", "question_he": "רוצה לשדרג עם השבחה?", "options": [{ "label": "ללא שדרוג", "value": "none" }, { "label": "הבלטה (Scodix)", "value": "scodix" }, { "label": "פויל זהב", "value": "gold_foil" }, { "label": "פויל כסף", "value": "silver_foil" }] }
     ]
   },
   "invitation": {
@@ -137,25 +118,18 @@ Generated: 2026-01-08T12:28:26.128Z
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה הזמנות?", "type": "number" },
-      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18", "value": "13x18" }, { "label": "A5", "value": "A5" }] },
-      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט (קלאסי)", "value": "matte_350" }] }
+      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18 (סטנדרט)", "value": "13x18" }, { "label": "15x15 (מרובע)", "value": "15x15" }] },
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט 350", "value": "matte_350" }] },
+      { "key": "finishing", "question_he": "גימור יוקרתי?", "options": [{ "label": "ללא", "value": "none" }, { "label": "פויל זהב", "value": "gold_foil" }, { "label": "פינות עגולות", "value": "round_corners" }] }
     ]
   },
-  "rollup": {
-    "name": "רולאפ",
-    "engine": "wide",
+  "flyer": {
+    "name": "פליירים",
+    "engine": "digital",
     "questions": [
-      { "key": "qty", "question_he": "כמה רולאפים?", "type": "number" },
-      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "85x200 (סטנדרט)", "value": "85x200" }, { "label": "100x200 (רחב)", "value": "100x200" }] }
-    ]
-  },
-  "poster": {
-    "name": "פוסטרים",
-    "engine": "wide",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פוסטרים?", "type": "number" },
-      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "50x70", "value": "50x70" }, { "label": "70x100", "value": "70x100" }, { "label": "A3", "value": "A3" }] },
-      { "key": "paper_type", "question_he": "על מה להדפיס?", "options": [{ "label": "נייר פוטו", "value": "paper_photo" }, { "label": "קנבס (בד)", "value": "canvas" }, { "label": "מדבקה", "value": "vinyl_sticker" }] }
+      { "key": "qty", "question_he": "כמה פליירים?", "type": "number" },
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "A5 (חצי דף)", "value": "A5" }, { "label": "A4 (דף שלם)", "value": "A4" }] },
+      { "key": "paper_type", "question_he": "עובי נייר?", "options": [{ "label": "130 גרם (דק)", "value": "chromo_130" }, { "label": "300 גרם (עבה)", "value": "chromo_300" }] }
     ]
   },
   "envelope": {
@@ -163,26 +137,16 @@ Generated: 2026-01-08T12:28:26.128Z
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה מעטפות?", "type": "number" },
-      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "11x23 (סטנדרט)", "value": "env_11x23" }, { "label": "16x23 (להזמנות)", "value": "env_16x23" }] },
-      { "key": "print", "question_he": "הדפסה?", "options": [{ "label": "צבעוני", "value": "color" }, { "label": "שחור לבן", "value": "bw" }] }
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "11x23 (סטנדרט)", "value": "env_11x23" }, { "label": "16x23 (להזמנות)", "value": "env_16x23" }] },
+      { "key": "print", "question_he": "הדפסה?", "options": [{ "label": "ללא הדפסה", "value": "none" }, { "label": "שחור לבן", "value": "bw" }, { "label": "צבעוני", "value": "color" }] }
     ]
   },
-  "sticker": {
-    "name": "מדבקות",
+  "rollup": {
+    "name": "רולאפ",
     "engine": "wide",
     "questions": [
-      { "key": "qty", "question_he": "כמה מטר רבוע (מ\"ר)?", "type": "number" },
-      { "key": "material", "question_he": "סוג מדבקה?", "options": [{ "label": "ויניל לבן", "value": "vinyl_white" }, { "label": "שקוף", "value": "vinyl_clear" }, { "label": "נייר", "value": "sticker_paper" }] },
-      { "key": "cut", "question_he": "צריך חיתוך צורני?", "options": [{ "label": "כן", "value": "yes" }, { "label": "לא (גליל/דף)", "value": "no" }] }
-    ]
-  },
-  "folder": {
-    "name": "פולדרים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פולדרים?", "type": "number" },
-      { "key": "lamination", "question_he": "סוג למינציה?", "options": [{ "label": "מט", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] },
-      { "key": "pocket", "question_he": "כיס?", "options": [{ "label": "כיס אחד", "value": "one_pocket" }, { "label": "שני כיסים", "value": "two_pockets" }] }
+      { "key": "qty", "question_he": "כמה רולאפים?", "type": "number" },
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "85x200 (סטנדרט)", "value": "85x200" }, { "label": "100x200 (רחב)", "value": "100x200" }] }
     ]
   }
 }
@@ -285,39 +249,42 @@ module.exports = { calculate_custom_job };
 
 --- FILE: engine\classifier.js ---
 ```js
-/** engine/classifier.js V13.0 - Intelligent Routing */
+/** engine/classifier.js V31.0 - Hybrid Intelligence */
 const { routeWithLLM } = require('./llmRouter');
-const { extractParameters } = require('./extractor'); // עדיין משתמשים בזה לגיבוי
+
+const KEYWORDS = {
+    // מילים שמפעילות פעולה מידית ללא AI
+    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט', 'ראשי'],
+    cart: ['עגלה', 'סיכום', 'מה יש', 'status'],
+    remove: ['מחק', 'הסר']
+};
 
 async function classifyMessage(message, session) {
     const text = message.toLowerCase().trim();
 
-    // 1. FAST PATH: בדיקות מהירות שלא עולות כסף/זמן
-    // זיהוי איפוס מוחלט
-    if (['reset', 'התחל', 'איפוס', 'ריסט'].includes(text)) {
-        return { intent: 'reset' };
-    }
-    
-    // זיהוי עגלה
-    if (text.includes('עגלה') || text.includes('סיכום')) {
-        return { intent: 'show_cart' };
-    }
+    // 1. FAST PATH (בדיקות מהירות)
+    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset' };
+    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart' };
+    if (KEYWORDS.remove.some(k => text === k)) return { intent: 'remove' };
 
-    // 2. SMART PATH: שימוש במוח (LLM)
-    // זה פותר את הבעיות: "מה זה גודל סגור?", "כריכה קשה", "סימניה"
+    // 2. SMART PATH (שימוש ב-Gemini)
     console.log("🧠 Consulting Gemini...");
-    const llmResult = await routeWithLLM(message, session);
-    
-    console.log("🧠 LLM Result:", JSON.stringify(llmResult));
+    try {
+        const llmResult = await routeWithLLM(message, session);
+        
+        console.log("🧠 LLM Decision:", llmResult.intent, llmResult.product);
 
-    // המרת תשובת ה-LLM לפורמט שה-Planner מכיר
-    return {
-        intent: llmResult.intent, // quote, faq, chat...
-        product: llmResult.product,
-        extractedParams: llmResult.mapped_params || {}, // הפרמטרים שנוקו ע"י ה-AI
-        aiResponse: llmResult.answer_text, // התשובה המילולית (ל-FAQ/Chat)
-        raw_text: message
-    };
+        return {
+            intent: llmResult.intent || 'chat',
+            product: llmResult.product,
+            extractedParams: llmResult.mapped_params || {}, 
+            aiResponse: llmResult.answer_text, 
+            raw_text: message
+        };
+    } catch (e) {
+        console.error("Classifier Fallback:", e);
+        return { intent: 'chat', aiResponse: "סליחה, אני קצת עמוס. נסה שוב." };
+    }
 }
 
 module.exports = { classifyMessage };
@@ -1224,13 +1191,12 @@ module.exports = { extractParameters };
 
 --- FILE: engine\llmRouter.js ---
 ```js
-/** engine/llmRouter.js V_DEBUG - Verbose Logging & Smart Inference */
+/** engine/llmRouter.js V32.0 - The Precision Brain */
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// לוג צבעוני לזיהוי קל
 const logAI = (msg, data) => console.log(`\x1b[35m[🧠 AI-BRAIN]\x1b[0m ${msg}`, data ? JSON.stringify(data, null, 2) : '');
 
 let genAI = null;
@@ -1240,55 +1206,48 @@ let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
 const SYSTEM_PROMPT = `
-You are "Pini", a smart print shop assistant.
-Your goal is to UNDERSTAND the user, even if they speak in slang or hints.
+You are "Pini", a print shop expert.
+Your job: Extract structured data (JSON) for the "Wizard".
 
-AVAILABLE PRODUCTS (DB KEYS):
-${Object.keys(productsDB).join(', ')}
+AVAILABLE PRODUCTS: ${Object.keys(productsDB).join(', ')}
 
-*** INFERENCE RULES (USE YOUR BRAIN!) ***
-1. **Implied Products**:
-   - User: "I'm getting married" -> Product: "invitation" (Intent: quote)
-   - User: "New business" -> Product: "bc" or "flyer" (Intent: quote)
-   - User: "Something for the wall" -> Product: "canvas" or "poster"
-   
-2. **Conversation & Personality**:
-   - If user asks a question ("What is X?"), Intent is "faq".
-   - If user just says "Hi", Intent is "chat".
-   - ALWAYS generate a "answer_text" in Hebrew that fits the persona (Warm, Israeli).
+*** IRON RULES (DO NOT BREAK) ***
+1. **Negation Handling (CRITICAL)**:
+   - If user says "No need for printing", "Without lamination", "No frame" -> Map parameter to "none".
+   - DO NOT output intent "remove" unless the user explicitly says "Delete the item", "Remove product", "Cancel order".
+   - Example: "I don't need printing" -> intent: "update", mapped_params: { "print": "none" }
 
-3. **OUTPUT JSON ONLY**:
+2. **Context Awareness**:
+   - Always prefer modifying the [ACTIVE PRODUCT] over switching topics.
+   - If user gives a number (e.g. "500"), map it to "qty".
+
+3. **Output Format (JSON ONLY)**:
 {
-  "intent": "quote" | "consult" | "chat" | "remove" | "reset",
+  "intent": "quote" | "consult" | "chat" | "remove" | "reset" | "update",
   "product": "product_key" | null,
-  "answer_text": "Hebrew text here",
-  "mapped_params": { "qty": 100, ... },
-  "confidence": "high" | "low",
-  "reasoning": "Why you chose this product/intent"
+  "answer_text": "Hebrew text here (keep it short)",
+  "mapped_params": { "qty": 100, "paper": "matte", ... },
+  "confidence": "high" | "low"
 }
 `;
 
 async function routeWithLLM(message, session) {
     logAI(`Analyzing Input: "${message}"`);
-    logAI(`Current Context Product: ${session.currentProduct || 'None'}`);
-
+    
     if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI" };
 
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         
         const finalPrompt = SYSTEM_PROMPT 
-            + `\n[CONTEXT]: Active Product: ${session.currentProduct || "None"}`
+            + `\n[CURRENT STATE]: Active Product: ${session.currentProduct || "None"}`
             + `\n[USER SAYS]: "${message}"\nJSON Output:`;
 
         const result = await model.generateContent(finalPrompt);
         let text = result.response.text().replace(/```json|```/g, '').trim();
-        
-        logAI("Raw Response from Gemini:", text); // <--- כאן נראה אם ה-AI הבין!
-
         const parsed = JSON.parse(text);
+        
         logAI("Parsed JSON:", parsed);
-
         return parsed;
 
     } catch (error) {
@@ -1835,161 +1794,172 @@ module.exports = {
 
 --- FILE: engine\planner.js ---
 ```js
-/** engine/planner.js V28.0 - Server-Side Normalization */
+/** engine/planner.js V32.0 - The Wizard Monster */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
+const { getMainMenu } = require('./productCatalog');
 
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
-// === מילון מונחים לשרת (The Translator) ===
-// ממפה מונחים שה-LLM עשוי להחזיר למפתחות האמיתיים ב-DB
+// מילון נרמול פרמטרים
 const PARAM_ALIASES = {
-    'paper': 'paper_type',
-    'stock': 'paper_type',
-    'media': 'paper_type',
-    'material': 'paper_type', // לפעמים בפורמט רחב
-    'coating': 'lamination',
-    'finish': 'finishing',
-    'width': 'size', // אם ה-LLM פירק גודל
-    'height': 'size'
+    'paper': 'paper_type', 'stock': 'paper_type', 'media': 'paper_type', 
+    'coating': 'lamination', 'finish': 'finishing', 'width': 'size', 
+    'amount': 'qty', 'quantity': 'qty', 'copies': 'qty'
 };
 
 function planActions(intentData, session) {
     const actions = [];
+    const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase() : "";
 
-    // --- 1. פעולות מערכת ---
-    if (intentData.intent === 'reset') {
-        return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: "דף חלק! 📄 מה נדפיס?" } }] };
-    }
-    if (intentData.intent === 'show_cart') {
-        const cartText = session.cart.length > 0 ? `יש לך ${session.cart.length} פריטים.` : "העגלה ריקה.";
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: cartText } }] };
-    }
+    // === 1. The Wizard Guard (הגנה מפני מחיקה בטעות) ===
+    // אם ה-LLM חשב שזה 'remove' אבל המשתמש דיבר על פרמטר ('בלי הדפסה')
     if (intentData.intent === 'remove') {
-         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: null } }] }; 
+        const negationKeywords = ['הדפסה', 'למינציה', 'בלי', 'ללא', 'צבע', 'שחור'];
+        if (negationKeywords.some(kw => rawInput.includes(kw))) {
+            console.log("🛡️ Wizard Guard: Intercepted accidental remove. Converting to Update.");
+            intentData.intent = 'update';
+            // אם זיהינו על מה מדובר, נעדכן ידנית
+            if (rawInput.includes('הדפסה')) intentData.extractedParams.print = 'none';
+            if (rawInput.includes('למינציה')) intentData.extractedParams.lamination = 'none';
+        }
     }
 
-    // --- 2. טיפול בשיחה ללא מוצר ---
+    // === 2. כוונות מערכת ===
+    if (intentData.intent === 'reset') {
+        return { 
+            actions: [
+                { type: 'CLEAR_SESSION_CONTEXT' }, 
+                { 
+                    type: 'GENERATE_RESPONSE', 
+                    payload: { 
+                        text: getMainMenu(),
+                        quickReplies: [{label:'כרטיסי ביקור', value:'bc'}, {label:'פליירים', value:'flyer'}]
+                    } 
+                }
+            ] 
+        };
+    }
+
+    if (intentData.intent === 'show_cart') {
+        const total = session.cart.reduce((sum, i) => sum + i.client_price, 0);
+        return { 
+            actions: [{ 
+                type: 'GENERATE_RESPONSE', 
+                payload: { 
+                    text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה.",
+                    quickReplies: session.cart.length ? [{label:'הורד הצעת מחיר', value:'checkout'}] : [{label:'תפריט', value:'reset'}]
+                } 
+            }] 
+        };
+    }
+
+    // === 3. ניהול ה-Wizard ===
     let currentProductKey = intentData.product || session.currentProduct;
     
-    // ניהול שינוי מוצר
+    // החלפת מוצר
     if (intentData.product && intentData.product !== session.currentProduct) {
         session.currentProduct = intentData.product;
         currentProductKey = intentData.product;
-        if (intentData.product !== session.currentProduct) session.draftAttributes = {}; 
+        session.draftAttributes = {}; 
     }
 
     if (!currentProductKey) {
-        // אם אין מוצר וזו סתם שיחה
-        if (['chat', 'consult', 'faq'].includes(intentData.intent)) {
-            return { 
-                actions: [{ 
-                    type: 'GENERATE_RESPONSE', 
-                    payload: { 
-                        text: intentData.aiResponse || "אני כאן לכל שאלה על דפוס! 😊",
-                        quickReplies: [{ label: 'תפריט ראשי', value: 'reset' }]
-                    } 
-                }] 
-            };
-        }
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה תרצה להדפיס? (פליירים, כרטיסים...)" } }] };
+        return { 
+            actions: [{ 
+                type: 'GENERATE_RESPONSE', 
+                payload: { 
+                    text: "מה תרצה להדפיס?",
+                    quickReplies: [{label:'כרטיסי ביקור', value:'bc'}, {label:'הזמנות', value:'invitation'}, {label:'רולאפ', value:'rollup'}]
+                } 
+            }] 
+        };
     }
 
     const productConfig = productsDB[currentProductKey];
-    if (!productConfig) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מוצר זה לא קיים במערכת." } }] };
-    }
-
-    // --- 3. נרמול הנתונים (הקסם של השרת) ---
-    // כאן השרת לוקח פיקוד ומתקן את מה שה-LLM שלח
     
-    let rawParams = intentData.extractedParams || {};
-    
-    // א. מיפוי שמות (Aliases)
+    // נרמול פרמטרים שהגיעו מה-LLM
+    let newParams = intentData.extractedParams || {};
     let normalizedParams = {};
-    Object.keys(rawParams).forEach(key => {
-        const dbKey = PARAM_ALIASES[key] || key; // תרגום: paper -> paper_type
-        normalizedParams[dbKey] = rawParams[key];
+    Object.keys(newParams).forEach(key => {
+        const dbKey = PARAM_ALIASES[key] || key; 
+        normalizedParams[dbKey] = newParams[key];
     });
 
-    // ב. התאמת ערכים (Value Matching)
-    // אם ה-LLM שלח "מט" אבל ב-DB כתוב "matte_350", השרת ימצא את זה
+    // מיפוי ערכים חכם (למשל 'מט' -> 'matte_350')
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
             if (val && q.options) {
-                // נסה למצוא התאמה בתוך האופציות
                 const match = q.options.find(opt => 
                     opt.value.toLowerCase() === val.toString().toLowerCase() || 
-                    opt.label.includes(val) ||
-                    val.toString().includes(opt.value) // אם ה-LLM החזיר "matte_350" והערך הוא "matte"
+                    opt.label.includes(val)
                 );
-                
-                if (match) {
-                    normalizedParams[q.key] = match.value; // נעלנו על הערך התקין מה-DB
-                }
+                if (match) normalizedParams[q.key] = match.value;
             }
         });
     }
 
-    // מיזוג לתוך הזיכרון
+    // עדכון ה-State
     const newDraft = { ...session.draftAttributes, ...normalizedParams };
     
-    // ברירות מחדל טכניות
+    // ברירות מחדל קשיחות
     if (currentProductKey === 'sticker' && !newDraft.material) newDraft.material = 'vinyl_white';
 
-    // --- 4. מה חסר? ---
+    // === 4. מציאת השאלה הבאה (The Funnel) ===
     let missingParam = null;
     let questionToAsk = null;
 
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            if (!newDraft[q.key]) { 
-                missingParam = q.key; 
-                questionToAsk = q; 
-                break; 
+            // אם הפרמטר חסר (undefined/null)
+            if (newDraft[q.key] == null) {
+                missingParam = q.key;
+                questionToAsk = q;
+                break;
             }
         }
     }
 
-    // --- 5. בניית התשובה ---
+    // === 5. תשובה למשתמש ===
     if (missingParam) {
-        let finalResponse = "";
-        
-        // טקסט מה-LLM (אם יש)
-        if (intentData.aiResponse) {
-            finalResponse += intentData.aiResponse + "\n\n";
-        } else if (Object.keys(newDraft).length === 0) {
-            finalResponse += `בכיף, בוא נגדיר את ה${productConfig.name}. 👌\n`;
+        // בניית כפתורים חכמה
+        let buttons = questionToAsk.options || [];
+        if (questionToAsk.key === 'qty') {
+            buttons = [{label:'100', value:'100'}, {label:'500', value:'500'}, {label:'1000', value:'1000'}];
         }
-
-        // השאלה הטכנית (מהכפתורים)
-        finalResponse += questionToAsk.question_he;
 
         actions.push({
             type: 'PRESENT_OPTIONS',
-            question: finalResponse,
-            options: questionToAsk.options || [],
+            question: questionToAsk.question_he,
+            options: buttons, // חובה כפתורים!
             product: currentProductKey,
             saveDraft: newDraft
         });
     } else {
-        // חישוב
+        // הכל מלא -> חישוב
         try {
-            const calcParams = { ...newDraft, product: currentProductKey };
-            const calcResult = calculate_custom_job(session.cart, calcParams);
+            const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
+            const item = calcResult.lastAdded;
             
+            const successText = `✅ הוספתי לעגלה:\n**${item.description}**\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}\n\nמה עכשיו?`;
+
             actions.push({ type: 'CALCULATE_AND_ADD', payload: newDraft });
             actions.push({ 
                 type: 'GENERATE_RESPONSE', 
-                template: 'quote_success', 
-                payload: { item: calcResult.lastAdded, textPrefix: intentData.aiResponse } 
+                payload: { 
+                    text: successText,
+                    quickReplies: [
+                        { label: 'הורד הצעת מחיר', value: 'checkout' },
+                        { label: 'הוסף עוד פריט', value: 'reset' }
+                    ]
+                } 
             });
             actions.push({ type: 'CHECK_QUEUE' }); 
         } catch (e) {
-            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "נתקלתי בבעיה בחישוב. נסה לשנות פרמטרים." } });
+            actions.push({ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב. נסה כמות אחרת." } });
         }
     }
 
@@ -4051,6 +4021,7 @@ module.exports = { findOptimalSetup, calculateUps };
             .app-container { height: 95vh; width: 95vw; }
         }
 
+        /* --- Sidebar Styles --- */
         .sidebar {
             width: 350px;
             background: var(--sidebar-bg);
@@ -4134,6 +4105,7 @@ module.exports = { findOptimalSetup, calculateUps };
         }
         .action-btn:hover { background-color: #006b56; }
 
+        /* --- Chat Styles --- */
         .chat-area {
             flex: 1;
             display: flex;
@@ -4228,8 +4200,8 @@ module.exports = { findOptimalSetup, calculateUps };
 
         @media (max-width: 768px) {
             .app-container { flex-direction: column; }
-            .sidebar { width: 100%; height: 30%; border-left: none; border-top: 1px solid #ccc; order: 2; }
-            .chat-area { height: 70%; order: 1; }
+            .sidebar { width: 100%; height: 35%; border-left: none; border-top: 1px solid #ccc; order: 2; }
+            .chat-area { height: 65%; order: 1; }
             .messages { padding: 10px; }
         }
     </style>
@@ -4289,29 +4261,19 @@ module.exports = { findOptimalSetup, calculateUps };
     </div>
 
     <script>
-        // --- הגדרות חיבור לשרת (התיקון הקריטי) ---
-        
-        // 1. האם אנחנו רצים במחשב שלך?
+        // --- הגדרות חיבור לשרת ---
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // 2. כתובת השרת ב-Hugging Face (שמנו אותה כאן קבועה כדי למנוע טעויות)
-        // אם תשנה את השם של ה-Space, עדכן כאן!
         const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space'; 
-        
-        // 3. בחירת הכתובת הנכונה אוטומטית
         const BASE_URL = isLocal ? 'http://localhost:7860' : REMOTE_SERVER;
         
         const API_URL = `${BASE_URL}/api/chat`;
         const PDF_URL = `${BASE_URL}/api/pdf`;
 
-        // ------------------------------------------
-
         const userId = 'user_' + Math.random().toString(36).substr(2, 9);
         let currentCart = [];
         let isProcessing = false;
 
-        // --- Helper Functions ---
-        
+        // --- UI Helpers ---
         function updateStatus(text) {
             const el = document.getElementById('connection-status');
             if(el) {
@@ -4358,6 +4320,7 @@ module.exports = { findOptimalSetup, calculateUps };
         }
 
         function updateCartUI(cart) {
+            currentCart = cart;
             const container = document.getElementById('cart-items');
             const totalDisplay = document.getElementById('cart-total-display');
             container.innerHTML = '';
@@ -4371,17 +4334,14 @@ module.exports = { findOptimalSetup, calculateUps };
                 </div>`;
             } else {
                 cart.forEach(item => {
-                    const title = item.product || 'מוצר'; 
-                    const desc = item.description || 'פריט מותאם אישית';
                     const price = item.client_price || 0;
-                    
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'cart-item';
                     itemDiv.innerHTML = `
-                        <div class="cart-item-title">${getHebrewName(title)} (${item.qty} יח')</div>
+                        <div class="cart-item-title">${item.product_name || item.product || 'פריט'} (${item.qty} יח')</div>
                         <div class="cart-item-price">₪${price}</div>
                         <div style="clear:both;"></div>
-                        <div class="cart-item-details">${desc}</div>
+                        <div class="cart-item-details">${item.description || ''}</div>
                     `;
                     container.appendChild(itemDiv);
                     total += price;
@@ -4389,23 +4349,8 @@ module.exports = { findOptimalSetup, calculateUps };
             }
             totalDisplay.innerText = '₪' + total.toLocaleString();
         }
-        
-        function getHebrewName(key) {
-            const map = {
-                'flyer': 'פליירים',
-                'bc': 'כרטיסי ביקור',
-                'rollup': 'רולאפ',
-                'sticker': 'מדבקות',
-                'canvas': 'קנבס',
-                'invitation': 'הזמנות לאירועים',
-                'envelope': 'מעטפות',
-                'booklet': 'חוברות / ספרים',
-                'poster': 'פוסטרים / קנבס',
-                'folder': 'פולדרים'
-            };
-            return map[key] || key;
-        }
 
+        // --- Core Functions ---
         async function downloadPDF() {
             if (currentCart.length === 0) return alert('העגלה ריקה');
             addMsg("מפיק מסמך PDF... ⏳", "bot");
@@ -4413,16 +4358,17 @@ module.exports = { findOptimalSetup, calculateUps };
                 const res = await fetch(PDF_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cart: currentCart, customer: { name: 'לקוח' } })
+                    body: JSON.stringify({ userId: userId, cart: currentCart })
                 });
                 if (res.ok) {
                     const blob = await res.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = "Quote.pdf";
+                    a.download = "Quote_Pini_Print.pdf";
                     document.body.appendChild(a);
                     a.click();
+                    window.URL.revokeObjectURL(url);
                     addMsg("המסמך ירד בהצלחה! ✅", "bot");
                 } else {
                     addMsg("שגיאה בהפקת PDF ❌", "bot");
@@ -4431,16 +4377,14 @@ module.exports = { findOptimalSetup, calculateUps };
         }
 
         function toggleMenu() {
-            addButtons([{ label: 'נקה עגלה', value: 'clear' }, { label: 'תפריט ראשי', value: 'reset' }]);
+            sendMessage("תפריט");
         }
 
-        // --- Core Function ---
         async function sendMessage(text = null) {
             if (isProcessing) return;
 
             const inputField = document.getElementById('user-input');
             const message = text || inputField.value.trim();
-            
             if (!message) return;
 
             addMsg(message, 'user');
@@ -4451,7 +4395,6 @@ module.exports = { findOptimalSetup, calculateUps };
             updateStatus('פיני מקליד...');
 
             try {
-                // שימוש בכתובת המלאה (BASE_URL)
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -4459,46 +4402,34 @@ module.exports = { findOptimalSetup, calculateUps };
                 });
 
                 if (!res.ok) throw new Error(`Server status: ${res.status}`);
-
                 const data = await res.json();
                 updateStatus('מחובר');
                 
-                const content = data.text || data.content;
-                if (content) addMsg(content, 'bot');
-
+                if (data.text) addMsg(data.text, 'bot');
+                
                 const buttons = data.options || data.quickReplies;
                 if (buttons && buttons.length > 0) addButtons(buttons);
 
-                if (data.cart) {
-                    currentCart = data.cart;
-                    updateCartUI(data.cart);
-                }
+                if (data.cart) updateCartUI(data.cart);
 
             } catch (error) {
                 console.error('Error:', error);
                 updateStatus('שגיאת חיבור');
-                addMsg('אופס, לא הצלחתי להתחבר לשרת. בדוק את החיבור.', 'bot');
-                
-                if (isLocal) {
-                    addMsg('טיפ: וודא ש-server.js רץ בפורט 7860.', 'bot');
-                }
+                addMsg('אופס, לא הצלחתי להתחבר לשרת. נסה שוב בעוד רגע.', 'bot');
             } finally {
                 isProcessing = false;
-                scrollToBottom();
-                inputField.focus();
             }
         }
 
-        document.getElementById('user-input').addEventListener('keypress', function (e) {
+        document.getElementById('user-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // --- Init ---
         window.onload = function() {
             setTimeout(() => {
-                addMsg("אהלן! נעים להכיר, אני פיני. 👨‍🎨", 'bot');
+                addMsg("אהלן! אני פיני 👨‍🎨, מומחה הדפוס של 'בית יצחק'.", 'bot');
                 setTimeout(() => {
-                    addMsg("אני המומחה לדפוס של 'בית יצחק'.\nהמטרה שלי היא לעזור לך להפיק מוצרים מדוייקים, איכותיים ובזמן.\n\nספר לי, מה אנחנו מדפיסים היום?", 'bot');
+                    addMsg("אני כאן כדי לעזור לך לקבל הצעות מחיר מהירות ומדוייקות.\nמה נדפיס היום?", 'bot');
                 }, 800);
             }, 500);
         };
@@ -4637,15 +4568,17 @@ Savings:         $0.135 per 56 requests
 
 --- FILE: server.js ---
 ```js
-/** server.js V_DEBUG */
+/** server.js V31.0 - Full PDF & Chat Support */
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 require('dotenv').config();
 
+// ייבוא המנועים
 const { classifyMessage } = require('./engine/classifier');
 const { planActions } = require('./engine/planner');
 const { getSession } = require('./services/sessionManager');
+const { generateQuotePDF } = require('./services/pdfService'); // חובה לקיום ה-PDF!
 
 const app = express();
 const PORT = process.env.PORT || 7860;
@@ -4653,22 +4586,22 @@ const PORT = process.env.PORT || 7860;
 app.use(cors());
 app.use(bodyParser.json());
 
+// === נתיב הצ'אט ===
 app.post('/api/chat', async (req, res) => {
     const { message, userId } = req.body;
-    const sessionID = userId || 'debug_user';
+    const sessionID = userId || 'default_user';
     const session = getSession(sessionID);
 
-    console.log(`\n\n🔵 --- NEW MESSAGE [${sessionID}] ---`);
-    console.log(`📩 User Input: "${message}"`);
+    console.log(`\n🔵 [${sessionID}] User: "${message}"`);
 
     try {
-        // 1. Classifier (Calls LLM Router)
+        // 1. הבנה (Classifier)
         const classification = await classifyMessage(message, session);
         
-        // 2. Planner
+        // 2. תכנון (Planner)
         const plan = planActions(classification, session);
         
-        // 3. Execution
+        // 3. ביצוע (Execution)
         let responseText = "";
         let quickReplies = [];
 
@@ -4682,6 +4615,9 @@ app.post('/api/chat', async (req, res) => {
             else if (action.type === 'CALCULATE_AND_ADD') {
                 session.cart.push(action.payload);
             }
+            else if (action.type === 'REMOVE_FROM_CART') {
+                if (session.cart.length > 0) session.cart.pop();
+            }
             else if (action.type === 'GENERATE_RESPONSE') {
                 responseText = action.payload.text || action.template;
                 if (action.payload.quickReplies) quickReplies = action.payload.quickReplies;
@@ -4692,18 +4628,55 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        console.log(`📤 Bot Output: "${responseText}"`);
-        console.log(`🏁 -------------------------------\n`);
-
-        res.json({ text: responseText, options: quickReplies, cart: session.cart });
+        // שליחת התשובה
+        res.json({ 
+            text: responseText, 
+            options: quickReplies,
+            cart: session.cart 
+        });
 
     } catch (error) {
-        console.error("💥 CRITICAL ERROR:", error);
-        res.status(500).json({ text: "תקלה בשרת. בדוק לוגים." });
+        console.error("💥 Server Error:", error);
+        res.status(500).json({ text: "אופס, נתקלתי בבעיה. נסה שוב." });
     }
 });
 
-app.listen(PORT, () => console.log(`🚀 DEBUG SERVER running on port ${PORT}`));
+// === נתיב ה-PDF (התיקון!) ===
+app.post('/api/pdf', async (req, res) => {
+    const { userId, cart: clientCart } = req.body;
+    
+    // שליפת העגלה (מהבקשה או מהסשן)
+    let cart = clientCart;
+    if (!cart && userId) {
+        const session = getSession(userId);
+        cart = session.cart;
+    }
+
+    if (!cart || cart.length === 0) {
+        return res.status(400).send("העגלה ריקה");
+    }
+
+    try {
+        console.log("📄 Generating PDF Quote...");
+        // הנחה שקיים שירות PDF תקין ב-services
+        const pdfBuffer = await generateQuotePDF(cart, { name: "לקוח יקר" });
+        
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Length': pdfBuffer.length,
+            'Content-Disposition': 'attachment; filename="quote.pdf"'
+        });
+        
+        res.send(pdfBuffer);
+        console.log("✅ PDF sent successfully");
+
+    } catch (error) {
+        console.error("❌ PDF Generation Error:", error);
+        res.status(500).json({ error: "Failed to generate PDF" });
+    }
+});
+
+app.listen(PORT, () => console.log(`🚀 SERVER running on port ${PORT}`));
 ```
 
 

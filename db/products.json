@@ -4,28 +4,9 @@
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number" },
-      { "key": "paper_type", "question_he": "איזה סוג נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
-      { "key": "lamination", "question_he": "תרצה ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "למינציה מט", "value": "lami_matte" }, { "label": "למינציה מבריקה", "value": "lami_gloss" }] }
-    ]
-  },
-  "flyer": {
-    "name": "פליירים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פליירים?", "type": "number" },
-      { "key": "size", "question_he": "באיזה גודל?", "options": [{ "label": "A5 (חצי דף)", "value": "A5" }, { "label": "A4 (דף שלם)", "value": "A4" }, { "label": "A6 (גלויה)", "value": "A6" }] },
-      { "key": "paper_type", "question_he": "איזה עובי נייר?", "options": [{ "label": "130 גרם (דק)", "value": "chromo_130" }, { "label": "170 גרם (בינוני)", "value": "chromo_170" }, { "label": "300 גרם (עבה)", "value": "chromo_300" }] }
-    ]
-  },
-  "booklet": {
-    "name": "חוברות וספרים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה עותקים להדפיס?", "type": "number" },
-      { "key": "pages", "question_he": "כמה עמודים בחוברת (כולל כריכה)?", "type": "number" },
-      { "key": "size", "question_he": "גודל סגור?", "options": [{ "label": "A4", "value": "A4" }, { "label": "A5", "value": "A5" }] },
-      { "key": "paper_type", "question_he": "איזה נייר פנים?", "options": [{ "label": "נטול עץ 80 (רגיל)", "value": "offset_80" }, { "label": "כרומו 135 (מבריק)", "value": "chromo_135" }] },
-      { "key": "cover_type", "question_he": "איזו כריכה?", "options": [{ "label": "סיכות (רגיל)", "value": "staple_bind" }, { "label": "ספירלה", "value": "spiral_bind" }, { "label": "כריכה רכה (הדבקה)", "value": "perfect_bind" }] }
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "מט 350 (סטנדרט)", "value": "matte_350" }, { "label": "כרומו 300 (מבריק)", "value": "chromo_300" }, { "label": "פנינה (יוקרתי)", "value": "pearl_300" }] },
+      { "key": "lamination", "question_he": "ציפוי למינציה?", "options": [{ "label": "ללא", "value": "none" }, { "label": "מט (מומלץ)", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] },
+      { "key": "finishing", "question_he": "רוצה לשדרג עם השבחה?", "options": [{ "label": "ללא שדרוג", "value": "none" }, { "label": "הבלטה (Scodix)", "value": "scodix" }, { "label": "פויל זהב", "value": "gold_foil" }, { "label": "פויל כסף", "value": "silver_foil" }] }
     ]
   },
   "invitation": {
@@ -33,25 +14,18 @@
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה הזמנות?", "type": "number" },
-      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18", "value": "13x18" }, { "label": "A5", "value": "A5" }] },
-      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט (קלאסי)", "value": "matte_350" }] }
+      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "13x18 (סטנדרט)", "value": "13x18" }, { "label": "15x15 (מרובע)", "value": "15x15" }] },
+      { "key": "paper_type", "question_he": "איזה נייר?", "options": [{ "label": "פנינה (מנצנץ)", "value": "pearl_300" }, { "label": "מט 350", "value": "matte_350" }] },
+      { "key": "finishing", "question_he": "גימור יוקרתי?", "options": [{ "label": "ללא", "value": "none" }, { "label": "פויל זהב", "value": "gold_foil" }, { "label": "פינות עגולות", "value": "round_corners" }] }
     ]
   },
-  "rollup": {
-    "name": "רולאפ",
-    "engine": "wide",
+  "flyer": {
+    "name": "פליירים",
+    "engine": "digital",
     "questions": [
-      { "key": "qty", "question_he": "כמה רולאפים?", "type": "number" },
-      { "key": "size", "question_he": "מה הגודל?", "options": [{ "label": "85x200 (סטנדרט)", "value": "85x200" }, { "label": "100x200 (רחב)", "value": "100x200" }] }
-    ]
-  },
-  "poster": {
-    "name": "פוסטרים",
-    "engine": "wide",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פוסטרים?", "type": "number" },
-      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "50x70", "value": "50x70" }, { "label": "70x100", "value": "70x100" }, { "label": "A3", "value": "A3" }] },
-      { "key": "paper_type", "question_he": "על מה להדפיס?", "options": [{ "label": "נייר פוטו", "value": "paper_photo" }, { "label": "קנבס (בד)", "value": "canvas" }, { "label": "מדבקה", "value": "vinyl_sticker" }] }
+      { "key": "qty", "question_he": "כמה פליירים?", "type": "number" },
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "A5 (חצי דף)", "value": "A5" }, { "label": "A4 (דף שלם)", "value": "A4" }] },
+      { "key": "paper_type", "question_he": "עובי נייר?", "options": [{ "label": "130 גרם (דק)", "value": "chromo_130" }, { "label": "300 גרם (עבה)", "value": "chromo_300" }] }
     ]
   },
   "envelope": {
@@ -59,26 +33,16 @@
     "engine": "digital",
     "questions": [
       { "key": "qty", "question_he": "כמה מעטפות?", "type": "number" },
-      { "key": "size", "question_he": "איזה גודל?", "options": [{ "label": "11x23 (סטנדרט)", "value": "env_11x23" }, { "label": "16x23 (להזמנות)", "value": "env_16x23" }] },
-      { "key": "print", "question_he": "הדפסה?", "options": [{ "label": "צבעוני", "value": "color" }, { "label": "שחור לבן", "value": "bw" }] }
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "11x23 (סטנדרט)", "value": "env_11x23" }, { "label": "16x23 (להזמנות)", "value": "env_16x23" }] },
+      { "key": "print", "question_he": "הדפסה?", "options": [{ "label": "ללא הדפסה", "value": "none" }, { "label": "שחור לבן", "value": "bw" }, { "label": "צבעוני", "value": "color" }] }
     ]
   },
-  "sticker": {
-    "name": "מדבקות",
+  "rollup": {
+    "name": "רולאפ",
     "engine": "wide",
     "questions": [
-      { "key": "qty", "question_he": "כמה מטר רבוע (מ\"ר)?", "type": "number" },
-      { "key": "material", "question_he": "סוג מדבקה?", "options": [{ "label": "ויניל לבן", "value": "vinyl_white" }, { "label": "שקוף", "value": "vinyl_clear" }, { "label": "נייר", "value": "sticker_paper" }] },
-      { "key": "cut", "question_he": "צריך חיתוך צורני?", "options": [{ "label": "כן", "value": "yes" }, { "label": "לא (גליל/דף)", "value": "no" }] }
-    ]
-  },
-  "folder": {
-    "name": "פולדרים",
-    "engine": "digital",
-    "questions": [
-      { "key": "qty", "question_he": "כמה פולדרים?", "type": "number" },
-      { "key": "lamination", "question_he": "סוג למינציה?", "options": [{ "label": "מט", "value": "lami_matte" }, { "label": "מבריק", "value": "lami_gloss" }] },
-      { "key": "pocket", "question_he": "כיס?", "options": [{ "label": "כיס אחד", "value": "one_pocket" }, { "label": "שני כיסים", "value": "two_pockets" }] }
+      { "key": "qty", "question_he": "כמה רולאפים?", "type": "number" },
+      { "key": "size", "question_he": "גודל?", "options": [{ "label": "85x200 (סטנדרט)", "value": "85x200" }, { "label": "100x200 (רחב)", "value": "100x200" }] }
     ]
   }
 }
