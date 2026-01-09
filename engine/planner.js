@@ -1,4 +1,4 @@
-/** engine/planner.js V53.0 - PDF Clean Description Fix */
+/** engine/planner.js V54.0 - Global Regex Priority */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -50,7 +50,7 @@ function generateTechnicalSpec(params, productConfig) {
 
 function planActions(intentData, session) {
     const actions = [];
-    const rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
+    let rawInput = intentData.raw_text ? intentData.raw_text.toLowerCase().trim() : "";
     
     // --- 1. System Actions ---
     if (intentData.intent === 'reset') {
@@ -61,7 +61,6 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: session.cart.length ? `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}` : "העגלה ריקה", quickReplies: [{label:'תפריט', value:'reset'}] } }] };
     }
 
-    // === SMART REMOVE LOGIC ===
     if (intentData.intent === 'remove') {
         let indexToRemove = session.cart.length - 1; 
         let itemDesc = "הפריט האחרון";
@@ -74,23 +73,16 @@ function planActions(intentData, session) {
             if (keywords.length > 0) {
                 let bestScore = -1;
                 let bestIndex = -1;
-
                 for (let i = 0; i < session.cart.length; i++) {
                     const item = session.cart[i];
                     const itemText = (item.cleanDescription + " " + (item.fullSpec || "")).toLowerCase();
                     const score = keywords.reduce((acc, kw) => acc + (itemText.includes(kw) ? 1 : 0), 0);
-                    
-                    if (score >= bestScore) {
-                        bestScore = score;
-                        bestIndex = i;
-                    }
+                    if (score >= bestScore) { bestScore = score; bestIndex = i; }
                 }
                 if (bestScore > 0) indexToRemove = bestIndex;
             }
-            
             const item = session.cart[indexToRemove];
-            itemDesc = item.cleanDescription || "פריט"; // שימוש בתיאור הנקי
-
+            itemDesc = item.cleanDescription || "פריט";
             return { 
                 actions: [
                     { type: 'REMOVE_FROM_CART', payload: { index: indexToRemove } }, 
@@ -134,11 +126,24 @@ function planActions(intentData, session) {
         normalizedParams[dbKey] = newParams[key];
     });
 
-    // === FORCE MATCH LOGIC ===
+    // === GLOBAL REGEX EXTRACTION (The Fix) ===
+    // אנו שולפים מידות לפני הכל כדי למנוע זיהוי שגוי של מספרים
+    const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
+    if (sizeMatch) {
+        const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
+        console.log(`🎯 Global Regex: Extracted Size "${val}"`);
+        normalizedParams['size'] = val;
+        // מחיקת המידה מהטקסט כדי שלא תזוהה ככמות
+        rawInput = rawInput.replace(sizeMatch[0], ' '); 
+    }
+
+    // === FORCE MATCH LOGIC (Standard) ===
     let activeQuestion = null;
     if (productConfig.questions) {
         for (const q of productConfig.questions) {
-            if (session.draftAttributes[q.key] == null) {
+            // אם כבר מצאנו את המידה ב-Global, ה-Draft שלה יהיה מלא ולא נשאל עליה
+            const currentVal = normalizedParams[q.key] || session.draftAttributes[q.key];
+            if (currentVal == null) {
                 activeQuestion = q;
                 break;
             }
@@ -148,15 +153,9 @@ function planActions(intentData, session) {
     if (activeQuestion) {
         let matchFound = false;
 
-        // A. Size
-        if (activeQuestion.key === 'size') {
-            const sizeMatch = rawInput.match(/(\d+)\s*(?:x|X|על|\*)\s*(\d+)/);
-            if (sizeMatch) {
-                const val = `${sizeMatch[1]}x${sizeMatch[2]}`;
-                console.log(`🎯 Force Match: Size "${val}"`);
-                normalizedParams[activeQuestion.key] = val;
-                matchFound = true;
-            } else if (/^[a-zA-Z]+\d+$/.test(rawInput)) { 
+        // A. Size (Fallback for simple formats)
+        if (activeQuestion.key === 'size' && !normalizedParams.size) {
+             if (/^[a-zA-Z]+\d+$/.test(rawInput)) { 
                 normalizedParams[activeQuestion.key] = rawInput.toUpperCase();
                 matchFound = true;
             }
@@ -179,7 +178,7 @@ function planActions(intentData, session) {
             }
         }
         
-        // C. Numbers
+        // C. Numbers (Runs on Cleaned Input)
         if (!matchFound && activeQuestion.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) {
@@ -188,13 +187,9 @@ function planActions(intentData, session) {
                 matchFound = true;
             }
         }
-
-        if (matchFound) {
-            if (activeQuestion.key !== 'qty' && normalizedParams.qty) delete normalizedParams.qty;
-        }
     }
 
-    // MAPPING
+    // MAPPING & MERGING
     if (productConfig.questions) {
         productConfig.questions.forEach(q => {
             const val = normalizedParams[q.key];
@@ -230,7 +225,6 @@ function planActions(intentData, session) {
         if (questionToAsk.key === 'qty' && !buttons.length) {
             buttons = [{label:'100', value:'100'}, {label:'500', value:'500'}];
         }
-        
         actions.push({
             type: 'PRESENT_OPTIONS',
             question: questionToAsk.question_he,
@@ -242,31 +236,24 @@ function planActions(intentData, session) {
         // 6. Calc
         try {
             const calcResult = calculate_custom_job(session.cart, { ...newDraft, product: currentProductKey });
-            
-            // === בניית התיאור המושלם ===
             const productName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
             const fullSpec = generateTechnicalSpec(newDraft, productConfig);
-            
-            // תיאור נקי ל-PDF (בלי כוכביות)
             const cleanDesc = `${productName} - ${fullSpec}`;
-            
-            // תיאור יפה לוואטסאפ (עם כוכביות)
             const displayDesc = `**${productName}**\n${fullSpec}`;
 
             const item = { 
                 ...calcResult.lastAdded,
                 productName: productName,
                 fullSpec: fullSpec,
-                description: cleanDesc, // PDF יקח את זה
-                cleanDescription: cleanDesc, // לשימוש במחיקה חכמה
-                displayDescription: displayDesc, // לשימוש בתצוגת צ'אט
+                description: cleanDesc, 
+                cleanDescription: cleanDesc,
+                displayDescription: displayDesc,
                 attributes: newDraft
             };
             
             let successText = `✅ הוספתי לעגלה:\n${displayDesc}\nכמות: ${item.qty}\nסה"כ: ₪${item.client_price}`;
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item }); 
-
             actions.push({ 
                 type: 'GENERATE_RESPONSE', 
                 payload: { 
