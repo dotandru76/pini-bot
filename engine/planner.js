@@ -1,4 +1,4 @@
-/** engine/planner.js V91.0 - Perfect Fuzzy Logic */
+/** engine/planner.js V93.0 - Direct Queue Injection */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -17,19 +17,11 @@ const PARAM_ALIASES = {
 const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות' };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
 
-const PRODUCT_KEYWORDS = {
-    'bc': ['כרטיס', 'ביקור', 'cards'],
-    'flyer': ['פלייר', 'flyer'],
-    'booklet': ['חוברות', 'ספר', 'booklet', 'קטלוג'],
-    'rollup': ['רולאפ', 'rollup', 'רול'],
-    'sticker': ['מדבק', 'sticker']
-};
-
 function planActions(intentData, session) {
     const actions = [];
     let rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
     
-    // --- 1. System Actions ---
+    // 1. System Actions
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
     
     if (intentData.intent === 'show_cart') {
@@ -41,27 +33,29 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: session.cart.length - 1 } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי.`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // --- 2. Product & Queue Logic ---
+    // 2. Product & Queue Logic
     let currentProductKey = session.currentProduct;
     
+    // זיהוי מוצר חדש (או כפוי ע"י Validator)
     if (intentData.intent === 'quote' && intentData.product) {
         if (intentData.product !== session.currentProduct) {
-            // זיהוי ריבוי מוצרים (Queue)
-            const foundProducts = [];
-            Object.keys(PRODUCT_KEYWORDS).forEach(key => {
-                const keywords = PRODUCT_KEYWORDS[key];
-                if (keywords.some(kw => rawInput.toLowerCase().includes(kw))) {
-                    foundProducts.push(key);
-                }
-            });
-
             session.currentProduct = intentData.product;
             session.draftAttributes = {}; 
             currentProductKey = intentData.product;
-            session.productQueue = foundProducts.filter(p => p !== currentProductKey);
+            
+            // --- V93: Queue Injection from Validator ---
+            // אם ה-Validator זיהה כמה מוצרים, נכניס אותם לתור מיד
+            if (intentData.allDetectedProducts && intentData.allDetectedProducts.length > 1) {
+                // מסננים את המוצר הנוכחי מהרשימה, והשאר הולכים לתור
+                const queue = intentData.allDetectedProducts.filter(p => p !== currentProductKey);
+                // מסירים כפילויות ליתר ביטחון
+                session.productQueue = [...new Set(queue)];
+                console.log(`🔄 [PLANNER] Queue initialized: ${session.productQueue.join(', ')}`);
+            }
         }
     }
 
+    // שליפה מהתור אם אין מוצר נוכחי
     if (!currentProductKey && session.productQueue && session.productQueue.length > 0) {
         currentProductKey = session.productQueue.shift();
         session.currentProduct = currentProductKey;
@@ -72,7 +66,7 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // --- 3. Hybrid Wizard Logic ---
+    // 3. Hybrid Wizard Logic
     const productConfig = productsDB[currentProductKey];
     let draft = session.draftAttributes || {};
 
@@ -99,14 +93,16 @@ function planActions(intentData, session) {
     if (questionAskedLastTime && draft[questionAskedLastTime.key] == null && rawInput) {
         let valueToSave = null;
 
-        // בדיקת מספר
-        if (questionAskedLastTime.type === 'number') {
-            const numMatch = rawInput.match(/(\d+)/);
-            if (numMatch) valueToSave = parseInt(numMatch[0]);
+        // בדיקת מספר (כולל תיקון V92 ללולאה)
+        const numMatch = rawInput.match(/(\d+)/);
+        if (numMatch) {
+            if (questionAskedLastTime.key === 'qty' || questionAskedLastTime.key === 'pages' || questionAskedLastTime.type === 'number') {
+                valueToSave = parseInt(numMatch[0]);
+            }
         }
         
-        // בדיקת אופציות (Fuzzy Match משופר V91)
-        if (questionAskedLastTime.options) {
+        // בדיקת אופציות (Fuzzy Match V91)
+        if (!valueToSave && questionAskedLastTime.options) {
             const match = questionAskedLastTime.options.find(opt => {
                 const l = opt.label.toLowerCase();
                 const v = opt.value.toLowerCase();
@@ -116,12 +112,10 @@ function planActions(intentData, session) {
                        input === l || 
                        l.includes(input) || 
                        input.includes(l.split(' ')[0]) || 
-                       input.includes(l.split('(')[0].trim()); // התיקון החכם שלך לסוגריים
+                       input.includes(l.split('(')[0].trim());
             });
             
             if (match) valueToSave = match.value;
-            
-            // Auto-None
             if (!valueToSave && (rawInput.includes('בלי') || rawInput.includes('ללא') || rawInput === 'none')) {
                 valueToSave = 'none';
             }
@@ -132,7 +126,7 @@ function planActions(intentData, session) {
     
     session.draftAttributes = draft;
 
-    // --- 4. Next Step Check ---
+    // 4. בדיקה מה הלאה
     let nextQuestion = null;
     for (const q of productConfig.questions) {
         if (draft[q.key] == null) {
@@ -162,16 +156,20 @@ function planActions(intentData, session) {
             const calcResult = calculate_custom_job(session.cart, { ...draft, product: currentProductKey });
             const hebrewName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
             
+            // תיאור נקי ל-PDF
+            const cleanDesc = calcResult.lastAdded.description || ""; 
+            
             const item = { 
                 ...calcResult.lastAdded, 
                 product: hebrewName,       
                 productName: hebrewName,   
+                description: cleanDesc,
                 attributes: draft 
             };
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item });
 
-            // טיפול בתור (Queue)
+            // טיפול במעבר לתור (Queue)
             if (session.productQueue && session.productQueue.length > 0) {
                 const nextProduct = session.productQueue.shift();
                 session.currentProduct = nextProduct;

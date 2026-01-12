@@ -1,5 +1,5 @@
 # PINI BOT PROJECT CONTEXT
-Generated: 2026-01-12T16:06:34.809Z
+Generated: 2026-01-12T16:34:12.467Z
 
 
 
@@ -273,39 +273,61 @@ module.exports = { calculate_custom_job };
 
 --- FILE: engine\classifier.js ---
 ```js
-/** engine/classifier.js V37.1 */
-const { routeWithLLM } = require('./llmRouter');
+/** engine/classifier.js V91.0 - Syntax & Fast Path Fixed */
 const { validateLLMResult } = require('./validator');
+const { routeWithLLM } = require('./llmRouter'); // תוקן לפי בקשתך
 
+// מילות מפתח לטיפול מהיר ללא LLM
 const KEYWORDS = {
-    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט', 'ראשי'],
-    cart: ['עגלה', 'סיכום', 'מה יש', 'status'],
-    remove_all: ['מחק הכל', 'רוקן עגלה']
+    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט'],
+    cart: ['עגלה', 'סיכום', 'מה יש', 'בסל', 'כמה זה יוצא', 'כמה יצא'],
+    checkout: ['תארוז', 'הצעת מחיר', 'לשלם', 'חשבון', 'צ\'ק אאוט', 'checkout'],
+    greeting: ['היי', 'שלום', 'הי', 'אהלן', 'בוקר טוב', 'ערב טוב'],
+    bye: ['ביי', 'להתראות', 'תודה', 'יום טוב'],
+    remove: ['מחק', 'תסיר', 'להוריד', 'remove']
 };
 
-async function classifyMessage(message, session) {
-    const text = message.toLowerCase().trim();
+async function classify(text, session) {
+    const t = text.toLowerCase().trim();
+
+    // 1. Fast Path - בדיקות מיידיות
+    if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
+    if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
     
-    // Fast Path
-    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset', raw_text: message };
-    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart', raw_text: message };
-    if (KEYWORDS.remove_all.some(k => text === k)) return { intent: 'remove_all', raw_text: message };
+    // זיהוי בקשת תשלום/הצעה (רק אם יש משהו בעגלה)
+    if (session.cart && session.cart.length > 0) {
+        if (KEYWORDS.checkout.some(k => t.includes(k))) return { intent: 'show_cart' };
+    }
 
-    // Pipeline
-    console.log("🧠 Consulting Gemini...");
-    let result = await routeWithLLM(message, session);
-    result = validateLLMResult(result, message, session);
+    // זיהוי ברכה
+    if (KEYWORDS.greeting.some(k => t.startsWith(k)) && t.length < 20) {
+        return { intent: 'chat', aiResponse: 'היי! אני פיני 👨‍🎨, מה נדפיס היום?' };
+    }
 
-    return {
-        intent: result.intent || 'chat',
-        product: result.product,
-        extractedParams: result.mapped_params || {}, 
-        aiResponse: result.answer_text, 
-        raw_text: message 
-    };
+    // זיהוי פרידה
+    if (KEYWORDS.bye.some(k => t.includes(k))) {
+        return { intent: 'chat', aiResponse: 'בשמחה! מוזמן לחזור מתי שתרצה.' };
+    }
+
+    if (KEYWORDS.remove.some(k => t.includes(k))) return { intent: 'remove' };
+
+    // 2. LLM Pipeline
+    try {
+        const llmResult = await routeWithLLM(text, session); // תוקן השם
+        
+        // 3. Validation Layer
+        const validated = validateLLMResult(llmResult, text, session);
+        
+        return validated;
+
+    } catch (e) {
+        console.error("Classifier Error:", e);
+        return { intent: 'chat', aiResponse: 'סליחה, הייתה תקלה רגעית. נסה שוב?' };
+    }
 }
 
-module.exports = { classifyMessage };
+// תוקן ה-Export כדי להתאים לקריאה ב-server.js
+module.exports = { classifyMessage: classify };
 ```
 
 
@@ -1805,7 +1827,7 @@ module.exports = {
 
 --- FILE: engine\planner.js ---
 ```js
-/** engine/planner.js V83.0 - Multi-Product Queue & Context Clarity */
+/** engine/planner.js V91.0 - Perfect Fuzzy Logic */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -1815,19 +1837,15 @@ let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
 const PARAM_ALIASES = { 
-    'paper': 'paper_type', 'stock': 'paper_type', 'sug_niyar': 'paper_type',
-    'coating': 'lamination', 'laminatzia': 'lamination',
-    'finish': 'finishing', 'haskhba': 'finishing',
-    'width': 'size', 'godel': 'size',
-    'amount': 'qty', 'quantity': 'qty', 'kamut': 'qty',
-    'type': 'book_type', 'sug': 'book_type',
-    'pages': 'pages', 'amudim': 'pages'
+    'paper': 'paper_type', 'stock': 'paper_type', 
+    'coating': 'lamination', 'finish': 'finishing', 
+    'width': 'size', 'amount': 'qty', 'quantity': 'qty', 
+    'type': 'book_type', 'pages': 'pages'
 };
 
 const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות' };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
 
-// מילות מפתח לזיהוי מוצרים נוספים במשפט (Queue Detection)
 const PRODUCT_KEYWORDS = {
     'bc': ['כרטיס', 'ביקור', 'cards'],
     'flyer': ['פלייר', 'flyer'],
@@ -1840,7 +1858,7 @@ function planActions(intentData, session) {
     const actions = [];
     let rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
     
-    // --- 1. פעולות מערכת ---
+    // --- 1. System Actions ---
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
     
     if (intentData.intent === 'show_cart') {
@@ -1852,15 +1870,12 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: session.cart.length - 1 } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי.`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // --- 2. ניהול מוצר ותור (Queue Logic) ---
+    // --- 2. Product & Queue Logic ---
     let currentProductKey = session.currentProduct;
     
-    // זיהוי התחלתי או החלפת נושא
     if (intentData.intent === 'quote' && intentData.product) {
         if (intentData.product !== session.currentProduct) {
-            
-            // --- V83: Multi-Product Detection ---
-            // אם זו ההתחלה, נסרוק את הטקסט כדי לראות אם יש עוד מוצרים שמחכים
+            // זיהוי ריבוי מוצרים (Queue)
             const foundProducts = [];
             Object.keys(PRODUCT_KEYWORDS).forEach(key => {
                 const keywords = PRODUCT_KEYWORDS[key];
@@ -1869,17 +1884,13 @@ function planActions(intentData, session) {
                 }
             });
 
-            // המוצר הראשי שה-LLM זיהה הוא הנוכחי
             session.currentProduct = intentData.product;
             session.draftAttributes = {}; 
             currentProductKey = intentData.product;
-
-            // כל שאר המוצרים שנמצאו נכנסים לתור (אם הם לא הנוכחי)
             session.productQueue = foundProducts.filter(p => p !== currentProductKey);
         }
     }
 
-    // אם אנחנו במצב "בין לבין" (אין מוצר נוכחי אבל יש משהו בתור)
     if (!currentProductKey && session.productQueue && session.productQueue.length > 0) {
         currentProductKey = session.productQueue.shift();
         session.currentProduct = currentProductKey;
@@ -1890,11 +1901,11 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // --- 3. המוח ההיברידי ---
+    // --- 3. Hybrid Wizard Logic ---
     const productConfig = productsDB[currentProductKey];
     let draft = session.draftAttributes || {};
 
-    // שלב 0: קליטה חכמה
+    // שלב 0: קליטה חכמה מה-LLM
     if (intentData.extractedParams) {
         Object.keys(intentData.extractedParams).forEach(key => {
             const normalizedKey = PARAM_ALIASES[key] || key;
@@ -1905,7 +1916,7 @@ function planActions(intentData, session) {
         });
     }
 
-    // שלב א': השלמה "טיפשה"
+    // שלב א': השלמה לפי השאלה האחרונה
     let questionAskedLastTime = null;
     for (const q of productConfig.questions) {
         if (draft[q.key] == null) { 
@@ -1916,27 +1927,41 @@ function planActions(intentData, session) {
 
     if (questionAskedLastTime && draft[questionAskedLastTime.key] == null && rawInput) {
         let valueToSave = null;
+
+        // בדיקת מספר
         if (questionAskedLastTime.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) valueToSave = parseInt(numMatch[0]);
         }
+        
+        // בדיקת אופציות (Fuzzy Match משופר V91)
         if (questionAskedLastTime.options) {
-            const match = questionAskedLastTime.options.find(opt => 
-                rawInput === opt.value || 
-                rawInput.includes(opt.label) || 
-                opt.label.includes(rawInput)
-            );
+            const match = questionAskedLastTime.options.find(opt => {
+                const l = opt.label.toLowerCase();
+                const v = opt.value.toLowerCase();
+                const input = rawInput.toLowerCase();
+                
+                return input === v || 
+                       input === l || 
+                       l.includes(input) || 
+                       input.includes(l.split(' ')[0]) || 
+                       input.includes(l.split('(')[0].trim()); // התיקון החכם שלך לסוגריים
+            });
+            
             if (match) valueToSave = match.value;
+            
+            // Auto-None
             if (!valueToSave && (rawInput.includes('בלי') || rawInput.includes('ללא') || rawInput === 'none')) {
                 valueToSave = 'none';
             }
         }
+
         if (valueToSave !== null) draft[questionAskedLastTime.key] = valueToSave;
     }
     
     session.draftAttributes = draft;
 
-    // 4. בדיקה מה הלאה
+    // --- 4. Next Step Check ---
     let nextQuestion = null;
     for (const q of productConfig.questions) {
         if (draft[q.key] == null) {
@@ -1946,79 +1971,53 @@ function planActions(intentData, session) {
     }
 
     if (nextQuestion) {
-        // --- V83: Clarity Update ---
-        // מוסיפים הקשר לשאלה ("לגבי הרולאפ: ...")
         const productNameHE = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
-        const prefix = `📌 **לגבי ה${productNameHE}:** `; // הדגשה ברורה
+        const prefix = `📌 **לגבי ה${productNameHE}:** `;
         
         return { 
             actions: [{ 
                 type: 'PRESENT_OPTIONS', 
-                question: prefix + nextQuestion.question_he, // הוספת הפרפיקס
+                question: prefix + nextQuestion.question_he, 
                 options: nextQuestion.options || [], 
                 product: currentProductKey, 
                 saveDraft: draft 
             }] 
         };
     } else {
-        // סיימנו מוצר זה -> חישוב
+        // סיום וחישוב
         try {
             if (currentProductKey === 'rollup' && !draft.size) draft.size = '85x200';
             
             const calcResult = calculate_custom_job(session.cart, { ...draft, product: currentProductKey });
             const hebrewName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
-            const cleanDesc = calcResult.lastAdded.description || ""; 
             
             const item = { 
                 ...calcResult.lastAdded, 
                 product: hebrewName,       
                 productName: hebrewName,   
-                description: cleanDesc,
                 attributes: draft 
             };
             
-            // הוספה לעגלה
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item });
 
-            // --- V83: Queue Transition Logic ---
-            // האם יש עוד מוצרים בתור?
+            // טיפול בתור (Queue)
             if (session.productQueue && session.productQueue.length > 0) {
-                // שולפים את הבא בתור
                 const nextProduct = session.productQueue.shift();
                 session.currentProduct = nextProduct;
-                session.draftAttributes = {}; // איפוס לשלב הבא
+                session.draftAttributes = {};
                 
                 const nextNameHE = PRODUCT_NAMES_HE[nextProduct] || nextProduct;
+                const nextConfig = productsDB[nextProduct];
+                const firstQ = nextConfig.questions[0];
 
-                // הודעת מעבר
                 actions.push({ 
                     type: 'GENERATE_RESPONSE', 
                     payload: { 
-                        text: `✅ הוספתי את ה${hebrewName} לעגלה (₪${item.client_price}).\n\n🔄 **עובר מיד ל${nextNameHE}...**`, 
-                        quickReplies: [] // בלי כפתורים, כי אנחנו ממשיכים מיד
+                        text: `✅ הוספתי את ה${hebrewName} לעגלה (₪${item.client_price}).\n\n🔄 **עובר מיד ל${nextNameHE}...**\n\n❓ ${firstQ.question_he}`, 
+                        quickReplies: firstQ.options || []
                     } 
                 });
-                
-                // טריק: קריאה רפוקרסיבית (או דמוי) כדי לייצר את השאלה הראשונה של המוצר הבא *באותו תור*
-                // כדי לפשט, אנחנו נסמוך על זה שבקליק הבא (או בגלל שאין כפתורים המשתמש יגיב) זה ימשיך,
-                // אבל כדי להיות ממש חכמים, אפשר להחזיר את השאלה הראשונה כבר עכשיו.
-                
-                // בגרסה פשוטה: המשתמש יראה "עובר ל..." ואז הבוט יחכה לקלט.
-                // כדי שזה יהיה מושלם, ה-Frontend צריך לתמוך בזה, או שפשוט נחכה לקלט כלשהו מהמשתמש.
-                // אבל רגע, אם המשתמש לא אומר כלום, זה נעצר.
-                
-                // הפתרון האלגנטי: נשרשר את השאלה הראשונה של המוצר הבא לתגובה!
-                const nextConfig = productsDB[nextProduct];
-                const firstQ = nextConfig.questions[0];
-                
-                // עדכון התגובה האחרונה שתכלול את השאלה
-                actions[actions.length - 1].payload.text += `\n\n❓ ${firstQ.question_he}`;
-                actions[actions.length - 1].payload.quickReplies = firstQ.options || [];
-                // עדכון ה-Session כדי שהתשובה הבאה תלך למוצר החדש
-                // (כבר עשינו session.currentProduct = nextProduct למעלה)
-                
             } else {
-                // סיימנו הכל - צ'ק אאוט רגיל
                 actions.push({ 
                     type: 'GENERATE_RESPONSE', 
                     payload: { 
@@ -2027,9 +2026,7 @@ function planActions(intentData, session) {
                     } 
                 });
             }
-
             return { actions };
-
         } catch (e) {
             console.error(e);
             return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב.", quickReplies: MAIN_MENU_BUTTONS } }] };
@@ -2896,31 +2893,48 @@ module.exports = { handleWithSmartLLM };
 
 --- FILE: engine\validator.js ---
 ```js
-/** engine/validator.js V72.0 - Less Aggressive */
+/** engine/validator.js V91.0 - Regex & Safety Net */
 function validateLLMResult(llmResult, userText, session) {
     let result = { ...llmResult };
     const text = userText.toLowerCase();
 
-    // 1. זיהוי עריכה/שינוי
-    if (text.includes("תשנה") || text.includes("תחליף") || text.includes("במקום") || text.includes("עדכן")) {
+    // וודא ש-mapped_params קיים
+    if (!result.mapped_params) result.mapped_params = {};
+
+    // 1. זיהוי עריכה/שינוי (Override)
+    if (text.includes("תשנה") || text.includes("תחליף") || text.includes("במקום") || text.includes("טעות")) {
         result.intent = 'update';
     }
 
-    // 2. טיפול ב"בלי" / "ללא"
-    if (text.includes("בלי") || text.includes("ללא") || text.includes("לא רוצה")) {
-        if (!result.mapped_params) result.mapped_params = {};
-        
-        // Specific mapping
-        if (text.includes("למינציה")) result.mapped_params.lamination = 'none';
-        if (text.includes("השבחה") || text.includes("זהב") || text.includes("פויל")) result.mapped_params.finishing = 'none';
-        
-        // REMOVED: The aggressive auto-fill block for finishing=none
-        // This allows the planner to ask about finishing later if it wasn't mentioned.
+    // 2. זיהוי גדלים (Regex חזק) - מציל מקרים שה-LLM מחזיר 'chat' על מידות
+    // תופס: 85x200, 85*200, 85 על 200, 85X200
+    const sizeMatch = text.match(/(\d+)\s*(?:x|X|\*|על)\s*(\d+)/);
+    if (sizeMatch) {
+        result.mapped_params.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
+        // אם ה-LLM חשב שזה סתם צ'אט, נתקן אותו כי יש פה פרמטר טכני
+        if (result.intent === 'chat') result.intent = 'update'; 
     }
 
-    // 3. הצגת עגלה
-    if (text.includes("כמה זה") || text.includes("בינתיים") || text.includes("יוצא לי")) {
-        result.intent = 'show_cart';
+    // 3. זיהוי נייר (Hardcoded Safety)
+    if (text.includes('כרומו')) {
+        if (text.includes('300')) result.mapped_params.paper_type = 'chromo_300';
+        else if (text.includes('130') || text.includes('170')) result.mapped_params.paper_type = 'chromo_130';
+        else result.mapped_params.paper_type = 'chromo_300'; 
+        if (result.intent === 'chat') result.intent = 'update';
+    }
+    if (text.includes('מט') || text.includes('נטול עץ')) {
+        result.mapped_params.paper_type = 'matte_350';
+        if (result.intent === 'chat') result.intent = 'update';
+    }
+
+    // 4. טיפול ב"בלי" / "ללא"
+    if (text.includes("בלי") || text.includes("ללא") || text.includes("לא רוצה")) {
+        if (result.intent === 'chat') result.intent = 'update';
+    }
+
+    // 5. אם זו רק כמות (מספר בלבד) וה-LLM פספס
+    if (/^\d+$/.test(text.trim()) && result.intent === 'chat') {
+        result.intent = 'update';
     }
 
     return result;
