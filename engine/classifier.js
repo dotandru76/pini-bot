@@ -1,33 +1,55 @@
-/** engine/classifier.js V37.1 */
-const { routeWithLLM } = require('./llmRouter');
+/** engine/classifier.js V91.0 - Syntax & Fast Path Fixed */
 const { validateLLMResult } = require('./validator');
+const { routeWithLLM } = require('./llmRouter'); // תוקן לפי בקשתך
 
+// מילות מפתח לטיפול מהיר ללא LLM
 const KEYWORDS = {
-    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט', 'ראשי'],
-    cart: ['עגלה', 'סיכום', 'מה יש', 'status'],
-    remove_all: ['מחק הכל', 'רוקן עגלה']
+    reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט'],
+    cart: ['עגלה', 'סיכום', 'מה יש', 'בסל', 'כמה זה יוצא', 'כמה יצא'],
+    checkout: ['תארוז', 'הצעת מחיר', 'לשלם', 'חשבון', 'צ\'ק אאוט', 'checkout'],
+    greeting: ['היי', 'שלום', 'הי', 'אהלן', 'בוקר טוב', 'ערב טוב'],
+    bye: ['ביי', 'להתראות', 'תודה', 'יום טוב'],
+    remove: ['מחק', 'תסיר', 'להוריד', 'remove']
 };
 
-async function classifyMessage(message, session) {
-    const text = message.toLowerCase().trim();
+async function classify(text, session) {
+    const t = text.toLowerCase().trim();
+
+    // 1. Fast Path - בדיקות מיידיות
+    if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
+    if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
     
-    // Fast Path
-    if (KEYWORDS.reset.some(k => text.includes(k))) return { intent: 'reset', raw_text: message };
-    if (KEYWORDS.cart.some(k => text.includes(k))) return { intent: 'show_cart', raw_text: message };
-    if (KEYWORDS.remove_all.some(k => text === k)) return { intent: 'remove_all', raw_text: message };
+    // זיהוי בקשת תשלום/הצעה (רק אם יש משהו בעגלה)
+    if (session.cart && session.cart.length > 0) {
+        if (KEYWORDS.checkout.some(k => t.includes(k))) return { intent: 'show_cart' };
+    }
 
-    // Pipeline
-    console.log("🧠 Consulting Gemini...");
-    let result = await routeWithLLM(message, session);
-    result = validateLLMResult(result, message, session);
+    // זיהוי ברכה
+    if (KEYWORDS.greeting.some(k => t.startsWith(k)) && t.length < 20) {
+        return { intent: 'chat', aiResponse: 'היי! אני פיני 👨‍🎨, מה נדפיס היום?' };
+    }
 
-    return {
-        intent: result.intent || 'chat',
-        product: result.product,
-        extractedParams: result.mapped_params || {}, 
-        aiResponse: result.answer_text, 
-        raw_text: message 
-    };
+    // זיהוי פרידה
+    if (KEYWORDS.bye.some(k => t.includes(k))) {
+        return { intent: 'chat', aiResponse: 'בשמחה! מוזמן לחזור מתי שתרצה.' };
+    }
+
+    if (KEYWORDS.remove.some(k => t.includes(k))) return { intent: 'remove' };
+
+    // 2. LLM Pipeline
+    try {
+        const llmResult = await routeWithLLM(text, session); // תוקן השם
+        
+        // 3. Validation Layer
+        const validated = validateLLMResult(llmResult, text, session);
+        
+        return validated;
+
+    } catch (e) {
+        console.error("Classifier Error:", e);
+        return { intent: 'chat', aiResponse: 'סליחה, הייתה תקלה רגעית. נסה שוב?' };
+    }
 }
 
-module.exports = { classifyMessage };
+// תוקן ה-Export כדי להתאים לקריאה ב-server.js
+module.exports = { classifyMessage: classify };
