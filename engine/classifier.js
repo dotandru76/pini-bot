@@ -1,4 +1,4 @@
-/** engine/classifier.js V97.1 - Crash Proof & Button Bypass */
+/** engine/classifier.js V98.0 - Data Integrity Fix */
 const { validateLLMResult } = require('./validator');
 const { routeWithLLM } = require('./llmRouter');
 
@@ -12,22 +12,21 @@ const KEYWORDS = {
 };
 
 async function classify(text, session) {
-    // --- CRASH FIX: Ensure input is always a string ---
+    // 1. Crash Proofing: המרה בטוחה לטקסט
     const safeText = String(text || ""); 
     const t = safeText.toLowerCase().trim();
 
-    // --- 0. SUPER FAST PATH: Technical Codes (Buttons) ---
-    // אם זה נראה כמו קוד טכני (matte_350), ה-LLM לא צריך לגעת בזה!
+    // 2. SUPER FAST PATH: Technical Codes (Buttons)
     if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
         console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
         return { 
-            intent: 'update', // זה תמיד עדכון פרמטר
-            raw_text: safeText, // מעבירים את הטקסט כמו שהוא
+            intent: 'update', 
+            raw_text: safeText, // ✅ יש פה raw_text
             mapped_params: {} 
         };
     }
 
-    // 1. Fast Path - בדיקות מיידיות רגילות
+    // 3. Fast Path - מילות מפתח
     if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
     if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
     
@@ -45,10 +44,15 @@ async function classify(text, session) {
 
     if (KEYWORDS.remove.some(k => t.includes(k))) return { intent: 'remove' };
 
-    // 2. LLM Pipeline (רק למלל חופשי אמיתי)
+    // 4. LLM Pipeline (למלל חופשי כמו "500")
     try {
         const llmResult = await routeWithLLM(safeText, session);
         const validated = validateLLMResult(llmResult, safeText, session);
+        
+        // --- FIX V98.0: הצמדת הטקסט המקורי ---
+        // זה מבטיח שה-Planner יקבל את המספר "500" גם אם ה-LLM פספס אותו
+        validated.raw_text = safeText; 
+        
         return validated;
     } catch (e) {
         console.error("Classifier Error:", e);
