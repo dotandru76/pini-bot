@@ -1,4 +1,4 @@
-/** engine/planner.js V80.0 - The Strict Wizard */
+/** engine/planner.js V81.0 - The Hybrid Wizard (Smart + Strict) */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -7,88 +7,113 @@ const { getMainMenu } = require('./productCatalog');
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) {}
 
+// מיפוי שמות למונחים טכניים כדי שה-LLM והמערכת ידברו באותה שפה
+const PARAM_ALIASES = { 
+    'paper': 'paper_type', 'stock': 'paper_type', 'sug_niyar': 'paper_type',
+    'coating': 'lamination', 'laminatzia': 'lamination',
+    'finish': 'finishing', 'haskhba': 'finishing',
+    'width': 'size', 'godel': 'size',
+    'amount': 'qty', 'quantity': 'qty', 'kamut': 'qty',
+    'type': 'book_type', 'sug': 'book_type',
+    'pages': 'pages', 'amudim': 'pages'
+};
+
 const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות' };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
 
 function planActions(intentData, session) {
     const actions = [];
-    let rawInput = intentData.raw_text ? intentData.raw_text.trim() : ""; // שומרים על Case לאנגלית
+    let rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
     
-    // 1. פקודות מערכת (עוקפות הכל)
+    // --- 1. פעולות מערכת ---
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
+    
     if (intentData.intent === 'show_cart') {
         const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
+    
     if (intentData.intent === 'remove') {
         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: session.cart.length - 1 } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי.`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // 2. זיהוי מוצר חדש (כניסה ל-Wizard)
+    // --- 2. ניהול מוצר (Context) ---
     let currentProductKey = session.currentProduct;
-    // אם זו בקשה חדשה למוצר (intent=quote) או שאין מוצר פעיל
+    
+    // אם ה-LLM זיהה מוצר חדש (למשל "אני רוצה רולאפ")
     if (intentData.intent === 'quote' && intentData.product) {
         if (intentData.product !== session.currentProduct) {
             session.currentProduct = intentData.product;
-            session.draftAttributes = {}; // איפוס דראפט למוצר חדש
+            session.draftAttributes = {}; // איפוס לדף חלק
             currentProductKey = intentData.product;
         }
     }
 
-    // אם עדיין אין מוצר, שולחים לתפריט
     if (!currentProductKey) {
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    // 3. ה-WIZARD הקשוח (לולאת שאלות)
+    // --- 3. המוח ההיברידי ---
     const productConfig = productsDB[currentProductKey];
     let draft = session.draftAttributes || {};
-    
-    // -- שלב א: קליטת תשובה לשאלה הקודמת (אם הייתה) --
-    // אנחנו עוברים על השאלות לפי הסדר. הראשונה שחסרה ב-draft היא זו ששאלנו בפעם הקודמת.
+
+    // שלב 0: קליטה חכמה מה-LLM (ה"מוח")
+    // אם ה-LLM חילץ פרמטרים מהמלל החופשי (למשל: "500 עותקים"), נכניס אותם לטופס
+    if (intentData.extractedParams) {
+        Object.keys(intentData.extractedParams).forEach(key => {
+            const normalizedKey = PARAM_ALIASES[key] || key;
+            const val = intentData.extractedParams[key];
+            // מעדכנים רק אם יש ערך אמיתי
+            if (val !== null && val !== undefined && val !== '') {
+                draft[normalizedKey] = val;
+            }
+        });
+    }
+
+    // שלב א': השלמה "טיפשה" (WIZARD) - אם ה-LLM פספס, אנחנו בודקים תשובה ישירה לשאלה האחרונה
+    // בודקים מה שאלנו בפעם הקודמת
     let questionAskedLastTime = null;
     for (const q of productConfig.questions) {
-        if (draft[q.key] == null) { 
-            questionAskedLastTime = q; 
+        if (draft[q.key] == null) { // השאלה הראשונה שאין לה תשובה ב-draft היא זו ששאלנו
+            questionAskedLastTime = q;
             break; 
         }
     }
 
-    // אם הייתה שאלה פתוחה, ננסה למלא אותה עם הקלט הנוכחי
-    if (questionAskedLastTime && rawInput) {
+    // אם הייתה שאלה פתוחה, וה-LLM לא מילא אותה כבר בשלב 0, ננסה למלא אותה מהקלט הגולמי
+    if (questionAskedLastTime && draft[questionAskedLastTime.key] == null && rawInput) {
         let valueToSave = null;
 
-        // בדיקה 1: האם זה מספר? (עבור כמויות, עמודים, מידות)
+        // אם זו שאלת מספר (כמו עמודים/כמות) והמשתמש כתב רק מספר
         if (questionAskedLastTime.type === 'number') {
             const numMatch = rawInput.match(/(\d+)/);
             if (numMatch) valueToSave = parseInt(numMatch[0]);
         }
         
-        // בדיקה 2: האם זה בחירה מרשימה? (נייר, גימור)
+        // אם זו שאלת בחירה (כפתורים)
         if (questionAskedLastTime.options) {
-            // מחפשים התאמה ל-Value (באנגלית) או ל-Label (בעברית)
             const match = questionAskedLastTime.options.find(opt => 
-                rawInput === opt.value || // בדיקה מדויקת לקוד (מהכפתור)
-                rawInput.includes(opt.label) || // בדיקה לטקסט (מהמשתמש)
-                opt.label.includes(rawInput) // בדיקה חלקית
+                rawInput === opt.value || 
+                rawInput.includes(opt.label) || 
+                opt.label.includes(rawInput)
             );
             if (match) valueToSave = match.value;
             
-            // טיפול ב"ללא" / "בלי"
             if (!valueToSave && (rawInput.includes('בלי') || rawInput.includes('ללא') || rawInput === 'none')) {
                 valueToSave = 'none';
             }
         }
 
-        // שמירת התשובה (רק אם מצאנו משהו חוקי)
         if (valueToSave !== null) {
             draft[questionAskedLastTime.key] = valueToSave;
-            session.draftAttributes = draft; // עדכון הזיכרון
         }
     }
+    
+    // שמירת המצב המעודכן
+    session.draftAttributes = draft;
 
-    // -- שלב ב: זיהוי השאלה הבאה --
-    // עוברים שוב על הרשימה עם ה-Draft המעודכן
+    // --- 4. בדיקה מה הלאה (הלולאה) ---
+    // עוברים שוב על הרשימה כדי לראות מה *עדיין* חסר
     let nextQuestion = null;
     for (const q of productConfig.questions) {
         if (draft[q.key] == null) {
@@ -97,9 +122,8 @@ function planActions(intentData, session) {
         }
     }
 
-    // -- שלב ג: החלטה --
     if (nextQuestion) {
-        // יש עוד שאלות - שאל את הבאה
+        // מצאנו חור בטופס -> שואלים את השאלה
         return { 
             actions: [{ 
                 type: 'PRESENT_OPTIONS', 
@@ -110,9 +134,8 @@ function planActions(intentData, session) {
             }] 
         };
     } else {
-        // אין עוד שאלות - חשב מחיר!
+        // הטופס מלא -> מחשבים מחיר
         try {
-            // תיקוני ברירת מחדל
             if (currentProductKey === 'rollup' && !draft.size) draft.size = '85x200';
             
             const calcResult = calculate_custom_job(session.cart, { ...draft, product: currentProductKey });
