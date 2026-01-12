@@ -28,7 +28,7 @@ const PRODUCT_KEYWORDS = {
 
 function planActions(intentData, session) {
     const actions = [];
-    let rawInput = intentData.raw_text ? intentData.raw_text.trim() : "";
+    let rawInput = intentData.raw_text ? String(intentData.raw_text).trim() : "";
     
     // 1. System Actions
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
@@ -45,14 +45,12 @@ function planActions(intentData, session) {
     // 2. Product & Queue Logic
     let currentProductKey = session.currentProduct;
     
-    // זיהוי מוצר חדש (או כפוי ע"י Validator)
     if (intentData.intent === 'quote' && intentData.product) {
         if (intentData.product !== session.currentProduct) {
             session.currentProduct = intentData.product;
             session.draftAttributes = {}; 
             currentProductKey = intentData.product;
             
-            // Queue Injection from Validator (V93)
             if (intentData.allDetectedProducts && intentData.allDetectedProducts.length > 1) {
                 const queue = intentData.allDetectedProducts.filter(p => p !== currentProductKey);
                 session.productQueue = [...new Set(queue)];
@@ -61,7 +59,6 @@ function planActions(intentData, session) {
         }
     }
 
-    // שליפה מהתור אם אין מוצר נוכחי
     if (!currentProductKey && session.productQueue && session.productQueue.length > 0) {
         currentProductKey = session.productQueue.shift();
         session.currentProduct = currentProductKey;
@@ -76,7 +73,7 @@ function planActions(intentData, session) {
     const productConfig = productsDB[currentProductKey];
     let draft = session.draftAttributes || {};
 
-    // שלב 0: קליטה חכמה מה-LLM
+    // שלב 0: קליטה חכמה
     if (intentData.extractedParams) {
         Object.keys(intentData.extractedParams).forEach(key => {
             const normalizedKey = PARAM_ALIASES[key] || key;
@@ -87,7 +84,7 @@ function planActions(intentData, session) {
         });
     }
 
-    // שלב א': השלמה לפי השאלה האחרונה
+    // שלב א': השלמה
     let questionAskedLastTime = null;
     for (const q of productConfig.questions) {
         if (draft[q.key] == null) { 
@@ -101,7 +98,6 @@ function planActions(intentData, session) {
         let valueToSave = null;
         const inputLower = rawInput.toLowerCase().trim();
 
-        // בדיקת מספר
         const numMatch = rawInput.match(/(\d+)/);
         if (numMatch) {
             if (questionAskedLastTime.key === 'qty' || questionAskedLastTime.key === 'pages' || questionAskedLastTime.type === 'number') {
@@ -109,22 +105,23 @@ function planActions(intentData, session) {
             }
         }
         
-        // בדיקת אופציות (כולל בדיקת VALUE)
         if (!valueToSave && questionAskedLastTime.options) {
             const match = questionAskedLastTime.options.find(opt => {
                 const l = opt.label.toLowerCase();
-                const v = String(opt.value).toLowerCase(); // המרה למחרוזת ליתר ביטחון
+                const v = String(opt.value).toLowerCase();
                 
-                return inputLower === v ||           // ✅ בדיקה ישירה מול הקוד הטכני
-                       inputLower === l ||           // בדיקה מול התווית
-                       l.includes(inputLower) ||     // חיפוש חלקי בתווית
+                return inputLower === v ||           
+                       inputLower === l ||           
+                       l.includes(inputLower) ||     
                        inputLower.includes(l.split(' ')[0]) ||
                        inputLower.includes(l.split('(')[0].trim());
             });
             
-            if (match) valueToSave = match.value;
+            if (match) {
+                valueToSave = match.value;
+                console.log(`🎯 [PLANNER] Matched Option! Input: "${rawInput}" -> Value: "${match.value}"`);
+            }
             
-            // Auto-None
             if (!valueToSave && (inputLower.includes('בלי') || inputLower.includes('ללא') || inputLower === 'none')) {
                 valueToSave = 'none';
             }
@@ -158,7 +155,6 @@ function planActions(intentData, session) {
             }] 
         };
     } else {
-        // סיום וחישוב
         try {
             if (currentProductKey === 'rollup' && !draft.size) draft.size = '85x200';
             
@@ -176,7 +172,6 @@ function planActions(intentData, session) {
             
             actions.push({ type: 'CALCULATE_AND_ADD', payload: item });
 
-            // טיפול במעבר לתור (Queue)
             if (session.productQueue && session.productQueue.length > 0) {
                 const nextProduct = session.productQueue.shift();
                 session.currentProduct = nextProduct;

@@ -1,4 +1,4 @@
-/** engine/classifier.js V97.0 - Iron Dome for Buttons */
+/** engine/classifier.js V97.1 - Crash Proof & Button Bypass */
 const { validateLLMResult } = require('./validator');
 const { routeWithLLM } = require('./llmRouter');
 
@@ -12,17 +12,18 @@ const KEYWORDS = {
 };
 
 async function classify(text, session) {
-    const t = text.toLowerCase().trim();
+    // --- CRASH FIX: Ensure input is always a string ---
+    const safeText = String(text || ""); 
+    const t = safeText.toLowerCase().trim();
 
     // --- 0. SUPER FAST PATH: Technical Codes (Buttons) ---
-    // אם זה נראה כמו קוד טכני (אותיות_אותיות), ה-LLM לא צריך לגעת בזה!
-    // זה פותר את הלולאה של "matte_350" מיידית.
+    // אם זה נראה כמו קוד טכני (matte_350), ה-LLM לא צריך לגעת בזה!
     if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
         console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
         return { 
             intent: 'update', // זה תמיד עדכון פרמטר
-            raw_text: text,   // מעבירים את הטקסט כמו שהוא ל-Planner
-            mapped_params: {} // ה-Planner יעשה את המיפוי
+            raw_text: safeText, // מעבירים את הטקסט כמו שהוא
+            mapped_params: {} 
         };
     }
 
@@ -46,8 +47,8 @@ async function classify(text, session) {
 
     // 2. LLM Pipeline (רק למלל חופשי אמיתי)
     try {
-        const llmResult = await routeWithLLM(text, session);
-        const validated = validateLLMResult(llmResult, text, session);
+        const llmResult = await routeWithLLM(safeText, session);
+        const validated = validateLLMResult(llmResult, safeText, session);
         return validated;
     } catch (e) {
         console.error("Classifier Error:", e);
