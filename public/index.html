@@ -327,6 +327,7 @@
             document.querySelectorAll('.quick-replies').forEach(el => el.remove());
         }
 
+        // --- TIUKUN (FIX): Updated addButtons to pass both value and label ---
         function addButtons(options) {
             const container = document.getElementById('messages-container');
             const qrDiv = document.createElement('div');
@@ -334,10 +335,15 @@
             options.forEach(opt => {
                 const btn = document.createElement('div');
                 btn.className = 'chip';
-                const label = opt.label || opt.text || opt;
-                const val = opt.value || opt;
+                
+                // תמיכה בפורמט אובייקט {label, value} או סתם מחרוזת
+                const label = typeof opt === 'object' ? (opt.label || opt.text) : opt;
+                const value = typeof opt === 'object' ? (opt.value || opt) : opt;
+                
                 btn.innerText = label;
-                btn.onclick = () => sendMessage(val);
+                
+                // התיקון: שולחים גם את הערך הטכני וגם את התווית לתצוגה
+                btn.onclick = () => sendMessage(value, label);
                 qrDiv.appendChild(btn);
             });
             container.appendChild(qrDiv);
@@ -405,14 +411,19 @@
             sendMessage("תפריט");
         }
 
-        async function sendMessage(text = null) {
+        // --- TIKUN (FIX): Updated sendMessage to accept displayLabel ---
+        async function sendMessage(text = null, displayLabel = null) {
             if (isProcessing) return;
 
             const inputField = document.getElementById('user-input');
-            const message = text || inputField.value.trim();
-            if (!message) return;
+            const valueToSend = text || inputField.value.trim(); // מה נשלח לשרת (קוד)
+            const textToDisplay = displayLabel || valueToSend;   // מה יוצג למשתמש (עברית)
 
-            addMsg(message, 'user');
+            if (!valueToSend) return;
+
+            // מציגים למשתמש את מה שהוא אמור לראות
+            addMsg(textToDisplay, 'user');
+            
             inputField.value = '';
             removeQuickReplies();
             
@@ -423,7 +434,8 @@
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message, userId: userId })
+                    // שולחים לשרת את הערך הטכני
+                    body: JSON.stringify({ message: valueToSend, userId: userId })
                 });
 
                 if (!res.ok) throw new Error(`Server status: ${res.status}`);
