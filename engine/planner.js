@@ -1,4 +1,4 @@
-/** engine/planner.js V93.0 - Direct Queue Injection */
+/** engine/planner.js V96.0 - Value Match Fix & Queue Logic */
 const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
@@ -14,8 +14,17 @@ const PARAM_ALIASES = {
     'type': 'book_type', 'pages': 'pages'
 };
 
-const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות' };
+const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות', 'poster': 'פוסטרים' };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
+
+const PRODUCT_KEYWORDS = {
+    'bc': ['כרטיס', 'ביקור', 'cards'],
+    'flyer': ['פלייר', 'flyer'],
+    'booklet': ['חוברות', 'ספר', 'booklet', 'קטלוג'],
+    'rollup': ['רולאפ', 'rollup', 'רול'],
+    'sticker': ['מדבק', 'sticker'],
+    'poster': ['פוסטר', 'poster']
+};
 
 function planActions(intentData, session) {
     const actions = [];
@@ -43,12 +52,9 @@ function planActions(intentData, session) {
             session.draftAttributes = {}; 
             currentProductKey = intentData.product;
             
-            // --- V93: Queue Injection from Validator ---
-            // אם ה-Validator זיהה כמה מוצרים, נכניס אותם לתור מיד
+            // Queue Injection from Validator (V93)
             if (intentData.allDetectedProducts && intentData.allDetectedProducts.length > 1) {
-                // מסננים את המוצר הנוכחי מהרשימה, והשאר הולכים לתור
                 const queue = intentData.allDetectedProducts.filter(p => p !== currentProductKey);
-                // מסירים כפילויות ליתר ביטחון
                 session.productQueue = [...new Set(queue)];
                 console.log(`🔄 [PLANNER] Queue initialized: ${session.productQueue.join(', ')}`);
             }
@@ -90,10 +96,12 @@ function planActions(intentData, session) {
         }
     }
 
+    // --- FIX V96.0: Enhanced Value Match Logic ---
     if (questionAskedLastTime && draft[questionAskedLastTime.key] == null && rawInput) {
         let valueToSave = null;
+        const inputLower = rawInput.toLowerCase().trim();
 
-        // בדיקת מספר (כולל תיקון V92 ללולאה)
+        // בדיקת מספר
         const numMatch = rawInput.match(/(\d+)/);
         if (numMatch) {
             if (questionAskedLastTime.key === 'qty' || questionAskedLastTime.key === 'pages' || questionAskedLastTime.type === 'number') {
@@ -101,22 +109,23 @@ function planActions(intentData, session) {
             }
         }
         
-        // בדיקת אופציות (Fuzzy Match V91)
+        // בדיקת אופציות (כולל בדיקת VALUE)
         if (!valueToSave && questionAskedLastTime.options) {
             const match = questionAskedLastTime.options.find(opt => {
                 const l = opt.label.toLowerCase();
-                const v = opt.value.toLowerCase();
-                const input = rawInput.toLowerCase();
+                const v = String(opt.value).toLowerCase(); // המרה למחרוזת ליתר ביטחון
                 
-                return input === v || 
-                       input === l || 
-                       l.includes(input) || 
-                       input.includes(l.split(' ')[0]) || 
-                       input.includes(l.split('(')[0].trim());
+                return inputLower === v ||           // ✅ בדיקה ישירה מול הקוד הטכני
+                       inputLower === l ||           // בדיקה מול התווית
+                       l.includes(inputLower) ||     // חיפוש חלקי בתווית
+                       inputLower.includes(l.split(' ')[0]) ||
+                       inputLower.includes(l.split('(')[0].trim());
             });
             
             if (match) valueToSave = match.value;
-            if (!valueToSave && (rawInput.includes('בלי') || rawInput.includes('ללא') || rawInput === 'none')) {
+            
+            // Auto-None
+            if (!valueToSave && (inputLower.includes('בלי') || inputLower.includes('ללא') || inputLower === 'none')) {
                 valueToSave = 'none';
             }
         }
@@ -155,8 +164,6 @@ function planActions(intentData, session) {
             
             const calcResult = calculate_custom_job(session.cart, { ...draft, product: currentProductKey });
             const hebrewName = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
-            
-            // תיאור נקי ל-PDF
             const cleanDesc = calcResult.lastAdded.description || ""; 
             
             const item = { 
