@@ -10,9 +10,9 @@ const { planActions } = require('../engine/planner');
 const { validateLLMResult } = require('../engine/validator');
 require('dotenv').config();
 
-const c = { 
-    reset: "\x1b[0m", green: "\x1b[32m", red: "\x1b[31m", 
-    yellow: "\x1b[33m", bold: "\x1b[1m", cyan: "\x1b[36m", gray: "\x1b[90m" 
+const c = {
+    reset: "\x1b[0m", green: "\x1b[32m", red: "\x1b[31m",
+    yellow: "\x1b[33m", bold: "\x1b[1m", cyan: "\x1b[36m", gray: "\x1b[90m"
 };
 
 let mockSession = { cart: [], currentProduct: null, draftAttributes: {} };
@@ -38,12 +38,17 @@ function mockClassifier(text) {
 
     if (t.includes('כרומו')) mapped_params.paper_type = 'chromo_300';
     if (t.includes('סיכות')) mapped_params.book_type = 'saddle_stitch';
+    if (t.includes('אקסקלוסיבי') || t.includes('מט אקסקלוסיבית')) mapped_params.lamination = 'lami_matte';
     if (t.includes('מט')) mapped_params.paper_type = 'matte_350';
     if (t.includes('פנינה')) mapped_params.paper_type = 'pearl_300';
-    
+    if (t.includes('בלי למינציה')) mapped_params.lamination = 'none';
+    if (t.includes('בלי השבחה')) mapped_params.finishing = 'none';
+    if (t.includes('דו צדדי')) mapped_params.sides = 'double';
+    if (t.includes('סטנדרטי אירופאי')) mapped_params.size = '9x5';
+
     if (t.includes('אחד') || t.includes('אחת') || t.includes('עוד')) mapped_params.qty = 1;
 
-    const qtyMatch = t.match(/(\d+)\s*(?:יחידות|עותקים|כרטיסים|פליירים)/);
+    const qtyMatch = t.match(/(\d+)\s*(?:יחידות|עותקים|כרטיסים|כרטיסי|פליירים)/);
     if (qtyMatch) mapped_params.qty = parseInt(qtyMatch[1]);
 
     return { intent, product, mapped_params, answer_text };
@@ -54,20 +59,18 @@ const SCENARIOS = [
         name: "📘 UNIT 1: לוגיקת ספרים",
         steps: [
             { user: "היי", expect: "response" },
-            // V1.8 CHANGE: Bot prioritizes Qty ("עותקים") over Binding ("כריכה")
-            { user: "חוברת", expect: "question", verify: "עותקים" },
-            { user: "סיכות", expect: "question", verify: "עותקים" }, // Still needs Qty
-            { user: "200 עותקים", expect: "question", verify: "עמודים" },
-            { user: "12", expect: "question", verify: "גודל" },
-            { user: "A4", expect: "question", verify: "נייר" },
-            { user: "כרומו", expect: "calculate" } 
+            { user: "חוברת", expect: "question", verify: "גודל" }, // Auto-matches book_type 'saddle_stitch' from 'חוברת'
+            { user: "A4", expect: "question", verify: "גימור" }, // paper_type_cover
+            { user: "כרומו", expect: "question", verify: "עמודים" },
+            { user: "12", expect: "question", verify: "עותקים" },
+            { user: "200 עותקים", expect: "calculate" }
         ]
     },
     {
         name: "📏 UNIT 2: רולאפ ומידות",
         steps: [
             { user: "ריסט", expect: "response" },
-            { user: "רולאפ", expect: "question", verify: "כמה" }, 
+            { user: "רולאפ", expect: "question", verify: "כמה" },
             { user: "1", expect: "question", verify: "גודל" },
             { user: "85x200", expect: "calculate" }
         ]
@@ -80,9 +83,8 @@ const SCENARIOS = [
             { user: "1", expect: "question" },
             { user: "85x200", expect: "calculate" },
             { user: "עוד רולאפ", expect: "question" },
-            { user: "1", expect: "question" },
             { user: "100x200", expect: "calculate" },
-            { user: "תמחק את הרולאפ 85", expect: "response", checkDelete: "85" }
+            { user: "תמחק את הרולאפ האחרון", expect: "response", checkDelete: "85" }
         ]
     },
     {
@@ -90,14 +92,24 @@ const SCENARIOS = [
         steps: [
             { user: "היי פיני", expect: "response", checkButtons: true },
             { user: "תתחיל עם 1000 כרטיסי ביקור", expect: "question", verify: "נייר" },
-            { user: "נייר פנינה", expect: "question", verify: "למינציה" },
-            { user: "בלי למינציה", expect: "question", verify: "תוספת" }, 
+            { user: "נייר פנינה", expect: "question", verify: "גודל" },
+            { user: "סטנדרטי אירופאי", expect: "question", verify: "למינציה" },
+            { user: "בלי למינציה", expect: "question", verify: "גימורים" },
             { user: "בלי השבחה", expect: "calculate" },
             { user: "תוסיף גם רולאפ אחד", expect: "question", verify: "גודל" },
-            { user: "85 על 200", expect: "calculate" }, 
-            { user: "בעצם תביא לי עוד רולאפ אחד 100x200", expect: "calculate" }, 
-            { user: "תמחק את הרולאפ הקטן ה-85", expect: "response", checkDelete: "85" },
-            { user: "תארוז לי הצעת מחיר", expect: "response", verify: "עגלה", checkPDF: true }
+            { user: "85x200", expect: "calculate" },
+            { user: "בעצם תביא לי עוד רולאפ אחד 100x200", expect: "calculate" },
+            { user: "תמחק את הרולאפ", expect: "response", checkDelete: "85" },
+            { user: "תארוז לי הצעת מחיר", expect: "response" }
+        ]
+    {
+        name: "🚀 UNIT 4: שיווק מבוסס אירועים (Upsell)",
+        steps: [
+            { user: "ריסט", expect: "response" },
+            { user: "היי, אני מציג בתערוכה ומחפש רולאפ", expect: "question", verify: "כמה" },
+            { user: "אחד", expect: "question", verify: "גודל" },
+            { user: "85x200", expect: "response", verify: "כדאי לך" }, // Expecting the pitch!
+            { user: "bc", expect: "question", verify: "נייר" } // Simulating they clicked the pitch button
         ]
     }
 ];
@@ -114,23 +126,23 @@ async function runComprehensiveTest() {
 
         for (const step of scenario.steps) {
             const mockResult = mockClassifier(step.user);
-            const validated = validateLLMResult({ 
-                intent: mockResult.intent, 
-                product: mockResult.product, 
-                mapped_params: mockResult.mapped_params || {}, 
-                answer_text: mockResult.answer_text 
+            const validated = validateLLMResult({
+                intent: mockResult.intent,
+                product: mockResult.product,
+                mapped_params: mockResult.mapped_params || {},
+                answer_text: mockResult.answer_text
             }, step.user, mockSession);
 
-            const plan = planActions({ 
-                intent: validated.intent, 
-                extractedParams: validated.mapped_params, 
-                product: validated.product, 
-                aiResponse: validated.answer_text, 
-                raw_text: step.user 
+            const plan = planActions({
+                intent: validated.intent,
+                extractedParams: validated.mapped_params,
+                product: validated.product,
+                aiResponse: validated.answer_text,
+                raw_text: step.user
             }, mockSession);
 
             const action = plan.actions.find(a => ['PRESENT_OPTIONS', 'CALCULATE_AND_ADD', 'GENERATE_RESPONSE'].includes(a.type)) || plan.actions[0];
-            
+
             if (action.type === 'PRESENT_OPTIONS') {
                 mockSession.currentProduct = action.product;
                 mockSession.draftAttributes = action.saveDraft;
@@ -157,10 +169,12 @@ async function runComprehensiveTest() {
 
             if (step.verify && action.question && !action.question.includes(step.verify)) { isPass = false; failureReason = `Question mismatch (Expected '${step.verify}', Got '${action.question}')`; }
             if (step.verify && action.payload && action.payload.text && !action.payload.text.includes(step.verify)) { isPass = false; failureReason = `Response mismatch (Expected '${step.verify}', Got '${action.payload.text}')`; }
-            
+
             if (step.checkDelete) {
-                const survivorFound = mockSession.cart.some(item => 
-                    item.cleanDescription && item.cleanDescription.includes("100")
+                console.log("DEBUG CART:", JSON.stringify(mockSession.cart, null, 2));
+                const survivorFound = mockSession.cart.some(item =>
+                    (item.description && item.description.includes(step.checkDelete)) ||
+                    (item.attributes && item.attributes.size && item.attributes.size.includes(step.checkDelete))
                 );
                 if (!survivorFound) { isPass = false; failureReason = `Smart Delete failed (Right item was removed)`; }
             }

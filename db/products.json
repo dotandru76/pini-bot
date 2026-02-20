@@ -3,110 +3,346 @@
     "name": "כרטיסי ביקור",
     "engine": "digital",
     "questions": [
-      { "key": "paper_type", "question_he": "איזה נייר?", "options": [
-          { "label": "מט 350 גרם", "value": "matte_350" },
-          { "label": "כרומו 300 גרם", "value": "chromo_300" },
-          { "label": "פנינה יוקרתי", "value": "pearl_300" }
-      ]},
-      { "key": "qty", "question_he": "כמה כרטיסים?", "type": "number", "options": [
-          { "label": "250", "value": 250 },
-          { "label": "500", "value": 500 },
-          { "label": "1000", "value": 1000 }
-      ]},
-      { "key": "lamination", "question_he": "תרצה למינציה?", "options": [
-          { "label": "בלי למינציה", "value": "none" },
-          { "label": "למינציה מט", "value": "lami_matte" },
-          { "label": "למינציה מבריקה", "value": "lami_gloss" }
-      ]},
-      { "key": "finishing", "question_he": "גימורים מיוחדים?", "options": [
-          { "label": "ללא השבחה", "value": "none" },
-          { "label": "פינות עגולות", "value": "round_corners" },
-          { "label": "פויל זהב", "value": "foil_gold" }
-      ]}
+      {
+        "key": "paper_type",
+        "question_he": "באיזה נייר נשתמש?",
+        "options": [
+          {
+            "label": "אקוורלו קרם (אקולוגי מהודר)",
+            "value": "aquarelle_cream"
+          },
+          {
+            "label": "נטול עץ (לבן ויוקרתי)",
+            "value": "woodfree"
+          },
+          {
+            "label": "בד / טקסטורה מיוחדת",
+            "value": "textured"
+          },
+          {
+            "label": "כרומו 300 / 400 גרם",
+            "value": "chromo_300"
+          },
+          {
+            "label": "פנינה (מנצנץ)",
+            "value": "pearl_300"
+          }
+        ]
+      },
+      {
+        "key": "size",
+        "question_he": "איזה גודל?",
+        "options": [
+          {
+            "label": "סטנדרטי אירופאי (9x5 ס\"מ)",
+            "value": "9x5"
+          },
+          {
+            "label": "כמו כרטיס אשראי (8.5x5.5 ס\"מ)",
+            "value": "8.5x5.5"
+          },
+          {
+            "label": "ריבוע מיוחד (5.5x5.5 ס\"מ)",
+            "value": "5.5x5.5"
+          }
+        ]
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה כרטיסים נדפיס?",
+        "type": "number",
+        "options": [
+          {
+            "label": "250",
+            "value": 250
+          },
+          {
+            "label": "500",
+            "value": 500
+          },
+          {
+            "label": "1000",
+            "value": 1000
+          }
+        ]
+      },
+      {
+        "key": "lamination",
+        "question_he": "כדאי להוסיף למינציה (לעמידות ומראה)?",
+        "options": [
+          {
+            "label": "למינציה מט אקסקלוסיבית",
+            "value": "lami_matte"
+          },
+          {
+            "label": "למינציה מבריקה",
+            "value": "lami_gloss"
+          },
+          {
+            "label": "בלי למינציה",
+            "value": "none"
+          }
+        ]
+      },
+      {
+        "key": "finishing",
+        "question_he": "גימורים מיוחדים להשלמת המראה?",
+        "options": [
+          {
+            "label": "פויל זהב / כסף",
+            "value": "foil"
+          },
+          {
+            "label": "פינות עגולות",
+            "value": "round_corners"
+          },
+          {
+            "label": "לכת סלקטיבית (UV Spot)",
+            "value": "uv_spot"
+          },
+          {
+            "label": "ללא השבחה",
+            "value": "none"
+          }
+        ]
+      }
     ]
   },
   "flyer": {
     "name": "פליירים",
     "engine": "digital",
     "questions": [
-       { "key": "size", "question_he": "איזה גודל?", "options": [
-          { "label": "A5", "value": "A5" },
-          { "label": "A4", "value": "A4" },
-          { "label": "A6", "value": "A6" }
-      ]},
-      { "key": "paper_type", "question_he": "סוג נייר?", "options": [
-          { "label": "כרומו 130 גרם", "value": "chromo_130" },
-          { "label": "כרומו 170 גרם", "value": "chromo_170" },
-          { "label": "נטול עץ 80 גרם", "value": "woodfree_80" }
-      ]},
-      { "key": "qty", "question_he": "כמה פליירים להדפיס?", "type": "number" }
+      {
+        "key": "size",
+        "question_he": "איזה גודל הפלייר?",
+        "options": [
+          {
+            "label": "גודל עמוד מלא (A4)",
+            "value": "A4"
+          },
+          {
+            "label": "חצי עמוד - הנפוץ ביותר (A5)",
+            "value": "A5"
+          },
+          {
+            "label": "רבע עמוד (A6)",
+            "value": "A6"
+          }
+        ]
+      },
+      {
+        "key": "paper_type",
+        "question_he": "באיזה נייר?",
+        "options": [
+          {
+            "label": "כרומו 130 גרם",
+            "value": "chromo_130"
+          },
+          {
+            "label": "כרומו 170 גרם (מרגיש איכותי יותר)",
+            "value": "chromo_170"
+          },
+          {
+            "label": "נטול עץ 80 גרם",
+            "value": "woodfree_80"
+          }
+        ]
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה פליירים תצטרך בכמות (למשל: 500, 1000)?",
+        "type": "number"
+      }
     ]
   },
   "booklet": {
-    "name": "חוברות",
+    "name": "חוברות וספרים",
     "engine": "digital",
     "questions": [
-      { "key": "book_type", "question_he": "איזה סוג ספר/חוברת?", "options": [
-          { "label": "חוברת סיכות (עד 60 עמ')", "value": "saddle_stitch" },
-          { "label": "כריכה רכה (הדבקה חמה)", "value": "perfect_bound" },
-          { "label": "ספירלה", "value": "wire_o" }
-      ]},
-      { "key": "qty", "question_he": "כמה עותקים?", "type": "number" },
-      { "key": "pages", "question_he": "כמה עמודים בסה\"כ?", "type": "number" },
-      { "key": "size", "question_he": "גודל?", "options": [
-          { "label": "A4", "value": "A4" },
-          { "label": "A5", "value": "A5" },
-          { "label": "21x21 ס\"מ", "value": "21x21" }
-      ]},
-      { "key": "paper_type", "question_he": "נייר לכריכה?", "options": [
-          { "label": "כרומו 300 (עבה)", "value": "chromo_300" },
-          { "label": "מט 300 (עבה)", "value": "matte_300" }
-      ]}
+      {
+        "key": "book_type",
+        "question_he": "איזה סוג ספר או חוברת?",
+        "options": [
+          {
+            "label": "כריכה קשה יוקרתית (קרטון 2 מ\"מ)",
+            "value": "hardcover"
+          },
+          {
+            "label": "כריכה רכה (הדבקה בחום – לספרי קריאה)",
+            "value": "perfect_bound"
+          },
+          {
+            "label": "חוברת סיכות פשוטה (אוכף)",
+            "value": "saddle_stitch"
+          },
+          {
+            "label": "ספירלה מתכת/פלסטיק (נפתחת 360 מעלות)",
+            "value": "wire_o"
+          }
+        ]
+      },
+      {
+        "key": "size",
+        "question_he": "מה הגודל הנדרש?",
+        "options": [
+          {
+            "label": "A4",
+            "value": "A4"
+          },
+          {
+            "label": "A5",
+            "value": "A5"
+          },
+          {
+            "label": "ריבועי מיוחד (21x21)",
+            "value": "21x21"
+          }
+        ]
+      },
+      {
+        "key": "paper_type_cover",
+        "question_he": "איזה גימור נעשה לכריכה?",
+        "options": [
+          {
+            "label": "כרומו עבה (170-300 גרם) + למינציה מבריקה",
+            "value": "cover_gloss"
+          },
+          {
+            "label": "כרומו עבה + למינציה מט",
+            "value": "cover_matte"
+          }
+        ]
+      },
+      {
+        "key": "pages",
+        "question_he": "כמה עמודים יש בפנים סך הכל?",
+        "type": "number"
+      },
+      {
+        "key": "qty",
+        "question_he": "וכמה עותקים להדפיס מהספר/חוברת?",
+        "type": "number"
+      }
     ]
   },
   "rollup": {
     "name": "רולאפ",
     "engine": "wide",
     "questions": [
-      { "key": "qty", "question_he": "כמה יחידות?", "type": "number" },
-      { "key": "size", "question_he": "גודל?", "options": [
-          { "label": "סטנדרטי 85x200", "value": "85x200" },
-          { "label": "רחב 100x200", "value": "100x200" },
-          { "label": "ענק 120x200", "value": "120x200" }
-      ]}
+      {
+        "key": "qty",
+        "question_he": "כמה יחידות?",
+        "type": "number"
+      },
+      {
+        "key": "size",
+        "question_he": "גודל?",
+        "options": [
+          {
+            "label": "סטנדרטי 85x200",
+            "value": "85x200"
+          },
+          {
+            "label": "רחב 100x200",
+            "value": "100x200"
+          },
+          {
+            "label": "ענק 120x200",
+            "value": "120x200"
+          }
+        ]
+      }
     ]
   },
   "poster": {
     "name": "פוסטרים",
     "engine": "wide",
     "questions": [
-      { "key": "qty", "question_he": "כמה פוסטרים?", "type": "number" },
-      { "key": "size", "question_he": "איזה גודל?", "options": [
-          { "label": "50x70", "value": "50x70" },
-          { "label": "70x100", "value": "70x100" },
-          { "label": "A3", "value": "A3" }
-      ]},
-      { "key": "paper_type", "question_he": "סוג נייר?", "options": [
-          { "label": "נייר 170 גרם", "value": "paper_170" },
-          { "label": "פוטו סאטן", "value": "satin" }
-      ]}
+      {
+        "key": "qty",
+        "question_he": "כמה פוסטרים?",
+        "type": "number"
+      },
+      {
+        "key": "size",
+        "question_he": "איזה גודל?",
+        "options": [
+          {
+            "label": "50x70",
+            "value": "50x70"
+          },
+          {
+            "label": "70x100",
+            "value": "70x100"
+          },
+          {
+            "label": "A3",
+            "value": "A3"
+          }
+        ]
+      },
+      {
+        "key": "paper_type",
+        "question_he": "סוג נייר?",
+        "options": [
+          {
+            "label": "נייר 170 גרם",
+            "value": "paper_170"
+          },
+          {
+            "label": "פוטו סאטן",
+            "value": "satin"
+          }
+        ]
+      }
     ]
   },
   "sticker": {
     "name": "מדבקות",
     "engine": "wide",
     "questions": [
-      { "key": "qty", "question_he": "כמה מדבקות?", "type": "number" },
-      { "key": "size", "question_he": "גודל המדבקה (למשל 5x5)?", "type": "number" },
-      { "key": "material", "question_he": "סוג מדבקה?", "options": [
-          { "label": "ויניל (פלסטיק)", "value": "vinyl" },
-          { "label": "נייר", "value": "paper" },
-          { "label": "שקוף", "value": "transparent" }
-      ]},
-      { "key": "cut", "question_he": "סוג חיתוך?", "options": [
-          { "label": "מרובע/מלבני", "value": "square" },
-          { "label": "צורני (לפי לוגו)", "value": "contour" }
-      ]}
+      {
+        "key": "qty",
+        "question_he": "כמה מדבקות?",
+        "type": "number"
+      },
+      {
+        "key": "size",
+        "question_he": "גודל המדבקה (למשל 5x5)?",
+        "type": "number"
+      },
+      {
+        "key": "material",
+        "question_he": "סוג מדבקה?",
+        "options": [
+          {
+            "label": "ויניל (פלסטיק)",
+            "value": "vinyl"
+          },
+          {
+            "label": "נייר",
+            "value": "paper"
+          },
+          {
+            "label": "שקוף",
+            "value": "transparent"
+          }
+        ]
+      },
+      {
+        "key": "cut",
+        "question_he": "סוג חיתוך?",
+        "options": [
+          {
+            "label": "מרובע/מלבני",
+            "value": "square"
+          },
+          {
+            "label": "צורני (לפי לוגו)",
+            "value": "contour"
+          }
+        ]
+      }
     ]
   }
 }

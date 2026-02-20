@@ -1,6 +1,6 @@
 /** engine/classifier.js V98.0 - Data Integrity Fix */
 const { validateLLMResult } = require('./validator');
-const { routeWithLLM } = require('./llmRouter');
+const { routeWithLLM } = require('../services/llmService');
 
 const KEYWORDS = {
     reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט'],
@@ -13,23 +13,23 @@ const KEYWORDS = {
 
 async function classify(text, session) {
     // 1. Crash Proofing: המרה בטוחה לטקסט
-    const safeText = String(text || ""); 
+    const safeText = String(text || "");
     const t = safeText.toLowerCase().trim();
 
     // 2. SUPER FAST PATH: Technical Codes (Buttons)
     if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
         console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
-        return { 
-            intent: 'update', 
+        return {
+            intent: 'update',
             raw_text: safeText, // ✅ יש פה raw_text
-            mapped_params: {} 
+            mapped_params: {}
         };
     }
 
     // 3. Fast Path - מילות מפתח
     if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
     if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
-    
+
     if (session.cart && session.cart.length > 0) {
         if (KEYWORDS.checkout.some(k => t.includes(k))) return { intent: 'show_cart' };
     }
@@ -48,11 +48,11 @@ async function classify(text, session) {
     try {
         const llmResult = await routeWithLLM(safeText, session);
         const validated = validateLLMResult(llmResult, safeText, session);
-        
+
         // --- FIX V98.0: הצמדת הטקסט המקורי ---
         // זה מבטיח שה-Planner יקבל את המספר "500" גם אם ה-LLM פספס אותו
-        validated.raw_text = safeText; 
-        
+        validated.raw_text = safeText;
+
         return validated;
     } catch (e) {
         console.error("Classifier Error:", e);
