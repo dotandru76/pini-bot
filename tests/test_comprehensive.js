@@ -28,13 +28,22 @@ function mockClassifier(text) {
     if (t.includes('תפריט') || t.includes('ריסט') || t.includes('reset')) return { intent: 'reset' };
     if (t.includes('מחק') || t.includes('תסיר') || t.includes('עזוב')) return { intent: 'remove' };
     if (t.includes('עגלה') || t.includes('סל')) return { intent: 'show_cart' };
-    if (t.includes('היי') || t.includes('שלום') || t.includes('עניינים')) return { intent: 'chat', answer_text: 'היי! אני פיני.' };
     if (t.includes('הצעת מחיר') || t.includes('חשבון') || t.includes('checkout') || t.includes('תארוז')) return { intent: 'quote' };
 
+    // Product detection BEFORE greeting - so "היי, אני מחפש רולאפ" catches the product
     if (t.includes('ספר') || t.includes('חוברת')) { intent = 'quote'; product = 'booklet'; }
     if (t.includes('רולאפ')) { intent = 'quote'; product = 'rollup'; }
     if (t.includes('פלייר')) { intent = 'quote'; product = 'flyer'; }
-    if (t.includes('כרטיס')) { intent = 'quote'; product = 'bc'; }
+    if (t.includes('כרטיס') || t === 'bc') { intent = 'quote'; product = 'bc'; }
+
+    // Only treat as pure greeting if no product was detected
+    if (!product && (t.includes('היי') || t.includes('שלום') || t.includes('עניינים'))) return { intent: 'chat', answer_text: 'היי! אני פיני.' };
+
+    let event_context = null;
+
+    if (t.includes('תערוכה')) event_context = 'exhibition';
+    if (t.includes('חתונה')) event_context = 'wedding';
+    if (t.includes('עסק חדש')) event_context = 'business';
 
     if (t.includes('כרומו')) mapped_params.paper_type = 'chromo_300';
     if (t.includes('סיכות')) mapped_params.book_type = 'saddle_stitch';
@@ -51,7 +60,7 @@ function mockClassifier(text) {
     const qtyMatch = t.match(/(\d+)\s*(?:יחידות|עותקים|כרטיסים|כרטיסי|פליירים)/);
     if (qtyMatch) mapped_params.qty = parseInt(qtyMatch[1]);
 
-    return { intent, product, mapped_params, answer_text };
+    return { intent, product, mapped_params, answer_text, event_context };
 }
 
 const SCENARIOS = [
@@ -102,14 +111,15 @@ const SCENARIOS = [
             { user: "תמחק את הרולאפ", expect: "response", checkDelete: "85" },
             { user: "תארוז לי הצעת מחיר", expect: "response" }
         ]
+    },
     {
         name: "🚀 UNIT 4: שיווק מבוסס אירועים (Upsell)",
         steps: [
             { user: "ריסט", expect: "response" },
             { user: "היי, אני מציג בתערוכה ומחפש רולאפ", expect: "question", verify: "כמה" },
             { user: "אחד", expect: "question", verify: "גודל" },
-            { user: "85x200", expect: "response", verify: "כדאי לך" }, // Expecting the pitch!
-            { user: "bc", expect: "question", verify: "נייר" } // Simulating they clicked the pitch button
+            { user: "85x200", expect: "calculate", checkUpsell: "מציגים" }, // Upsell pitch fires alongside cart add
+            { user: "bc", expect: "question", verify: "נייר" } // Simulating they clicked the upsell button
         ]
     }
 ];
@@ -130,7 +140,8 @@ async function runComprehensiveTest() {
                 intent: mockResult.intent,
                 product: mockResult.product,
                 mapped_params: mockResult.mapped_params || {},
-                answer_text: mockResult.answer_text
+                answer_text: mockResult.answer_text,
+                event_context: mockResult.event_context
             }, step.user, mockSession);
 
             const plan = planActions({
@@ -138,7 +149,8 @@ async function runComprehensiveTest() {
                 extractedParams: validated.mapped_params,
                 product: validated.product,
                 aiResponse: validated.answer_text,
-                raw_text: step.user
+                raw_text: step.user,
+                event_context: validated.event_context
             }, mockSession);
 
             const action = plan.actions.find(a => ['PRESENT_OPTIONS', 'CALCULATE_AND_ADD', 'GENERATE_RESPONSE'].includes(a.type)) || plan.actions[0];
@@ -169,6 +181,11 @@ async function runComprehensiveTest() {
 
             if (step.verify && action.question && !action.question.includes(step.verify)) { isPass = false; failureReason = `Question mismatch (Expected '${step.verify}', Got '${action.question}')`; }
             if (step.verify && action.payload && action.payload.text && !action.payload.text.includes(step.verify)) { isPass = false; failureReason = `Response mismatch (Expected '${step.verify}', Got '${action.payload.text}')`; }
+
+            if (step.checkUpsell) {
+                const upsellAction = plan.actions.find(a => a.type === 'GENERATE_RESPONSE' && a.payload && a.payload.text && a.payload.text.includes(step.checkUpsell));
+                if (!upsellAction) { isPass = false; failureReason = `Upsell pitch missing (Expected text containing '${step.checkUpsell}')`; }
+            }
 
             if (step.checkDelete) {
                 console.log("DEBUG CART:", JSON.stringify(mockSession.cart, null, 2));
