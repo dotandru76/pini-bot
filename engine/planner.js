@@ -14,7 +14,7 @@ const PARAM_ALIASES = {
     'type': 'book_type', 'pages': 'pages'
 };
 
-const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'חוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות', 'poster': 'פוסטרים' };
+const PRODUCT_NAMES_HE = { 'bc': 'כרטיסי ביקור', 'flyer': 'פליירים', 'booklet': 'ספרים וחוברות', 'rollup': 'רולאפ', 'sticker': 'מדבקות', 'poster': 'פוסטרים' };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
 
 const PRODUCT_KEYWORDS = {
