@@ -93,13 +93,12 @@ function planActions(intentData, session) {
 
     if (!currentProductKey) {
         let aiTalk = intentData.answer_text || intentData.aiResponse || "מה נדפיס היום?";
-        let customButtons = [...MAIN_MENU_BUTTONS];
+        let customButtons = [];
 
         if (intentData.recommended_products && intentData.recommended_products.length > 0) {
             customButtons = intentData.recommended_products.map(key => {
                 return { label: PRODUCT_NAMES_HE[key] || key, value: key };
             });
-            customButtons.push({ label: '📋 תפריט ראשי', value: 'reset' });
         }
 
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: aiTalk, quickReplies: customButtons } }] };
