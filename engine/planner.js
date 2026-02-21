@@ -92,7 +92,8 @@ function planActions(intentData, session) {
     }
 
     if (!currentProductKey) {
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מה נדפיס היום?", quickReplies: MAIN_MENU_BUTTONS } }] };
+        let aiTalk = intentData.answer_text || intentData.aiResponse || "מה נדפיס היום?";
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: aiTalk, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
     // 3. Hybrid Wizard Logic
