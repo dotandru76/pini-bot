@@ -61,6 +61,7 @@ async function classify(text, session) {
     // 4. LLM Pipeline (למלל חופשי כמו "500")
     try {
         const llmResult = await routeWithLLM(safeText, session);
+        console.log(`🤖 [LLM RAW RESULT]:`, JSON.stringify(llmResult));
         const validated = validateLLMResult(llmResult, safeText, session);
 
         // --- FIX V98.0: הצמדת הטקסט המקורי ---
