@@ -106,6 +106,14 @@ function planActions(intentData, session) {
 
     // 3. Hybrid Wizard Logic
     const productConfig = productsDB[currentProductKey];
+
+    // 🔥 CRASH PROTECTION: If the LLM picked a product not in our DB
+    if (!productConfig || !productConfig.questions) {
+        console.error(`❌ [PLANNER ERROR] Product '${currentProductKey}' is missing from products.json!`);
+        session.currentProduct = null;
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "מתנצל, אין לי עדיין תמחור אוטומטי למוצר הזה. מה עוד תרצה שנדפיס?", quickReplies: [{ label: 'תפריט ראשי', value: 'reset' }] } }] };
+    }
+
     let draft = session.draftAttributes || {};
 
     // שלב 0: מה נשאל פעם קודמת? (לפני שמעדכנים מהקלט החדש)

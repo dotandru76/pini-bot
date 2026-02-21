@@ -344,5 +344,52 @@
         ]
       }
     ]
+  },
+  "invitation": {
+    "name": "הזמנות לאירועים",
+    "engine": "digital",
+    "questions": [
+      {
+        "key": "size",
+        "question_he": "איזה גודל ההזמנה?",
+        "options": [
+          {
+            "label": "סטנדרטי (12x17 ס\"מ)",
+            "value": "12x17"
+          },
+          {
+            "label": "מרובע (15x15 ס\"מ)",
+            "value": "15x15"
+          },
+          {
+            "label": "גדול (15x20 ס\"מ)",
+            "value": "15x20"
+          }
+        ]
+      },
+      {
+        "key": "paper_type",
+        "question_he": "על איזה סוג נייר נדפיס?",
+        "options": [
+          {
+            "label": "פנינה (נייר מנצנץ ויוקרתי)",
+            "value": "pearl_300"
+          },
+          {
+            "label": "אקוורלו (נייר טקסטורה מחוספס)",
+            "value": "aquarelle_cream"
+          },
+          {
+            "label": "כרומו עבה קלאסי",
+            "value": "chromo_300"
+          }
+        ]
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה הזמנות תצטרך סך הכל?",
+        "type": "number"
+      }
+    ]
   }
 }
