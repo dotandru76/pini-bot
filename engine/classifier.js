@@ -16,7 +16,7 @@ async function classify(text, session) {
     const safeText = String(text || "");
     const t = safeText.toLowerCase().trim();
 
-    // 2. SUPER FAST PATH: Technical Codes (Buttons)
+    // 2. SUPER FAST PATH: Technical Codes (Buttons & System Actions)
     if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
         console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
         return {
@@ -24,6 +24,20 @@ async function classify(text, session) {
             raw_text: safeText, // ✅ יש פה raw_text
             mapped_params: {}
         };
+    }
+
+    if (t.startsWith('system_remove_item_')) {
+        const index = parseInt(t.replace('system_remove_item_', ''));
+        console.log(`🚀 [CLASSIFIER] Fast Path: Remove Item ${index}`);
+        return { intent: 'remove_specific', payload: { index } };
+    }
+
+    if (t.startsWith('system_update_qty_')) {
+        const parts = t.replace('system_update_qty_', '').split('_');
+        const index = parseInt(parts[0]);
+        const qty = parseInt(parts[1]);
+        console.log(`🚀 [CLASSIFIER] Fast Path: Update Qty Item ${index} to ${qty}`);
+        return { intent: 'update_qty', payload: { index, qty } };
     }
 
     // 3. Fast Path - מילות מפתח

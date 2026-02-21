@@ -95,6 +95,33 @@
         .cart-item-title { font-weight: bold; font-size: 0.95rem; }
         .cart-item-details { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
         .cart-item-price { font-weight: bold; color: var(--text-primary); float: left; }
+        
+        .cart-item-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            float: left;
+        }
+
+        .cart-action-btn {
+            background: #f0f2f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: #54656f;
+            transition: all 0.2s;
+        }
+        
+        .cart-action-btn:hover {
+            background: #e9edef;
+            color: var(--primary-color);
+        }
+        
+        .cart-action-btn.danger:hover {
+            color: #d32f2f;
+        }
 
         .sidebar-footer {
             padding: 20px;
@@ -373,6 +400,11 @@
                         <div class="cart-item-price">₪${price}</div>
                         <div style="clear:both;"></div>
                         <div class="cart-item-details">${item.description || ''}</div>
+                        <div class="cart-item-actions">
+                            <button class="cart-action-btn danger" onclick="removeCartItem(${index})" title="הסר פריט"><i class="fas fa-trash"></i> הסר</button>
+                            <button class="cart-action-btn" onclick="requestQtyChange(${index})" title="שנה כמות"><i class="fas fa-edit"></i> כמות</button>
+                        </div>
+                        <div style="clear:both;"></div>
                     `;
                     container.appendChild(itemDiv);
                     total += price;
@@ -405,6 +437,18 @@
                     addMsg("שגיאה בהפקת PDF ❌", "bot");
                 }
             } catch (e) { console.error(e); addMsg("שגיאה בתקשורת ❌", "bot"); }
+        }
+
+        async function removeCartItem(index) {
+            // Sends a targeted system message
+            sendMessage(`SYSTEM_REMOVE_ITEM_${index}`, "מסיר פריט מהעגלה...");
+        }
+
+        async function requestQtyChange(index) {
+            const newQty = prompt("הכנס כמות חדשה:");
+            if (newQty && !isNaN(newQty)) {
+                sendMessage(`SYSTEM_UPDATE_QTY_${index}_${newQty}`, `מעדכן כמות פריט ל-${newQty}...`);
+            }
         }
 
         function toggleMenu() {

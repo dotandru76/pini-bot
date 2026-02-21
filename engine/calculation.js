@@ -7,7 +7,7 @@ let materials = {}, productsDB = {};
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
     productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
-} catch (e) {}
+} catch (e) { }
 
 function parseSize(sizeStr) {
     if (!sizeStr) return { w: 210, h: 297 };
@@ -23,15 +23,15 @@ function parseSize(sizeStr) {
 function calculate_custom_job(cart, params) {
     const productKey = params.product || 'flyer';
     const productConfig = productsDB[productKey] || {};
-    
+
     // --- FORCE FIX: זיהוי מוחלט של פורמט רחב ---
     const WIDE_PRODUCTS = ['rollup', 'canvas', 'sticker', 'banner', 'sign', 'shimson'];
     let engineType = productConfig.engine;
-    
+
     if (WIDE_PRODUCTS.includes(productKey)) {
         engineType = 'wide';
     }
-    
+
     if (!engineType) engineType = 'digital';
     // -------------------------------------------
 
@@ -43,47 +43,60 @@ function calculate_custom_job(cart, params) {
 }
 
 function calculateDigital(cart, params, productKey) {
+    console.log(`\n🧮 [CALCULATION] Starting Digital Calc for: ${productKey}`);
     const qty = parseInt(params.qty) || 100;
     const sizeObj = parseSize(params.size);
     const paperKey = params.paper_type || 'offset_80';
-    
+
     let safePaperKey = paperKey;
     if (productKey === 'bc' && paperKey.includes('matte')) safePaperKey = 'matte_350';
-    
+
     const paperData = materials.papers[safePaperKey] || materials.papers['offset_80'];
     const impResult = calculateImposition(sizeObj.w, sizeObj.h);
-    
+
+    console.log(`📐 [CALCULATION] Size: ${sizeObj.w}x${sizeObj.h}mm, Paper: ${safePaperKey} (Cost/Sheet: ₪${paperData.cost_sheet})`);
+    console.log(`⚙️ [CALCULATION] Imposition: ${impResult.ups} ups (Yield: ${impResult.efficiency})`);
+
     if (impResult.ups === 0) throw new Error("מוצר גדול מדי למכונה");
 
     const rawSheets = Math.ceil(qty / impResult.ups);
     const totalSheets = rawSheets + Math.max(10, Math.ceil(rawSheets * 0.05));
     const costPaper = totalSheets * paperData.cost_sheet;
-    const totalCost = costPaper + (totalSheets * 0.35) + 20; 
+    const totalCost = costPaper + (totalSheets * 0.35) + 20;
+
+    console.log(`💵 [CALCULATION] Sheets Needed: ${totalSheets} (Includes waste). Raw Paper Cost: ₪${costPaper.toFixed(2)}`);
+    console.log(`💵 [CALCULATION] Total Production Cost (w/ clicks & setup): ₪${totalCost.toFixed(2)}`);
+
     const finalPrice = Math.max(50, Math.ceil(totalCost * 2.5));
+    console.log(`💎 [CALCULATION] Final Client Price (x2.5 Markup): ₪${finalPrice}\n`);
 
     return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח', ${paperData.name}`);
 }
 
 function calculateWideFormat(cart, params, productKey) {
+    console.log(`\n🧮 [CALCULATION] Starting Wide Format Calc for: ${productKey}`);
     const qty = parseInt(params.qty) || 1;
     let totalSqm = 0;
-    
+
     if (productKey === 'sticker' && !params.size) {
-        totalSqm = qty; 
+        totalSqm = qty;
     } else {
         const sizeObj = parseSize(params.size);
         totalSqm = (sizeObj.w * sizeObj.h / 1000000) * qty;
     }
-    
-    let costPerSqm = 50; 
+
+    let costPerSqm = 50;
     let finalPrice = Math.max(100, Math.ceil(totalSqm * costPerSqm * 3));
+
+    console.log(`📐 [CALCULATION] Total SQM: ${totalSqm.toFixed(2)}. Cost/SQM: ₪${costPerSqm}`);
+    console.log(`💎 [CALCULATION] Final Client Price (x3 Markup): ₪${finalPrice}\n`);
 
     return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`);
 }
 
 function buildResult(cart, product, params, price, qty, desc) {
-    const item = { product, description: desc, qty, client_price: price, unit_price: (price/qty).toFixed(2) };
-    return { updatedCart: [...(cart||[]), item], lastAdded: item };
+    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2) };
+    return { updatedCart: [...(cart || []), item], lastAdded: item };
 }
 
 module.exports = { calculate_custom_job };

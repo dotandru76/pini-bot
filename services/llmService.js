@@ -31,7 +31,19 @@ async function routeWithLLM(message, session) {
             + `\n[CURRENT STATE]: Active Product: ${session.currentProduct || "None"}`
             + `\n[USER SAYS]: "${message}"\nJSON Output:`;
 
+        console.log(`\n=================== AI REQUEST ===================`);
+        console.log(`📝 [LLM] Payload length: ${finalPrompt.length} chars (~${Math.round(finalPrompt.length / 4)} tokens)`);
+        console.time("⏱️ [LLM] Response Time");
+
         const result = await model.generateContent(finalPrompt);
+
+        console.timeEnd("⏱️ [LLM] Response Time");
+        const usage = result.response.usageMetadata;
+        if (usage) {
+            console.log(`📊 [LLM] Tokens Used: In=${usage.promptTokenCount}, Out=${usage.candidatesTokenCount}, Total=${usage.totalTokenCount}`);
+        }
+        console.log(`==================================================\n`);
+
         let text = result.response.text().replace(/```json|```/g, '').trim();
         return JSON.parse(text);
 

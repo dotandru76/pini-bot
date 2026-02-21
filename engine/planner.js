@@ -39,7 +39,33 @@ function planActions(intentData, session) {
     }
 
     if (intentData.intent === 'remove') {
-        return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: session.cart.length - 1 } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי.`, quickReplies: MAIN_MENU_BUTTONS } }] };
+        return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: session.cart.length - 1 } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ מחקתי את הפריט האחרון.`, quickReplies: MAIN_MENU_BUTTONS } }] };
+    }
+
+    if (intentData.intent === 'remove_specific') {
+        return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: intentData.payload.index } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ הפריט הוסר מהעגלה.`, quickReplies: MAIN_MENU_BUTTONS } }] };
+    }
+
+    if (intentData.intent === 'update_qty') {
+        const { index, qty } = intentData.payload;
+        if (session.cart[index]) {
+            // In a full implementation, we would recalculate the price here instead of just updating qty
+            // For now, we update the qty and calculate a rough new price if it's strictly proportional, or ideally trigger a recalculate action.
+            session.cart[index].qty = qty;
+
+            // Quick recalculation for the specific item
+            try {
+                const { calculateCustom } = require('../services/productionEngine');
+                const calcResult = calculateCustom(session.cart[index].attributes || session.cart[index]);
+                if (calcResult && calcResult.client_price) {
+                    session.cart[index].client_price = calcResult.client_price;
+                }
+            } catch (e) {
+                console.log("Could not recalculate automatically");
+            }
+
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `✅ הכמות עודכנה ל-${qty}.`, quickReplies: MAIN_MENU_BUTTONS } }] };
+        }
     }
 
     // 2. Product & Queue Logic
@@ -142,7 +168,12 @@ function planActions(intentData, session) {
             }
         }
 
-        if (valueToSave !== null) draft[questionAskedLastTime.key] = valueToSave;
+        if (valueToSave !== null) {
+            draft[questionAskedLastTime.key] = valueToSave;
+            console.log(`📝 [PLANNER] Saved parameter: ${questionAskedLastTime.key} = ${valueToSave}`);
+        } else {
+            console.log(`⚠️ [PLANNER] Failed to extract parameter for: ${questionAskedLastTime.key} from input: "${rawInput}"`);
+        }
     }
 
     session.draftAttributes = draft;
