@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>דפוס בית יצחק - הצ'אט של פיני</title>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
+
     <style>
         :root {
             --app-bg: #d1d7db;
@@ -37,13 +38,16 @@
             max-width: 1600px;
             height: 100vh;
             background: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             overflow: hidden;
             position: relative;
         }
 
         @media (min-width: 1400px) {
-            .app-container { height: 95vh; width: 95vw; }
+            .app-container {
+                height: 95vh;
+                width: 95vw;
+            }
         }
 
         /* --- Sidebar Styles --- */
@@ -92,10 +96,23 @@
             margin-bottom: 5px;
         }
 
-        .cart-item-title { font-weight: bold; font-size: 0.95rem; }
-        .cart-item-details { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
-        .cart-item-price { font-weight: bold; color: var(--text-primary); float: left; }
-        
+        .cart-item-title {
+            font-weight: bold;
+            font-size: 0.95rem;
+        }
+
+        .cart-item-details {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .cart-item-price {
+            font-weight: bold;
+            color: var(--text-primary);
+            float: left;
+        }
+
         .cart-item-actions {
             display: flex;
             gap: 8px;
@@ -113,12 +130,12 @@
             color: #54656f;
             transition: all 0.2s;
         }
-        
+
         .cart-action-btn:hover {
             background: #e9edef;
             color: var(--primary-color);
         }
-        
+
         .cart-action-btn.danger:hover {
             color: #d32f2f;
         }
@@ -153,9 +170,12 @@
             gap: 8px;
             background-color: var(--primary-color);
             color: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
-        .action-btn:hover { background-color: #006b56; }
+
+        .action-btn:hover {
+            background-color: #006b56;
+        }
 
         /* --- Chat Styles --- */
         .chat-area {
@@ -179,21 +199,42 @@
         }
 
         .avatar {
-            width: 45px; height: 45px;
-            background: white; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
+            width: 45px;
+            height: 45px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             overflow: hidden;
             border: 1px solid #ddd;
         }
-        
-        .avatar img { width: 100%; height: 100%; object-fit: cover; }
 
-        .chat-info { flex: 1; }
-        .chat-name { font-weight: bold; font-size: 1rem; }
-        .chat-status { font-size: 0.8rem; color: var(--text-secondary); }
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-info {
+            flex: 1;
+        }
+
+        .chat-name {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .chat-status {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
 
         .header-actions {
-            color: #54656f; cursor: pointer; font-size: 1.2rem; padding: 10px;
+            color: #54656f;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 10px;
         }
 
         .messages {
@@ -212,59 +253,123 @@
             font-size: 0.95rem;
             line-height: 1.4;
             position: relative;
-            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
             white-space: pre-wrap;
         }
 
-        .message.bot { background: var(--bot-msg-bg); align-self: flex-start; border-top-right-radius: 0; }
-        .message.user { background: var(--user-msg-bg); align-self: flex-end; border-top-left-radius: 0; }
+        .message.bot {
+            background: var(--bot-msg-bg);
+            align-self: flex-start;
+            border-top-right-radius: 0;
+        }
+
+        .message.user {
+            background: var(--user-msg-bg);
+            align-self: flex-end;
+            border-top-left-radius: 0;
+        }
 
         .msg-time {
-            font-size: 0.7rem; color: #999; text-align: left; margin-top: 4px; float: left;
+            font-size: 0.7rem;
+            color: #999;
+            text-align: left;
+            margin-top: 4px;
+            float: left;
         }
 
         .input-area {
-            height: 62px; background: #f0f2f5; padding: 0 16px;
-            display: flex; align-items: center; gap: 10px;
+            height: 62px;
+            background: #f0f2f5;
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
-        .icon-btn { color: #54656f; cursor: pointer; font-size: 1.4rem; padding: 5px; }
+        .icon-btn {
+            color: #54656f;
+            cursor: pointer;
+            font-size: 1.4rem;
+            padding: 5px;
+        }
 
         .input-wrapper {
-            flex: 1; background: white; border-radius: 8px; padding: 9px 12px;
-            display: flex; align-items: center;
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
         }
 
-        input { border: none; width: 100%; outline: none; font-size: 1rem; font-family: inherit; }
+        input {
+            border: none;
+            width: 100%;
+            outline: none;
+            font-size: 1rem;
+            font-family: inherit;
+        }
 
         .quick-replies {
-            display: flex; gap: 8px; justify-content: center;
-            margin-top: 10px; flex-wrap: wrap; padding-bottom: 10px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            padding-bottom: 10px;
         }
 
         .chip {
-            background: white; border: 1px solid #e9edef; color: var(--primary-color);
-            padding: 8px 16px; border-radius: 20px; font-size: 0.9rem;
-            font-weight: bold; cursor: pointer; transition: 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            background: white;
+            border: 1px solid #e9edef;
+            color: var(--primary-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
-        .chip:hover { background: #f0fdf4; transform: translateY(-1px); }
+
+        .chip:hover {
+            background: #f0fdf4;
+            transform: translateY(-1px);
+        }
 
         @media (max-width: 768px) {
-            .app-container { flex-direction: column; }
-            .sidebar { width: 100%; height: 35%; border-left: none; border-top: 1px solid #ccc; order: 2; }
-            .chat-area { height: 65%; order: 1; }
-            .messages { padding: 10px; }
+            .app-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: 35%;
+                border-left: none;
+                border-top: 1px solid #ccc;
+                order: 2;
+            }
+
+            .chat-area {
+                height: 65%;
+                order: 1;
+            }
+
+            .messages {
+                padding: 10px;
+            }
         }
     </style>
 </head>
+
 <body>
 
     <div class="app-container">
         <div class="chat-area">
             <div class="chat-header">
                 <div class="avatar">
-                    <img src="pini.png" alt="פיני" onerror="this.src='https://cdn-icons-png.flaticon.com/512/4712/4712027.png'">
+                    <img src="pini.png" alt="פיני"
+                        onerror="this.src='https://cdn-icons-png.flaticon.com/512/4712/4712027.png'">
                 </div>
                 <div class="chat-info">
                     <div class="chat-name">פיני - דפוס בית יצחק</div>
@@ -284,7 +389,8 @@
                 <div class="input-wrapper">
                     <input type="text" id="user-input" placeholder="הקלד הודעה..." autocomplete="off">
                 </div>
-                <div class="icon-btn" onclick="sendMessage()" style="color: var(--primary-color);"><i class="fas fa-paper-plane"></i></div>
+                <div class="icon-btn" onclick="sendMessage()" style="color: var(--primary-color);"><i
+                        class="fas fa-paper-plane"></i></div>
             </div>
         </div>
 
@@ -315,9 +421,9 @@
     <script>
         // --- הגדרות חיבור לשרת ---
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space'; 
+        const REMOTE_SERVER = 'https://dotandru-pini-print-bot.hf.space';
         const BASE_URL = isLocal ? 'http://localhost:7860' : REMOTE_SERVER;
-        
+
         const API_URL = `${BASE_URL}/api/chat`;
         const PDF_URL = `${BASE_URL}/api/pdf`;
 
@@ -328,7 +434,7 @@
         // --- UI Helpers ---
         function updateStatus(text) {
             const el = document.getElementById('connection-status');
-            if(el) {
+            if (el) {
                 el.innerText = text;
                 el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
             }
@@ -336,7 +442,7 @@
 
         function scrollToBottom() {
             const container = document.getElementById('messages-container');
-            if(container) container.scrollTop = container.scrollHeight;
+            if (container) container.scrollTop = container.scrollHeight;
         }
 
         function addMsg(text, sender) {
@@ -362,13 +468,13 @@
             options.forEach(opt => {
                 const btn = document.createElement('div');
                 btn.className = 'chip';
-                
+
                 // תמיכה בפורמט אובייקט {label, value} או סתם מחרוזת
                 const label = typeof opt === 'object' ? (opt.label || opt.text) : opt;
                 const value = typeof opt === 'object' ? (opt.value || opt) : opt;
-                
+
                 btn.innerText = label;
-                
+
                 // התיקון: שולחים גם את הערך הטכני וגם את התווית לתצוגה
                 btn.onclick = () => sendMessage(value, label);
                 qrDiv.appendChild(btn);
@@ -391,7 +497,7 @@
                     <p>העגלה ריקה כרגע</p>
                 </div>`;
             } else {
-                cart.forEach(item => {
+                cart.forEach((item, index) => {
                     const price = item.client_price || 0;
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'cart-item';
@@ -467,10 +573,10 @@
 
             // מציגים למשתמש את מה שהוא אמור לראות
             addMsg(textToDisplay, 'user');
-            
+
             inputField.value = '';
             removeQuickReplies();
-            
+
             isProcessing = true;
             updateStatus('פיני מקליד...');
 
@@ -485,9 +591,9 @@
                 if (!res.ok) throw new Error(`Server status: ${res.status}`);
                 const data = await res.json();
                 updateStatus('מחובר');
-                
+
                 if (data.text) addMsg(data.text, 'bot');
-                
+
                 const buttons = data.options || data.quickReplies;
                 if (buttons && buttons.length > 0) addButtons(buttons);
 
@@ -506,7 +612,7 @@
             if (e.key === 'Enter') sendMessage();
         });
 
-        window.onload = function() {
+        window.onload = function () {
             setTimeout(() => {
                 addMsg("אהלן! אני פיני 👨‍🎨, מומחה הדפוס של 'בית יצחק'.", 'bot');
                 setTimeout(() => {
@@ -516,4 +622,5 @@
         };
     </script>
 </body>
+
 </html>
