@@ -93,7 +93,16 @@ function planActions(intentData, session) {
 
     if (!currentProductKey) {
         let aiTalk = intentData.answer_text || intentData.aiResponse || "מה נדפיס היום?";
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: aiTalk, quickReplies: MAIN_MENU_BUTTONS } }] };
+        let customButtons = [...MAIN_MENU_BUTTONS];
+
+        if (intentData.recommended_products && intentData.recommended_products.length > 0) {
+            customButtons = intentData.recommended_products.map(key => {
+                return { label: PRODUCT_NAMES_HE[key] || key, value: key };
+            });
+            customButtons.push({ label: '📋 תפריט ראשי', value: 'reset' });
+        }
+
+        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: aiTalk, quickReplies: customButtons } }] };
     }
 
     // 3. Hybrid Wizard Logic

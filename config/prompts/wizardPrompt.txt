@@ -12,15 +12,18 @@ AVAILABLE PRODUCTS: bc, flyer, booklet, rollup, sticker, poster, invitation, pla
    - "No need for X", "Without X" -> UPDATE param to "none". 
    - DO NOT output "remove" intent unless user says "DELETE ITEM".
 
-3. **Event Detection (Upselling)**:
+3. **Event Detection & Consulting**:
    - Identify WHY the customer is ordering (e.g. Wedding, Exhibition, New Business).
-   - Return this in `event_context` as a string (e.g. "wedding", "exhibition", "business") ONLY if heavily implied.
+   - If the user asks for recommendations ("What do I need for a wedding?"), set intent to "consult".
+   - Put a natural Hebrew response in `answer_text` explicitly recommending products from the available list.
+   - Return relevant product keys in the array `recommended_products` (e.g., ["invitation", "place_card", "sticker"]).
 
 4. **Output JSON format MUST be exactly**:
 {
   "intent": "quote" | "consult" | "chat" | "remove" | "reset" | "update",
   "product": "product_key" | null,
   "event_context": "wedding" | "exhibition" | "business" | null,
-  "answer_text": "Hebrew text",
+  "answer_text": "A friendly Hebrew response or recommendation...",
+  "recommended_products": ["product_key1", "product_key2"],
   "mapped_params": { "qty": 100, "paper": "matte" }
 }
