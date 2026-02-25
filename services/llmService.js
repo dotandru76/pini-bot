@@ -2,6 +2,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require('fs');
 const path = require('path');
+const { isBudgetExceeded, recordInferenceCost } = require('./budgetManager');
 require('dotenv').config();
 
 const logAI = (msg, data) => console.log(`\x1b[35m[🧠 AI]\x1b[0m ${msg}`, data ? JSON.stringify(data) : '');
@@ -22,6 +23,11 @@ try {
 }
 
 async function routeWithLLM(message, session) {
+    if (isBudgetExceeded()) {
+        console.warn("🛑 [BUDGET] Daily limit reached. Blocking LLM request.");
+        return { intent: 'chat', answer_text: "המערכת בתחזוקה רגעית (נחזור לפעילות מלאה מחר בבוקר)", confidence: 0 };
+    }
+
     if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI (חסר מפתח API)" };
 
     // PHASE 1.3 Anti-Hallucination: Prompt Jail (Temp 0, TopP 0.05)
@@ -70,11 +76,17 @@ async function routeWithLLM(message, session) {
 
             const parsedObj = JSON.parse(jsonMatch[0]);
 
+            const apiCostRaw = tokenData ? ((tokenData.in * 0.15 / 1000000) + (tokenData.out * 0.60 / 1000000)) : 0;
+            const apiCostStr = `$${apiCostRaw.toFixed(5)}`;
+
+            // --- PHASE 2: Budget Enforcement ---
+            recordInferenceCost(apiCostRaw);
+
             // --- PHASE 1.3: Injecting Debug Metadata ---
             parsedObj._debug = {
                 source: "LLM",
                 tokens: tokenData,
-                apiCost: tokenData ? `$${((tokenData.in * 0.15 / 1000000) + (tokenData.out * 0.60 / 1000000)).toFixed(5)}` : "Unknown" // Assuming $0.15/1M in, $0.6/1M out
+                apiCost: apiCostStr
             };
 
             console.log(`==================================================\n`);
