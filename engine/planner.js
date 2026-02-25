@@ -24,7 +24,10 @@ const PRODUCT_NAMES_HE = {
     'invitation': 'הזמנות',
     'place_card': 'פתקי הושבה / כרטיסי שולחן',
     'folder': 'פולדרים / תיקיות',
-    'office': 'ניירת משרדית'
+    'office': 'ניירת משרדית',
+    'alucobond': 'שילוט אלוקובונד',
+    'roll_stickers': 'מדבקות בגלילים',
+    'scodix': 'כרטיסי יוקרה סקודיקס'
 };
 const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
 
@@ -138,6 +141,10 @@ function planActions(intentData, session) {
 
     let draft = session.draftAttributes || {};
 
+    // --- PHASE 1.3: UI Isolation Logic ---
+    // If we are actively answering questions for a product (Wizard mode), don't show the MAIN_MENU_BUTTONS
+    const baseQuickReplies = (Object.keys(draft).length > 0 || currentProductKey) ? [] : MAIN_MENU_BUTTONS;
+
     // שלב 0: מה נשאל פעם קודמת? (לפני שמעדכנים מהקלט החדש)
     let questionAskedLastTime = null;
     for (const q of productConfig.questions) {
@@ -234,7 +241,10 @@ function planActions(intentData, session) {
 
     if (nextQuestion) {
         const productNameHE = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
-        const prefix = `📌 **לגבי ה${productNameHE}:** `;
+        // --- PHASE 1.3: Persona Injection ---
+        const warmGreetings = ["בשמחה!", "מעולה.", "מצוין, בוא נתקדם.", "בטח!", "סגור."];
+        const randomGreeting = warmGreetings[Math.floor(Math.random() * warmGreetings.length)];
+        const prefix = Object.keys(draft).length === 0 ? `${randomGreeting} אני מכין לך הצעה על ${productNameHE}.\n\n` : ``;
 
         console.log(`\x1b[33m🔍 [X-RAY PLANNER] Missing Data! Asking question for key: ${nextQuestion.key}\x1b[0m`);
 
@@ -309,7 +319,7 @@ function planActions(intentData, session) {
             return { actions };
         } catch (e) {
             console.error(e);
-            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב.", quickReplies: MAIN_MENU_BUTTONS } }] };
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: "שגיאה בחישוב.", quickReplies: baseQuickReplies } }] };
         }
     }
 }
