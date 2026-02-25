@@ -24,4 +24,12 @@ app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'ok', up: true });
 });
 
+// Serve frontend files
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.listen(PORT, () => console.log(`🚀 SERVER running on port ${PORT}`));
