@@ -52,13 +52,35 @@ try {
         try {
             credentials = JSON.parse(normalized);
         } catch (e2) {
-            console.error(`🛑 [STORAGE] Normalization failed. Last resort - "One-Line" try.`);
-            try {
-                const oneLiner = tryContent.replace(/\r?\n/g, ' ').replace(/\\n/g, '\n');
-                credentials = JSON.parse(oneLiner);
-            } catch (e3) {
-                console.error(`🛑 [STORAGE] ALL PARSING ATTEMPTS FAILED.`);
-                throw new Error(`Unable to parse GCP_SERVICE_ACCOUNT_KEY JSON. Error: ${e3.message}`);
+            console.warn(`🛑 [STORAGE] Normalization failed. Attempting surgical extraction...`);
+
+            // --- STEP 3: Surgical Extraction (The "Nuclear" Fallback) ---
+            // This is immune to most escaping/newline issues as it targets specific field patterns
+            const extract = (field) => {
+                const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`);
+                const match = tryContent.match(regex) || normalized.match(regex);
+                return match ? match[1] : null;
+            };
+
+            const private_key = extract('private_key');
+            const client_email = extract('client_email');
+            const project_id = extract('project_id');
+
+            if (private_key && client_email && project_id) {
+                credentials = {
+                    type: 'service_account',
+                    project_id: project_id,
+                    private_key: private_key.replace(/\\n/g, '\n').replace(/\\\\n/g, '\n'),
+                    client_email: client_email
+                };
+                console.log(`[STORAGE] SUCCESS via surgical extraction for ${project_id}`);
+            } else {
+                console.error(`🛑 [STORAGE] SURGICAL EXTRACTION FAILED. Missing fields:`, {
+                    pk: !!private_key,
+                    ce: !!client_email,
+                    pid: !!project_id
+                });
+                throw new Error(`Unable to parse GCP_SERVICE_ACCOUNT_KEY. Error: ${e2.message}`);
             }
         }
     }
