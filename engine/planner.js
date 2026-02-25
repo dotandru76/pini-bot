@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { calculate_custom_job } = require('./calculation');
 const { getMainMenu } = require('./productCatalog');
+const { analyzePrintReadyStatus } = require('./decisionKernel');
 
 let productsDB = {};
 try { productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8')); } catch (e) { }
@@ -43,6 +44,37 @@ const PRODUCT_KEYWORDS = {
 function planActions(intentData, session) {
     const actions = [];
     let rawInput = intentData.raw_text ? String(intentData.raw_text).trim() : "";
+
+    // --- PHASE 2.3: Decision Kernel Integration ---
+    if (intentData.mapped_params && (intentData.mapped_params.dpi || intentData.mapped_params.width_mm)) {
+        const kernelResult = analyzePrintReadyStatus(intentData.mapped_params, session);
+        console.log(`🛡️ [KERNEL] Result: ${kernelResult.status} | ${kernelResult.details}`);
+
+        // Push kernel result to debug metadata for Frontend Overlay
+        if (!intentData._debug) intentData._debug = {};
+        intentData._debug.kernel = kernelResult;
+
+        if (kernelResult.status !== 'READY_FOR_PRINT') {
+            console.warn(`🛑 [PLANNER] Technical Rejection: ${kernelResult.status}`);
+            let rejectionMsg = "משהו לא לגמרי תקין בקובץ: ";
+
+            if (kernelResult.status === 'REJECT_LOW_RES') {
+                rejectionMsg = `⚠️ **איכות נמוכה**: הרזולוציה שזיהיתי (${intentData.mapped_params.dpi} DPI) נמוכה מדי לדפוס איכותי. כדאי להעלות קובץ באיכות גבוהה יותר (300 DPI מומלץ).`;
+            } else if (kernelResult.status === 'DIMENSION_MISMATCH') {
+                rejectionMsg = `📐 **אי התאמה במידות**: המידות שזיהיתי בקובץ (${intentData.mapped_params.width_mm}x${intentData.mapped_params.height_mm} מ"מ) לא מתאימות להזמנה שלך (${session.draftAttributes.width}x${session.draftAttributes.height} מ"מ).`;
+            }
+
+            return {
+                actions: [{
+                    type: 'GENERATE_RESPONSE',
+                    payload: {
+                        text: rejectionMsg + "\n\nננסה שוב? אפשר להעלות קובץ חדש או לתאר מה לשנות.",
+                        quickReplies: [{ label: 'דבר עם נציג', value: 'human' }, { label: 'תפריט ראשי', value: 'reset' }]
+                    }
+                }]
+            };
+        }
+    }
 
     // 1. System Actions
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };

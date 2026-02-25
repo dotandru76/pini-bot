@@ -494,11 +494,19 @@
                 const costClass = debugData.cost === "₪0" ? "debug-free" : "debug-cost";
                 const costLabel = debugData.apiCost || debugData.cost;
 
+                // --- PHASE 2.3: Kernel Metadata ---
+                const kernel = debugData.kernel || {};
+                const kernelStatusClass = kernel.status === 'READY_FOR_PRINT' ? 'debug-free' : (kernel.status ? 'debug-cost' : '');
+                const kernelLabel = kernel.status ? `<span class="debug-badge ${kernelStatusClass}"><i class="fas fa-shield-alt"></i> ${kernel.status}</span>` : '';
+                const techBadge = kernel.raw ? `<span class="debug-badge"><i class="fas fa-ruler-combined"></i> ${kernel.raw.width}x${kernel.raw.height}mm | ${kernel.raw.dpi} DPI</span>` : '';
+
                 htmlStr += `
                 <div class="debug-overlay">
                     <span class="debug-badge"><i class="fas fa-microchip"></i> ${debugData.source || 'Engine'}</span>
                     <span class="debug-badge ${costClass}"><i class="fas fa-coins"></i> ${costLabel}</span>
                     ${debugData.tokens ? `<span class="debug-badge"><i class="fas fa-cubes"></i> T: ${debugData.tokens.total}</span>` : ''}
+                    ${techBadge}
+                    ${kernelLabel}
                 </div>`;
             }
 
