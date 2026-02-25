@@ -20,6 +20,7 @@ async function handleChat(req, res) {
     try {
         // 1. Comprehension (Extractor)
         const extraction = await classifyMessage(message, session);
+        console.log("🧩 [EXTRACTION DATA]:", JSON.stringify(extraction, null, 2));
 
         let finalResponse = { text: "שגיאה פנימית.", options: [], cart: session.cart };
 

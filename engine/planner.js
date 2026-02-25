@@ -147,6 +147,9 @@ function compileOrder(extractedData) {
             return { status: "HARD_FAIL", reason: "NO_VALID_ENTITIES_CONSTRUCTED" };
         }
 
+        console.log("📊 [COMPILER AUDIT] Buckets:", JSON.stringify(buckets, null, 2));
+        console.log("📊 [COMPILER AUDIT] Unassigned:", JSON.stringify(unassignedParams, null, 2));
+
         return {
             status: "READY",
             data: validatedItems
