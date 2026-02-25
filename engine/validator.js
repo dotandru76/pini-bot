@@ -60,6 +60,7 @@ function validateLLMResult(llmResult, userText, session) {
     const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:x|X|\*|על)\s*(\d+(?:\.\d+)?)/);
     if (sizeMatch) {
         result.mapped_params.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
+        console.log(`🛡️ [VALIDATOR] Detected Size with Decimals: ${result.mapped_params.size}`);
         if (result.intent === 'chat') result.intent = 'update';
     }
 
