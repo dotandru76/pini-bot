@@ -10,8 +10,13 @@ async function handleChat(req, res) {
     const { message, userId, requestId } = req.body; // <--- requestId is now expected from Client
 
     // --- PHASE 1.2: Hardening - Strict UUID Validation ---
-    if (!requestId || !/^[0-9a-fA-F-]{36}$/.test(requestId)) {
-        return res.status(400).json({ text: "Bad Request: Invalid or missing requestId UUID." });
+    if (!requestId) {
+        console.error(`💥 [API ERROR] 400 Bad Request: Missing requestId in payload for User: ${userId}`);
+        return res.status(400).json({ text: "Bad Request: Missing requestId UUID." });
+    }
+    if (!/^[0-9a-fA-F-]{36}$/.test(requestId)) {
+        console.error(`💥 [API ERROR] 400 Bad Request: Malformed requestId UUID '${requestId}' for User: ${userId}`);
+        return res.status(400).json({ text: "Bad Request: Invalid requestId UUID format." });
     }
 
     // Default fallback if a user doesn't provide an ID

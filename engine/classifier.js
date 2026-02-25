@@ -17,15 +17,6 @@ async function classify(text, session) {
     const t = safeText.toLowerCase().trim();
 
     // 2. SUPER FAST PATH: Technical Codes (Buttons & System Actions)
-    if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
-        console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
-        return {
-            intent: 'update',
-            raw_text: safeText, // ✅ יש פה raw_text
-            mapped_params: {}
-        };
-    }
-
     if (t.startsWith('system_remove_item_')) {
         const index = parseInt(t.replace('system_remove_item_', ''));
         console.log(`🚀 [CLASSIFIER] Fast Path: Remove Item ${index}`);
@@ -38,6 +29,15 @@ async function classify(text, session) {
         const qty = parseInt(parts[1]);
         console.log(`🚀 [CLASSIFIER] Fast Path: Update Qty Item ${index} to ${qty}`);
         return { intent: 'update_qty', payload: { index, qty } };
+    }
+
+    if (/^[a-z]+_[a-z0-9_]+$/.test(t)) {
+        console.log(`🚀 [CLASSIFIER] Fast Path (Button Click): ${t}`);
+        return {
+            intent: 'update',
+            raw_text: safeText, // ✅ יש פה raw_text
+            mapped_params: {}
+        };
     }
 
     // --- PHASE 1.3 Anti-Hallucination: Hybrid Detection (Regex Fast Path) ---
