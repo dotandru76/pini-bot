@@ -17,7 +17,11 @@ AVAILABLE PRODUCTS: flyer, booklet, sticker, poster, invitation, place_card, fol
    - Provide a confidence score (0.0 - 1.0) for every product and parameter.
    - If the user changes their mind in the same message (Oscillation), extract BOTH values in chronological order if possible, or provide the most recent one.
 
-3. **Output Structure**:
+3. **Standardized Keys**:
+   - Always use these keys: `qty`, `size`, `paper_type`, `material`, `lamination`, `finishing`.
+   - Never use `quantity`, `paper`, or `paper_weight`.
+
+4. **Output Structure**:
    - You MUST adhere strictly to the JSON Schema.
    - All parameters must be in the `parameters_detected` array.
    - Do NOT use `mapped_params`.

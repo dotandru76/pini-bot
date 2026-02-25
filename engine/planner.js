@@ -5,11 +5,21 @@
  */
 
 const PRODUCT_WHITELIST = {
-    flyer: ["qty", "paper_type", "size", "sides"],
-    booklet: ["qty", "pages", "cover", "binding"],
-    sticker: ["qty", "shape", "material"],
-    poster: ["qty", "size", "paper_type"],
-    bc: ["qty", "paper_type", "corners"]
+    flyer: ["qty", "paper_type", "size", "sides", "lamination", "finishing"],
+    booklet: ["qty", "pages", "cover", "binding", "size", "paper_type", "finishings"],
+    sticker: ["qty", "shape", "material", "cut", "size", "lamination"],
+    poster: ["qty", "size", "paper_type", "lamination"],
+    bc: ["qty", "paper_type", "corners", "lamination", "finishing"],
+    invitation: ["qty", "size", "paper_type", "finishing", "extras"]
+};
+
+const PARAM_MAPPING = {
+    "quantity": "qty",
+    "amount": "qty",
+    "paper_weight": "paper_type",
+    "paper": "paper_type",
+    "material_type": "material",
+    "dimensions": "size"
 };
 
 /**
@@ -49,6 +59,11 @@ function compileOrder(extractedData) {
 
         // 2. Param Isolation & Oscillation Detection (CTO Correction #4)
         extractedData.parameters_detected.forEach(param => {
+            // Apply normalization mapping
+            if (PARAM_MAPPING[param.key]) {
+                param.key = PARAM_MAPPING[param.key];
+            }
+
             // Find target bucket or assign to global if missing/unassigned
             const targetBucket = buckets[param.context];
 
