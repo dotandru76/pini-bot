@@ -120,217 +120,219 @@ const PRODUCT_CATALOG = {
         ]
     },
 
-            {
-    name: 'באנר תלייה',
-        sizes: ['מותאם אישית'],
-            desc: 'עם לולאות - לתלייה על קיר'
-},
-{
-    name: 'שלט קאפה',
-        sizes: ['מותאם אישית'],
-            desc: 'לוח קשיח - לתצוגה קבועה'
-}
+    // Category removed for detox.
+    poster: {
+        name: 'פוסטרים',
+        emoji: '🖼️',
+        description: 'הדפסה איכותית בגדלים גדולים',
+        popular: true,
+        types: [
+            { name: 'פוסטר נייר כרומו', desc: 'קלאסי לתערוכות וכנסיות', popular: true },
+            { name: 'פוסטר סינטטי', desc: 'עמיד במים וקריעה' }
         ],
-
-materials: [
-    { name: 'ויניל 440 גרם', desc: 'סטנדרט - איכותי', price_factor: 1.0, popular: true },
-    { name: 'ויניל פרימיום', desc: 'עמיד יותר', price_factor: 1.3 },
-    { name: 'בד פוליאסטר', desc: 'ללא השתקפות - לצילומים', price_factor: 1.5 },
-    { name: 'מש (רשת)', desc: 'לשימוש חוץ - עמיד ברוח', price_factor: 1.2 }
-],
-
-    quantities: [1, 2, 3, 5, 10],
+        sizes: ['A3', 'A2', 'A1', 'A0', '50x70', '70x100'],
+        materials: [
+            { name: 'נייר כרומו 170 גרם', price_factor: 1.0 },
+            { name: 'נייר פרימיום 240 גרם', price_factor: 1.4 },
+            { name: 'נייר מט / סאטן', price_factor: 1.2 }
+        ],
+        quantities: [1, 5, 10, 20, 50, 100],
         min_qty: 1,
-            production_days: 3,
-                express_available: true,
-
-                    tips: [
-                        '85×200 הגודל הנפוץ ביותר',
-                        'לאירועים חוזרים - קנו 2 (גיבוי)',
-                        'באנר בד מתאים לצילום ווידאו (אין השתקפות)'
-                    ]
+        production_days: 2
     },
 
-// === מדבקות ===
-sticker: {
-    name: 'מדבקות',
+    quantities: [1, 2, 3, 5, 10],
+    min_qty: 1,
+    production_days: 3,
+    express_available: true,
+
+    tips: [
+        '85×200 הגודל הנפוץ ביותר',
+        'לאירועים חוזרים - קנו 2 (גיבוי)',
+        'באנר בד מתאים לצילום ווידאו (אין השתקפות)'
+    ]
+},
+
+    // === מדבקות ===
+    sticker: {
+        name: 'מדבקות',
         emoji: '🏷️',
-            description: 'ממיתוג ועד אריזה - מדבקה לכל צורך',
+        description: 'ממיתוג ועד אריזה - מדבקה לכל צורך',
 
-                shapes: [
-                    { name: 'עגול', sizes: ['3 ס"מ', '4 ס"מ', '5 ס"מ', '6 ס"מ', '8 ס"מ'], popular: true },
-                    { name: 'מרובע', sizes: ['3×3', '4×4', '5×5', '6×6', '8×8'] },
-                    { name: 'מלבן', sizes: ['3×2', '5×3', '7×5', '10×7'], popular: true },
-                    { name: 'אובלי', sizes: ['5×3', '7×4'] },
-                    { name: 'חיתוך צורני', sizes: ['לפי העיצוב'], desc: 'חותכים לפי קו המתאר', premium: true }
-                ],
+        shapes: [
+            { name: 'עגול', sizes: ['3 ס"מ', '4 ס"מ', '5 ס"מ', '6 ס"מ', '8 ס"מ'], popular: true },
+            { name: 'מרובע', sizes: ['3×3', '4×4', '5×5', '6×6', '8×8'] },
+            { name: 'מלבן', sizes: ['3×2', '5×3', '7×5', '10×7'], popular: true },
+            { name: 'אובלי', sizes: ['5×3', '7×4'] },
+            { name: 'חיתוך צורני', sizes: ['לפי העיצוב'], desc: 'חותכים לפי קו המתאר', premium: true }
+        ],
 
-                    materials: [
-                        { name: 'נייר לבן', desc: 'סטנדרט - כתיבה עליו אפשרית', price_factor: 0.8 },
-                        { name: 'נייר מבריק', desc: 'צבעים עזים', price_factor: 1.0, popular: true },
-                        { name: 'ויניל לבן', desc: 'עמיד במים - לשימוש חוץ', price_factor: 1.4, popular: true },
-                        { name: 'ויניל שקוף', desc: 'רק העיצוב נראה', price_factor: 1.6 },
-                        { name: 'כסף מטאלי', desc: 'מראה מתכתי', price_factor: 1.8 },
-                        { name: 'זהב מטאלי', desc: 'יוקרה', price_factor: 1.8 },
-                        { name: 'קראפט', desc: 'חום טבעי - אקולוגי', price_factor: 1.2 },
-                        { name: 'הולוגרפי', desc: 'קשת צבעים משתנה', price_factor: 2.5, premium: true }
-                    ],
+        materials: [
+            { name: 'נייר לבן', desc: 'סטנדרט - כתיבה עליו אפשרית', price_factor: 0.8 },
+            { name: 'נייר מבריק', desc: 'צבעים עזים', price_factor: 1.0, popular: true },
+            { name: 'ויניל לבן', desc: 'עמיד במים - לשימוש חוץ', price_factor: 1.4, popular: true },
+            { name: 'ויניל שקוף', desc: 'רק העיצוב נראה', price_factor: 1.6 },
+            { name: 'כסף מטאלי', desc: 'מראה מתכתי', price_factor: 1.8 },
+            { name: 'זהב מטאלי', desc: 'יוקרה', price_factor: 1.8 },
+            { name: 'קראפט', desc: 'חום טבעי - אקולוגי', price_factor: 1.2 },
+            { name: 'הולוגרפי', desc: 'קשת צבעים משתנה', price_factor: 2.5, premium: true }
+        ],
 
-                        finishings: [
-                            { name: 'רגיל', price_add: 0 },
-                            { name: 'למינציה מט', desc: 'מגן + מט', price_add: 30 },
-                            { name: 'למינציה מבריקה', desc: 'מגן + ברק', price_add: 30 }
-                        ],
+        finishings: [
+            { name: 'רגיל', price_add: 0 },
+            { name: 'למינציה מט', desc: 'מגן + מט', price_add: 30 },
+            { name: 'למינציה מבריקה', desc: 'מגן + ברק', price_add: 30 }
+        ],
 
-                            adhesives: [
-                                { name: 'דבק קבוע', desc: 'סטנדרט', price_factor: 1.0 },
-                                { name: 'דבק חזק', desc: 'למשטחים קשים', price_factor: 1.1 },
-                                { name: 'דבק נשלף', desc: 'להסרה ללא שאריות', price_factor: 1.2 },
-                                { name: 'דבק לקירור', desc: 'עמיד בקור - למקררים', price_factor: 1.3 }
-                            ],
+        adhesives: [
+            { name: 'דבק קבוע', desc: 'סטנדרט', price_factor: 1.0 },
+            { name: 'דבק חזק', desc: 'למשטחים קשים', price_factor: 1.1 },
+            { name: 'דבק נשלף', desc: 'להסרה ללא שאריות', price_factor: 1.2 },
+            { name: 'דבק לקירור', desc: 'עמיד בקור - למקררים', price_factor: 1.3 }
+        ],
 
-                                quantities: [50, 100, 250, 500, 1000, 2500, 5000],
-                                    min_qty: 50,
-                                        production_days: 4,
-                                            express_available: true,
+        quantities: [50, 100, 250, 500, 1000, 2500, 5000],
+        min_qty: 50,
+        production_days: 4,
+        express_available: true,
 
-                                                tips: [
-                                                    'ויניל חובה למוצרים שנרטבים',
-                                                    'חיתוך צורני עושה רושם אבל עולה יותר',
-                                                    'למדבקות קטנות (עד 5 ס"מ) - קנו יותר, עולה כמעט אותו דבר'
-                                                ]
-},
+        tips: [
+            'ויניל חובה למוצרים שנרטבים',
+            'חיתוך צורני עושה רושם אבל עולה יותר',
+            'למדבקות קטנות (עד 5 ס"מ) - קנו יותר, עולה כמעט אותו דבר'
+        ]
+    },
 
-// === חוברות ===
-booklet: {
-    name: 'חוברות וקטלוגים',
+    // === חוברות ===
+    booklet: {
+        name: 'חוברות וקטלוגים',
         emoji: '📖',
-            description: 'לתוכן שדורש יותר מדף אחד',
+        description: 'לתוכן שדורש יותר מדף אחד',
 
-                types: [
-                    { name: 'חוברת מהודקת', desc: '2 סיכות באמצע - עד 64 עמודים', popular: true },
-                    { name: 'חוברת ספירלה', desc: 'כריכת פלסטיק/מתכת - נפתח שטוח' },
-                    { name: 'קטלוג דבק חם', desc: 'כריכה מודבקת - מקצועי' },
-                    { name: 'מחברת', desc: 'עם שורות/ריבועים - לכתיבה' }
-                ],
+        types: [
+            { name: 'חוברת מהודקת', desc: '2 סיכות באמצע - עד 64 עמודים', popular: true },
+            { name: 'חוברת ספירלה', desc: 'כריכת פלסטיק/מתכת - נפתח שטוח' },
+            { name: 'קטלוג דבק חם', desc: 'כריכה מודבקת - מקצועי' },
+            { name: 'מחברת', desc: 'עם שורות/ריבועים - לכתיבה' }
+        ],
 
-                    sizes: [
-                        { name: 'A5', size: '21×14.8 ס"מ', desc: 'הנפוץ ביותר', popular: true },
-                        { name: 'A4', size: '29.7×21 ס"מ', desc: 'גדול - לקטלוגים' },
-                        { name: 'מרובע', size: '21×21 ס"מ', desc: 'מודרני ויפה' },
-                        { name: 'DL', size: '21×10 ס"מ', desc: 'צר - לתפריטים' }
-                    ],
+        sizes: [
+            { name: 'A5', size: '21×14.8 ס"מ', desc: 'הנפוץ ביותר', popular: true },
+            { name: 'A4', size: '29.7×21 ס"מ', desc: 'גדול - לקטלוגים' },
+            { name: 'מרובע', size: '21×21 ס"מ', desc: 'מודרני ויפה' },
+            { name: 'DL', size: '21×10 ס"מ', desc: 'צר - לתפריטים' }
+        ],
 
-                        pages: [8, 12, 16, 20, 24, 32, 48, 64],
+        pages: [8, 12, 16, 20, 24, 32, 48, 64],
 
-                            papers: [
-                                { name: 'כרומו 150 גרם (פנים)', desc: 'מבריק', price_factor: 1.0, popular: true },
-                                { name: 'מט 150 גרם (פנים)', desc: 'קריאה נוחה', price_factor: 1.1 },
-                                { name: 'כרומו 250 גרם (כריכה)', desc: 'עטיפה חזקה', price_factor: 1.2 },
-                                { name: 'כרומו 300 גרם (כריכה)', desc: 'עטיפה יוקרתית', price_factor: 1.4 }
-                            ],
+        papers: [
+            { name: 'כרומו 150 גרם (פנים)', desc: 'מבריק', price_factor: 1.0, popular: true },
+            { name: 'מט 150 גרם (פנים)', desc: 'קריאה נוחה', price_factor: 1.1 },
+            { name: 'כרומו 250 גרם (כריכה)', desc: 'עטיפה חזקה', price_factor: 1.2 },
+            { name: 'כרומו 300 גרם (כריכה)', desc: 'עטיפה יוקרתית', price_factor: 1.4 }
+        ],
 
-                                finishings: [
-                                    { name: 'ללא גימור', price_add: 0 },
-                                    { name: 'למינציה מט לכריכה', price_add: 40, popular: true },
-                                    { name: 'למינציה מבריקה לכריכה', price_add: 40 },
-                                    { name: 'ספוט UV על הכריכה', price_add: 80 }
-                                ],
+        finishings: [
+            { name: 'ללא גימור', price_add: 0 },
+            { name: 'למינציה מט לכריכה', price_add: 40, popular: true },
+            { name: 'למינציה מבריקה לכריכה', price_add: 40 },
+            { name: 'ספוט UV על הכריכה', price_add: 80 }
+        ],
 
-                                    quantities: [25, 50, 100, 250, 500, 1000],
-                                        min_qty: 25,
-                                            production_days: 7,
-                                                express_available: true,
+        quantities: [25, 50, 100, 250, 500, 1000],
+        min_qty: 25,
+        production_days: 7,
+        express_available: true,
 
-                                                    tips: [
-                                                        'מספר עמודים חייב להתחלק ב-4',
-                                                        'כריכה עם למינציה מחזיקה יותר זמן',
-                                                        '16-24 עמודים = הגודל הנפוץ ביותר'
-                                                    ]
-},
+        tips: [
+            'מספר עמודים חייב להתחלק ב-4',
+            'כריכה עם למינציה מחזיקה יותר זמן',
+            '16-24 עמודים = הגודל הנפוץ ביותר'
+        ]
+    },
 
-// === פוסטרים ===
-poster: {
-    name: 'פוסטרים והדפסות גדולות',
+    // === פוסטרים ===
+    poster: {
+        name: 'פוסטרים והדפסות גדולות',
         emoji: '🖼️',
-            description: 'להדפסות שרואים מרחוק',
+        description: 'להדפסות שרואים מרחוק',
 
-                sizes: [
-                    { name: 'A3', size: '42×29.7 ס"מ' },
-                    { name: 'A2', size: '59.4×42 ס"מ', popular: true },
-                    { name: 'A1', size: '84.1×59.4 ס"מ', popular: true },
-                    { name: 'A0', size: '118.9×84.1 ס"מ' },
-                    { name: '50×70', size: '50×70 ס"מ', desc: 'סטנדרט פוסטר' },
-                    { name: '70×100', size: '70×100 ס"מ' },
-                    { name: 'מותאם אישית', size: 'כל גודל' }
-                ],
+        sizes: [
+            { name: 'A3', size: '42×29.7 ס"מ' },
+            { name: 'A2', size: '59.4×42 ס"מ', popular: true },
+            { name: 'A1', size: '84.1×59.4 ס"מ', popular: true },
+            { name: 'A0', size: '118.9×84.1 ס"מ' },
+            { name: '50×70', size: '50×70 ס"מ', desc: 'סטנדרט פוסטר' },
+            { name: '70×100', size: '70×100 ס"מ' },
+            { name: 'מותאם אישית', size: 'כל גודל' }
+        ],
 
-                    materials: [
-                        { name: 'נייר כרומו 200 גרם', desc: 'מבריק - צבעים עזים', price_factor: 1.0, popular: true },
-                        { name: 'נייר מט 200 גרם', desc: 'ללא השתקפות', price_factor: 1.1 },
-                        { name: 'נייר פוטו 260 גרם', desc: 'איכות צילום', price_factor: 1.5 },
-                        { name: 'קנבס', desc: 'לתמונות אמנות', price_factor: 2.5 },
-                        { name: 'פורקס 3 מ"מ', desc: 'לוח קשיח קל', price_factor: 2.0 },
-                        { name: 'קאפה 5 מ"מ', desc: 'לוח קשיח', price_factor: 2.2 }
-                    ],
+        materials: [
+            { name: 'נייר כרומו 200 גרם', desc: 'מבריק - צבעים עזים', price_factor: 1.0, popular: true },
+            { name: 'נייר מט 200 גרם', desc: 'ללא השתקפות', price_factor: 1.1 },
+            { name: 'נייר פוטו 260 גרם', desc: 'איכות צילום', price_factor: 1.5 },
+            { name: 'קנבס', desc: 'לתמונות אמנות', price_factor: 2.5 },
+            { name: 'פורקס 3 מ"מ', desc: 'לוח קשיח קל', price_factor: 2.0 },
+            { name: 'קאפה 5 מ"מ', desc: 'לוח קשיח', price_factor: 2.2 }
+        ],
 
-                        quantities: [1, 5, 10, 25, 50, 100],
-                            min_qty: 1,
-                                production_days: 2,
-                                    express_available: true,
+        quantities: [1, 5, 10, 25, 50, 100],
+        min_qty: 1,
+        production_days: 2,
+        express_available: true,
 
-                                        tips: [
-                                            'לפוסטר חוץ - בקשו למינציה או הדפסה על ויניל',
-                                            'לתמונות אמנות - קנבס נותן מראה גלריה',
-                                            'פורקס/קאפה לא צריך מסגרת'
-                                        ]
-},
+        tips: [
+            'לפוסטר חוץ - בקשו למינציה או הדפסה על ויניל',
+            'לתמונות אמנות - קנבס נותן מראה גלריה',
+            'פורקס/קאפה לא צריך מסגרת'
+        ]
+    },
 
-// === ניירת משרדית ===
-office: {
-    name: 'ניירת משרדית',
+    // === ניירת משרדית ===
+    office: {
+        name: 'ניירת משרדית',
         emoji: '📋',
-            description: 'כל מה שצריך למשרד מקצועי',
+        description: 'כל מה שצריך למשרד מקצועי',
 
-                items: [
-                    {
-                        name: 'נייר מכתבים',
-                        sizes: ['A4'],
-                        papers: ['נטול עץ 100 גרם', 'כותנה 120 גרם'],
-                        quantities: [100, 250, 500, 1000]
-                    },
-                    {
-                        name: 'מעטפות',
-                        sizes: ['DL (11×22)', 'C5 (16×23)', 'C4 (23×32)'],
-                        options: ['עם חלון', 'ללא חלון', 'עם הדפסה', 'לבן בלבד'],
-                        quantities: [100, 250, 500, 1000]
-                    },
-                    {
-                        name: 'כרטיסי תודה / ברכה',
-                        sizes: ['10×15', '12×17', 'A6'],
-                        papers: ['קרטון לבן 300 גרם', 'פנינה 300 גרם'],
-                        quantities: [50, 100, 250]
-                    },
-                    {
-                        name: 'פנקסי חשבונית / קבלה',
-                        sizes: ['A5', 'A4'],
-                        options: ['מקור+העתק', 'מקור+2 העתקים'],
-                        quantities: [5, 10, 20, 50]
-                    },
-                    {
-                        name: 'תיקיות / פולדרים',
-                        sizes: ['A4'],
-                        options: ['כיס אחד', 'שני כיסים', 'עם שם בהבלטה'],
-                        quantities: [100, 250, 500]
-                    }
-                ],
+        items: [
+            {
+                name: 'נייר מכתבים',
+                sizes: ['A4'],
+                papers: ['נטול עץ 100 גרם', 'כותנה 120 גרם'],
+                quantities: [100, 250, 500, 1000]
+            },
+            {
+                name: 'מעטפות',
+                sizes: ['DL (11×22)', 'C5 (16×23)', 'C4 (23×32)'],
+                options: ['עם חלון', 'ללא חלון', 'עם הדפסה', 'לבן בלבד'],
+                quantities: [100, 250, 500, 1000]
+            },
+            {
+                name: 'כרטיסי תודה / ברכה',
+                sizes: ['10×15', '12×17', 'A6'],
+                papers: ['קרטון לבן 300 גרם', 'פנינה 300 גרם'],
+                quantities: [50, 100, 250]
+            },
+            {
+                name: 'פנקסי חשבונית / קבלה',
+                sizes: ['A5', 'A4'],
+                options: ['מקור+העתק', 'מקור+2 העתקים'],
+                quantities: [5, 10, 20, 50]
+            },
+            {
+                name: 'תיקיות / פולדרים',
+                sizes: ['A4'],
+                options: ['כיס אחד', 'שני כיסים', 'עם שם בהבלטה'],
+                quantities: [100, 250, 500]
+            }
+        ],
 
-                    tips: [
-                        'ניירת אחידה משדרת מקצועיות',
-                        'הזמינו הכל ביחד - חוסך זמן ומשלוח',
-                        'נייר מכתבים + מעטפות תואמות = חובה'
-                    ]
-}
+        tips: [
+            'ניירת אחידה משדרת מקצועיות',
+            'הזמינו הכל ביחד - חוסך זמן ומשלוח',
+            'נייר מכתבים + מעטפות תואמות = חובה'
+        ]
+    }
 };
 
 // ============================================================
