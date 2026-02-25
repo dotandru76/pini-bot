@@ -13,32 +13,49 @@ try {
     if (cleanCreds.startsWith("'") && cleanCreds.endsWith("'")) cleanCreds = cleanCreds.slice(1, -1);
     if (cleanCreds.startsWith('"') && cleanCreds.endsWith('"')) cleanCreds = cleanCreds.slice(1, -1);
 
-    // Replace literal newlines with escaped ones, then convert escaped ones to real ones for the RSA key
-    cleanCreds = cleanCreds.replace(/\n/g, '\\n').replace(/\\n/g, '\n');
+    // Replace REAL newlines with escaped ones for JSON.parse, then fix double-escaping of backslashes if present
+    cleanCreds = cleanCreds.replace(/\r?\n/g, '\\n').replace(/\\\\n/g, '\\n');
 
+    let credentials;
     try {
-        const credentials = JSON.parse(cleanCreds);
-        storage = new Storage({
-            credentials,
-            projectId: credentials.project_id || 'pini-print-bot'
-        });
-        console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
+        // Try direct parse first
+        credentials = JSON.parse(cleanCreds);
     } catch (parseError) {
-        console.error(`🛑 [STORAGE] JSON Parse Error at pos ${parseError.message.match(/\d+/)?.[0]}:`, parseError.message);
-        // Attempt to show a snippet around the error position if available
-        const errorPosMatch = parseError.message.match(/\d+/);
-        const errorPos = errorPosMatch ? parseInt(errorPosMatch[0], 10) : -1;
-        if (errorPos !== -1) {
-            const snippetStart = Math.max(0, errorPos - 20);
-            const snippetEnd = Math.min(cleanCreds.length, errorPos + 20);
-            console.error(`🛑 [STORAGE] Snippet: ...${cleanCreds.substring(snippetStart, snippetEnd)}...`);
-        } else {
-            console.error(`🛑 [STORAGE] Full string (first 200 chars): ${cleanCreds.substring(0, 200)}...`);
+        console.warn(`[STORAGE] Direct JSON parse failed (${parseError.message}), attempting line-by-line fix...`);
+        // The most common error is literal newlines in the private_key value.
+        // We replace newlines with escaped \n if they look like they are inside a string.
+        // A simpler, safer way for GCP keys: Just replace all newlines with \n but then 
+        // restore structural JSON elements.
+        const fixed = cleanCreds
+            .replace(/\r?\n/g, '\\n') // Escape all newlines
+            .replace(/\\n\s*{\\n/g, '{\n') // Restore object starts
+            .replace(/\\n\s*}\\n/g, '\n}') // Restore object ends
+            .replace(/\\n\s*",/g, '",\n') // Restore comma separation
+            .replace(/\\n\s*"/g, '\n"'); // Restore key starts
+
+        try {
+            credentials = JSON.parse(fixed);
+        } catch (e2) {
+            console.error(`🛑 [STORAGE] Line-by-line fix ALSO failed:`, e2.message);
+            // Last resort: If it's a multi-line string, it might just need the "one-line" treatment
+            // and relying on the RSA parser to handle the key.
+            try {
+                const oneLiner = cleanCreds.replace(/\r?\n/g, ' ');
+                credentials = JSON.parse(oneLiner);
+            } catch (e3) {
+                console.error(`🛑 [STORAGE] One-liner fix failed:`, e3.message);
+                throw new Error("Unable to parse GCP_SERVICE_ACCOUNT_KEY JSON");
+            }
         }
-        storage = new Storage(); // Fallback to default storage initialization
     }
+
+    storage = new Storage({
+        credentials,
+        projectId: credentials.project_id || 'pini-print-bot'
+    });
+    console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
 } catch (e) {
-    console.error("🛑 [STORAGE] CRITICAL ERROR:", e.message);
+    console.error("🛑 [STORAGE] CRITICAL ERROR during initialization:", e.message);
     storage = new Storage();
 }
 

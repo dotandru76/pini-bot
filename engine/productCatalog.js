@@ -120,38 +120,6 @@ const PRODUCT_CATALOG = {
         ]
     },
 
-    // Category removed for detox.
-    poster: {
-        name: 'פוסטרים',
-        emoji: '🖼️',
-        description: 'הדפסה איכותית בגדלים גדולים',
-        popular: true,
-        types: [
-            { name: 'פוסטר נייר כרומו', desc: 'קלאסי לתערוכות וכנסיות', popular: true },
-            { name: 'פוסטר סינטטי', desc: 'עמיד במים וקריעה' }
-        ],
-        sizes: ['A3', 'A2', 'A1', 'A0', '50x70', '70x100'],
-        materials: [
-            { name: 'נייר כרומו 170 גרם', price_factor: 1.0 },
-            { name: 'נייר פרימיום 240 גרם', price_factor: 1.4 },
-            { name: 'נייר מט / סאטן', price_factor: 1.2 }
-        ],
-        quantities: [1, 5, 10, 20, 50, 100],
-        min_qty: 1,
-        production_days: 2
-    },
-
-    quantities: [1, 2, 3, 5, 10],
-    min_qty: 1,
-    production_days: 3,
-    express_available: true,
-
-    tips: [
-        '85×200 הגודל הנפוץ ביותר',
-        'לאירועים חוזרים - קנו 2 (גיבוי)',
-        'באנר בד מתאים לצילום ווידאו (אין השתקפות)'
-    ]
-},
 
     // === מדבקות ===
     sticker: {
@@ -251,42 +219,8 @@ const PRODUCT_CATALOG = {
         ]
     },
 
-    // === פוסטרים ===
-    poster: {
-        name: 'פוסטרים והדפסות גדולות',
-        emoji: '🖼️',
-        description: 'להדפסות שרואים מרחוק',
 
-        sizes: [
-            { name: 'A3', size: '42×29.7 ס"מ' },
-            { name: 'A2', size: '59.4×42 ס"מ', popular: true },
-            { name: 'A1', size: '84.1×59.4 ס"מ', popular: true },
-            { name: 'A0', size: '118.9×84.1 ס"מ' },
-            { name: '50×70', size: '50×70 ס"מ', desc: 'סטנדרט פוסטר' },
-            { name: '70×100', size: '70×100 ס"מ' },
-            { name: 'מותאם אישית', size: 'כל גודל' }
-        ],
 
-        materials: [
-            { name: 'נייר כרומו 200 גרם', desc: 'מבריק - צבעים עזים', price_factor: 1.0, popular: true },
-            { name: 'נייר מט 200 גרם', desc: 'ללא השתקפות', price_factor: 1.1 },
-            { name: 'נייר פוטו 260 גרם', desc: 'איכות צילום', price_factor: 1.5 },
-            { name: 'קנבס', desc: 'לתמונות אמנות', price_factor: 2.5 },
-            { name: 'פורקס 3 מ"מ', desc: 'לוח קשיח קל', price_factor: 2.0 },
-            { name: 'קאפה 5 מ"מ', desc: 'לוח קשיח', price_factor: 2.2 }
-        ],
-
-        quantities: [1, 5, 10, 25, 50, 100],
-        min_qty: 1,
-        production_days: 2,
-        express_available: true,
-
-        tips: [
-            'לפוסטר חוץ - בקשו למינציה או הדפסה על ויניל',
-            'לתמונות אמנות - קנבס נותן מראה גלריה',
-            'פורקס/קאפה לא צריך מסגרת'
-        ]
-    },
 
     // === ניירת משרדית ===
     office: {
