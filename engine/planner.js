@@ -44,9 +44,20 @@ function planActions(intentData, session) {
     // 1. System Actions
     if (intentData.intent === 'reset') return { actions: [{ type: 'CLEAR_SESSION_CONTEXT' }, { type: 'GENERATE_RESPONSE', payload: { text: getMainMenu(), quickReplies: MAIN_MENU_BUTTONS } }] };
 
-    if (intentData.intent === 'show_cart') {
-        const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
-        return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}`, quickReplies: MAIN_MENU_BUTTONS } }] };
+    // --- PHASE 1.3 MICRO-PATCH: Missing Add-to-Cart fix & X-Ray Logging ---
+    console.log(`\x1b[36m🔍 [X-RAY PLANNER] Intent: ${intentData.intent}, Product: ${intentData.product || session.currentProduct || 'None'}, Raw: "${rawInput}"\x1b[0m`);
+
+    // If the user said "cart" but they meant "add the current item to the cart" or "add 500 cards to cart"
+    if (intentData.intent === 'show_cart' || intentData.intent === 'add_to_cart') {
+        const paramsMap = intentData.mapped_params || intentData.extractedParams;
+        if (session.currentProduct || intentData.product || (paramsMap && Object.keys(paramsMap).length > 0)) {
+            console.log(`\x1b[36m🔍 [X-RAY PLANNER] Intercepted 'show_cart' as a product continuation/creation.\x1b[0m`);
+            intentData.intent = 'quote'; // Force it into the calculation flow
+        } else {
+            console.log(`\x1b[36m🔍 [X-RAY PLANNER] True 'show_cart' intent detected. Returning cart total.\x1b[0m`);
+            const total = session.cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `🛒 סה"כ בעגלה: ₪${total.toLocaleString()}`, quickReplies: MAIN_MENU_BUTTONS } }] };
+        }
     }
 
     if (intentData.intent === 'remove') {
@@ -143,12 +154,16 @@ function planActions(intentData, session) {
     }
 
     // שלב א': קליטה חכמה
-    if (intentData.extractedParams) {
-        Object.keys(intentData.extractedParams).forEach(key => {
+    // --- PHASE 1.3 MICRO-PATCH: The Quantity Loop Bug Fix ---
+    // Make sure we use mapped_params if extractedParams is undefined
+    const paramsMap = intentData.mapped_params || intentData.extractedParams;
+    if (paramsMap) {
+        Object.keys(paramsMap).forEach(key => {
             const normalizedKey = PARAM_ALIASES[key] || key;
-            const val = intentData.extractedParams[key];
+            const val = paramsMap[key];
             if (val !== null && val !== undefined && val !== '') {
                 draft[normalizedKey] = val;
+                console.log(`\x1b[32m🔍 [X-RAY PLANNER] Directly merged param into draft: ${normalizedKey} = ${val}\x1b[0m`);
             }
         });
     }
@@ -221,6 +236,8 @@ function planActions(intentData, session) {
         const productNameHE = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
         const prefix = `📌 **לגבי ה${productNameHE}:** `;
 
+        console.log(`\x1b[33m🔍 [X-RAY PLANNER] Missing Data! Asking question for key: ${nextQuestion.key}\x1b[0m`);
+
         return {
             actions: [{
                 type: 'PRESENT_OPTIONS',
@@ -231,6 +248,7 @@ function planActions(intentData, session) {
             }]
         };
     } else {
+        console.log(`\x1b[32m🔍 [X-RAY PLANNER] All data collected! Triggering Engine Calculation for: ${currentProductKey}\x1b[0m`);
         try {
             if (currentProductKey === 'rollup' && !draft.size) draft.size = '85x200';
 

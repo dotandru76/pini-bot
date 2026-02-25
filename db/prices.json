@@ -1,0 +1,19 @@
+{
+    "digital_base": {
+        "cost_per_click_bw": 0.05,
+        "cost_per_click_color": 0.35,
+        "setup_fee": 20,
+        "min_price": 50
+    },
+    "wide_base": {
+        "cost_per_sqm": 50,
+        "min_price": 100
+    },
+    "margins": {
+        "digital_multiplier": 2.5,
+        "wide_multiplier": 3.0,
+        "waste_factor": 0.05,
+        "min_waste_sheets": 10,
+        "profit_warning_threshold": 0.30
+    }
+}

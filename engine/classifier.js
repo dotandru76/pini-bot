@@ -40,9 +40,38 @@ async function classify(text, session) {
         return { intent: 'update_qty', payload: { index, qty } };
     }
 
+    // --- PHASE 1.3 Anti-Hallucination: Hybrid Detection (Regex Fast Path) ---
+    // Bypass LLM completely for common structural requests like "1000 פליירים" or "500 כרטיסי ביקור"
+    const regexMatch = t.match(/^(\d+)\s*(פליירים|פלייר|כרטיסים|כרטיס|רולאפ|רולאפים|רול אפ)$/);
+    if (regexMatch) {
+        let qty = parseInt(regexMatch[1]);
+        let prodTerm = regexMatch[2];
+        let detectedProduct = 'flyer';
+
+        if (prodTerm.includes('כרטיס')) detectedProduct = 'bc';
+        if (prodTerm.includes('רול')) detectedProduct = 'rollup';
+
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: quote (Hybrid Regex Fast Path) | Product: ${detectedProduct} | Qty: ${qty}\x1b[0m`);
+        return {
+            intent: 'quote',
+            product: detectedProduct,
+            mapped_params: { qty },
+            raw_text: safeText,
+            confidence: 1.0, // Maximum confidence because it's a regex match
+            _debug: { source: "Regex Fast-Path", cost: "₪0" }
+        };
+    }
+    // ------------------------------------------------------------------------
+
     // 3. Fast Path - מילות מפתח
-    if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
-    if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
+    if (KEYWORDS.reset.some(k => t.includes(k))) {
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: reset (Keyword Fast Path)\x1b[0m`);
+        return { intent: 'reset' };
+    }
+    if (KEYWORDS.cart.some(k => t.includes(k))) {
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: show_cart (Keyword Fast Path)\x1b[0m`);
+        return { intent: 'show_cart' };
+    }
 
     if (session.cart && session.cart.length > 0) {
         if (KEYWORDS.checkout.some(k => t.includes(k))) return { intent: 'show_cart' };
@@ -56,11 +85,15 @@ async function classify(text, session) {
         return { intent: 'chat', aiResponse: 'בשמחה! מוזמן לחזור מתי שתרצה.' };
     }
 
-    if (KEYWORDS.remove.some(k => t.includes(k))) return { intent: 'remove' };
+    if (KEYWORDS.remove.some(k => t.includes(k))) {
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: remove (Keyword Fast Path)\x1b[0m`);
+        return { intent: 'remove' };
+    }
 
     // 4. LLM Pipeline (למלל חופשי כמו "500")
     try {
         const llmResult = await routeWithLLM(safeText, session);
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: ${llmResult.intent || 'chat'} (LLM Inference)\x1b[0m`);
         console.log(`🤖 [LLM RAW RESULT]:`, JSON.stringify(llmResult));
         const validated = validateLLMResult(llmResult, safeText, session);
 

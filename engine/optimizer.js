@@ -1,9 +1,9 @@
 /**
  * engine/optimizer.js
- * מנוע אימפוזיציה (Imposition Engine)
+ * מנוע אימפוזיציה (Imposition Engine) - V2 (Hardened)
  * ====================================
  * תפקיד: לחשב מתמטית כמה יחידות נכנסות בגיליון SRA3.
- * זהו המפתח לרווחיות - חישוב מדויק של ניצול נייר.
+ * תוקן: הוספת Epsilon Guard למניעת חיתוך שגוי בגלל Floating Point (למשל מונע מ-2.99999998 להפוך ל-2).
  */
 
 const MACHINE_SPECS = {
@@ -15,10 +15,19 @@ const MACHINE_SPECS = {
 };
 
 /**
+ * פונקציית עזר לחלוקה מוגנת מפני שגיאות Floating Point
+ */
+function safeFloorDivision(total, part) {
+    if (part <= 0) return 0;
+    // Number.EPSILON מחפה בדיוק על המספרים שיורדים ב-0.000000001
+    return Math.floor((total / part) + Number.EPSILON);
+}
+
+/**
  * חישוב פריסה אופטימלית (Best Fit)
  * @param {number} prodWidth - רוחב מוצר במ"מ
  * @param {number} prodHeight - גובה מוצר במ"מ
- * @returns {object} { ups, sheets_needed, layout }
+ * @returns {object} { ups, layout, efficiency }
  */
 function calculateImposition(prodWidth, prodHeight) {
     // שטח נטו להדפסה (לאחר הפחתת שולי מכונה)
@@ -31,30 +40,33 @@ function calculateImposition(prodWidth, prodHeight) {
     }
 
     // אופציה א': ישר (Portrait)
-    // כמה נכנסים לרוחב * כמה נכנסים לגובה
-    const fitW_A = Math.floor(safeW / (prodWidth + MACHINE_SPECS.gutter));
-    const fitH_A = Math.floor(safeH / (prodHeight + MACHINE_SPECS.gutter));
+    const fitW_A = safeFloorDivision(safeW, prodWidth + MACHINE_SPECS.gutter);
+    const fitH_A = safeFloorDivision(safeH, prodHeight + MACHINE_SPECS.gutter);
     const total_A = fitW_A * fitH_A;
 
     // אופציה ב': מסובב (Landscape)
-    // הופכים את הכיוונים
-    const fitW_B = Math.floor(safeW / (prodHeight + MACHINE_SPECS.gutter));
-    const fitH_B = Math.floor(safeH / (prodWidth + MACHINE_SPECS.gutter));
+    const fitW_B = safeFloorDivision(safeW, prodHeight + MACHINE_SPECS.gutter);
+    const fitH_B = safeFloorDivision(safeH, prodWidth + MACHINE_SPECS.gutter);
     const total_B = fitW_B * fitH_B;
 
     // בחירת המנצח (איפה נכנסים יותר?)
     const maxUps = Math.max(total_A, total_B);
     const bestLayout = total_A >= total_B ? 'portrait' : 'landscape';
 
-    // חישוב אחוז ניצול הנייר (Efficiency)
+    // טיפול אלגנטי במוצר גדול מדי (הגנה על המערכת מקרש על חלוקה באפס)
+    if (maxUps === 0) {
+        return { ups: 0, layout: 'error', efficiency: "0.0%" };
+    }
+
+    // חישוב אחוז ניצול הנייר (Efficiency) - הערה: מחושב מול שטח ברוטו בכוונה תחילה
     const usedArea = maxUps * prodWidth * prodHeight;
     const totalArea = MACHINE_SPECS.sheetWidth * MACHINE_SPECS.sheetHeight;
-    const efficiency = ((usedArea / totalArea) * 100).toFixed(1);
+    const efficiencyNum = ((usedArea / totalArea) * 100).toFixed(1);
 
     return {
-        ups: maxUps, // כמה נכנסים בגיליון אחד
+        ups: maxUps,
         layout: bestLayout,
-        efficiency: efficiency + "%"
+        efficiency: efficiencyNum + "%"
     };
 }
 

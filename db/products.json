@@ -391,5 +391,98 @@
         "type": "number"
       }
     ]
+  },
+  "scodix": {
+    "name": "כרטיסי ביקור יוקרתיים (השבחת Scodix/פויל)",
+    "engine": "digital",
+    "questions": [
+      {
+        "key": "foil_type",
+        "question_he": "איזה סוג השבחה משולבת תרצה?",
+        "options": [
+          {
+            "label": "סקודיקס כסף (Scodix Silver)",
+            "value": "scodix_silver"
+          },
+          {
+            "label": "סקודיקס זהב (Scodix Gold)",
+            "value": "scodix_gold"
+          },
+          {
+            "label": "סקודיקס שקוף מובלט",
+            "value": "scodix_clear"
+          }
+        ]
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה כרטיסים נדפיס? (חישוב המינימום מתחיל ב-250)",
+        "type": "number",
+        "options": [
+          {
+            "label": "250",
+            "value": 250
+          },
+          {
+            "label": "500",
+            "value": 500
+          },
+          {
+            "label": "1000",
+            "value": 1000
+          }
+        ]
+      }
+    ]
+  },
+  "alucobond": {
+    "name": "שילוט אלוקובונד",
+    "engine": "wide",
+    "questions": [
+      {
+        "key": "size",
+        "question_he": "מה מידות השלט שאתה צריך? (למשל: 100x200 ס\"מ)",
+        "type": "text"
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה שלטים כאלו נייצר?",
+        "type": "number"
+      }
+    ]
+  },
+  "roll_stickers": {
+    "name": "מדבקות בגלילים (תעשייתי)",
+    "engine": "digital",
+    "questions": [
+      {
+        "key": "material",
+        "question_he": "באיזה חומר נשתמש לגליל?",
+        "options": [
+          {
+            "label": "פוליפרופילן לבן מבריק (עמיד למים)",
+            "value": "pp_white_gloss"
+          },
+          {
+            "label": "נייר כרומו חצי מבריק",
+            "value": "semi_gloss"
+          },
+          {
+            "label": "פוליפרופילן שקוף",
+            "value": "pp_clear"
+          }
+        ]
+      },
+      {
+        "key": "size",
+        "question_he": "מה קוטר/גודל כל מדבקה (למשל: 4x4, קוטר 5)?",
+        "type": "text"
+      },
+      {
+        "key": "qty",
+        "question_he": "כמה מדבקות מתוך הגליל תצטרך סך הכל?",
+        "type": "number"
+      }
+    ]
   }
 }

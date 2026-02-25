@@ -3,11 +3,21 @@ const fs = require('fs');
 const path = require('path');
 const { calculateImposition } = require('./optimizer');
 
-let materials = {}, productsDB = {};
+let materials = {}, productsDB = {}, pricesDB = {};
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
     productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
-} catch (e) { }
+    pricesDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/prices.json'), 'utf8'));
+} catch (e) {
+    console.error("Failed loading DB files in calculation.js", e);
+}
+
+// Fallbacks if prices.json is missing or corrupted
+const PRICES = pricesDB.digital_base ? pricesDB : {
+    digital_base: { cost_per_click_color: 0.35, setup_fee: 20, min_price: 50 },
+    wide_base: { cost_per_sqm: 50, min_price: 100 },
+    margins: { digital_multiplier: 2.5, wide_multiplier: 3.0, waste_factor: 0.05, min_waste_sheets: 10, profit_warning_threshold: 0.30 }
+};
 
 function parseSize(sizeStr) {
     if (!sizeStr) return { w: 210, h: 297 };
@@ -60,17 +70,29 @@ function calculateDigital(cart, params, productKey) {
     if (impResult.ups === 0) throw new Error("מוצר גדול מדי למכונה");
 
     const rawSheets = Math.ceil(qty / impResult.ups);
-    const totalSheets = rawSheets + Math.max(10, Math.ceil(rawSheets * 0.05));
+    const wasteSheets = Math.max(PRICES.margins.min_waste_sheets, Math.ceil(rawSheets * PRICES.margins.waste_factor));
+    const totalSheets = rawSheets + wasteSheets;
+
+    // Core Costs
     const costPaper = totalSheets * paperData.cost_sheet;
-    const totalCost = costPaper + (totalSheets * 0.35) + 20;
+    const costClicks = totalSheets * PRICES.digital_base.cost_per_click_color;
+    const totalCost = costPaper + costClicks + PRICES.digital_base.setup_fee;
 
     console.log(`💵 [CALCULATION] Sheets Needed: ${totalSheets} (Includes waste). Raw Paper Cost: ₪${costPaper.toFixed(2)}`);
     console.log(`💵 [CALCULATION] Total Production Cost (w/ clicks & setup): ₪${totalCost.toFixed(2)}`);
 
-    const finalPrice = Math.max(50, Math.ceil(totalCost * 2.5));
-    console.log(`💎 [CALCULATION] Final Client Price (x2.5 Markup): ₪${finalPrice}\n`);
+    const finalPrice = Math.max(PRICES.digital_base.min_price, Math.ceil(totalCost * PRICES.margins.digital_multiplier));
+    console.log(`💎 [CALCULATION] Final Client Price (x${PRICES.margins.digital_multiplier} Markup): ₪${finalPrice}\n`);
 
-    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח', ${paperData.name}`);
+    // --- PHASE 1.3: Margin Analyzer ---
+    const profitMargin = (finalPrice - totalCost) / finalPrice;
+    let margin_warning = false;
+    if (profitMargin < PRICES.margins.profit_warning_threshold) {
+        console.log(`\x1b[41m\x1b[37m 🚨 MARGIN WARN \x1b[0m Profit Margin for ${productKey} is ${Math.round(profitMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
+        margin_warning = true;
+    }
+
+    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח', ${paperData.name}`, totalCost, margin_warning);
 }
 
 function calculateWideFormat(cart, params, productKey) {
@@ -85,17 +107,26 @@ function calculateWideFormat(cart, params, productKey) {
         totalSqm = (sizeObj.w * sizeObj.h / 1000000) * qty;
     }
 
-    let costPerSqm = 50;
-    let finalPrice = Math.max(100, Math.ceil(totalSqm * costPerSqm * 3));
+    let costPerSqm = PRICES.wide_base.cost_per_sqm;
+    let totalCost = totalSqm * costPerSqm;
+    let finalPrice = Math.max(PRICES.wide_base.min_price, Math.ceil(totalCost * PRICES.margins.wide_multiplier));
 
     console.log(`📐 [CALCULATION] Total SQM: ${totalSqm.toFixed(2)}. Cost/SQM: ₪${costPerSqm}`);
-    console.log(`💎 [CALCULATION] Final Client Price (x3 Markup): ₪${finalPrice}\n`);
+    console.log(`💎 [CALCULATION] Final Client Price (x${PRICES.margins.wide_multiplier} Markup): ₪${finalPrice}\n`);
 
-    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`);
+    // --- PHASE 1.3: Margin Analyzer ---
+    const profitMargin = (finalPrice - totalCost) / finalPrice;
+    let margin_warning = false;
+    if (profitMargin < PRICES.margins.profit_warning_threshold) {
+        console.log(`\x1b[41m\x1b[37m 🚨 MARGIN WARN \x1b[0m Profit Margin for ${productKey} is ${Math.round(profitMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
+        margin_warning = true;
+    }
+
+    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`, totalCost, margin_warning);
 }
 
-function buildResult(cart, product, params, price, qty, desc) {
-    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2) };
+function buildResult(cart, product, params, price, qty, desc, cost, margin_warning) {
+    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2), production_cost: cost?.toFixed(2), margin_warning };
     return { updatedCart: [...(cart || []), item], lastAdded: item };
 }
 
