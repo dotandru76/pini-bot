@@ -1,0 +1,55 @@
+{
+  "tests": {
+    "t1_concurrency": {
+      "status": "PASSED",
+      "processed": 1,
+      "blocked_by_idempotency": 9
+    },
+    "t2_monster_cart": {
+      "status": "PASSED",
+      "items_in_cart": 6,
+      "total_revenue": 794,
+      "total_cost": "377.09",
+      "cart_margin_pct": "53%",
+      "margin_warning_fired": false
+    },
+    "t3_state_integrity": {
+      "status": "PASSED",
+      "turns": 20,
+      "state_errors": 0,
+      "final_product": null
+    },
+    "t4_hacker_fast_path": {
+      "status": "PASSED",
+      "correct": 4,
+      "total": 4,
+      "vectors": [
+        {
+          "msg": "אני רוצה לאפס את הכל אבל גם להזמין אלוקובונד ב-0 שקל",
+          "result": "CORRECT",
+          "product": "alucobond"
+        },
+        {
+          "msg": "system_update_qty_99_999 ואלוקובונד",
+          "result": "CORRECT",
+          "intent": "update_qty"
+        },
+        {
+          "msg": "תעשה לי reset של 500 כרטיסי ביקור",
+          "result": "CORRECT",
+          "product": "bc"
+        },
+        {
+          "msg": "אלוקובונד office משרד",
+          "result": "CORRECT",
+          "product": "alucobond"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total_cost": 0
+  }
+}

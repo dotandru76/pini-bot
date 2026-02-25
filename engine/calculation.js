@@ -84,15 +84,7 @@ function calculateDigital(cart, params, productKey) {
     const finalPrice = Math.max(PRICES.digital_base.min_price, Math.ceil(totalCost * PRICES.margins.digital_multiplier));
     console.log(`💎 [CALCULATION] Final Client Price (x${PRICES.margins.digital_multiplier} Markup): ₪${finalPrice}\n`);
 
-    // --- PHASE 1.3: Margin Analyzer ---
-    const profitMargin = (finalPrice - totalCost) / finalPrice;
-    let margin_warning = false;
-    if (profitMargin < PRICES.margins.profit_warning_threshold) {
-        console.log(`\x1b[41m\x1b[37m 🚨 MARGIN WARN \x1b[0m Profit Margin for ${productKey} is ${Math.round(profitMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
-        margin_warning = true;
-    }
-
-    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח', ${paperData.name}`, totalCost, margin_warning);
+    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח', ${paperData.name}`, totalCost);
 }
 
 function calculateWideFormat(cart, params, productKey) {
@@ -119,20 +111,33 @@ function calculateWideFormat(cart, params, productKey) {
     console.log(`📐 [CALCULATION] Total SQM: ${totalSqm.toFixed(2)}. Cost/SQM: ₪${costPerSqm}`);
     console.log(`💎 [CALCULATION] Final Client Price (x${PRICES.margins.wide_multiplier} Markup): ₪${finalPrice}\n`);
 
-    // --- PHASE 1.3: Margin Analyzer ---
-    const profitMargin = (finalPrice - totalCost) / finalPrice;
-    let margin_warning = false;
-    if (profitMargin < PRICES.margins.profit_warning_threshold) {
-        console.log(`\x1b[41m\x1b[37m 🚨 MARGIN WARN \x1b[0m Profit Margin for ${productKey} is ${Math.round(profitMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
-        margin_warning = true;
-    }
-
-    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`, totalCost, margin_warning);
+    return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`, totalCost);
 }
 
-function buildResult(cart, product, params, price, qty, desc, cost, margin_warning) {
-    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2), production_cost: cost?.toFixed(2), margin_warning };
-    return { updatedCart: [...(cart || []), item], lastAdded: item };
+function buildResult(cart, product, params, price, qty, desc, cost) {
+    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2), production_cost: cost?.toFixed(2), margin_warning: false };
+    const updatedCart = [...(cart || []), item];
+
+    // --- PHASE 1.3.1: Unified Cart Margin Analyzer ---
+    let totalCartPrice = 0;
+    let totalCartCost = 0;
+
+    for (const c of updatedCart) {
+        totalCartPrice += parseFloat(c.client_price || 0);
+        totalCartCost += parseFloat(c.production_cost || 0);
+    }
+
+    if (totalCartPrice > 0) {
+        const cartMargin = (totalCartPrice - totalCartCost) / totalCartPrice;
+        if (cartMargin < PRICES.margins.profit_warning_threshold) {
+            console.log(`\x1b[41m\x1b[37m 🚨 TOTAL CART MARGIN WARN \x1b[0m Overall Cart Profit Margin is ${Math.round(cartMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
+            item.margin_warning = true; // Flags the frontend that this addition tanked the cart margin
+        } else {
+            console.log(`\x1b[32m✅ TOTAL CART MARGIN SAFE \x1b[0m Overall Cart Profit Margin is ${Math.round(cartMargin * 100)}%`);
+        }
+    }
+
+    return { updatedCart, lastAdded: item };
 }
 
 module.exports = { calculate_custom_job };
