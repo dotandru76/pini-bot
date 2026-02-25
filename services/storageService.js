@@ -36,52 +36,56 @@ try {
 
     // --- STEP 2: Multi-Stage Parsing ---
     try {
-        // Try direct parse
         credentials = JSON.parse(tryContent);
     } catch (parseError) {
-        console.warn(`[STORAGE] Direct JSON parse failed (${parseError.message}), attempting normalization...`);
+        console.warn(`[STORAGE] JSON.parse failed (${parseError.message}), using ULTRA SURGICAL extraction...`);
 
-        // Handle literal newlines and internal escape corruption
-        let normalized = tryContent
-            .replace(/\r?\n/g, '\\n') // Escape real newlines
-            .replace(/\\\\n/g, '\\n') // Fix double-escaped newlines
-            .replace(/\\"/g, '"');    // Unescape internal quotes if they were escaped globally
+        // --- STEP 3: ULTRA SURGICAL Extraction ---
+        // Pluck fields using greedy matching to ignore escaping mess
+        const pluck = (key) => {
+            const regex = new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`);
+            const match = tryContent.match(regex);
+            return match ? match[1] : null;
+        };
 
-        // Final sanity check: if it starts with "{" but ends with "}" and still fails, 
-        // it might have escaped control characters.
-        try {
-            credentials = JSON.parse(normalized);
-        } catch (e2) {
-            console.warn(`🛑 [STORAGE] Normalization failed. Attempting surgical extraction...`);
+        let project_id = pluck('project_id');
+        let client_email = pluck('client_email');
 
-            // --- STEP 3: Surgical Extraction (The "Nuclear" Fallback) ---
-            // This is immune to most escaping/newline issues as it targets specific field patterns
-            const extract = (field) => {
-                const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`);
-                const match = tryContent.match(regex) || normalized.match(regex);
-                return match ? match[1] : null;
-            };
+        // Private Key is special: It's long and full of \n
+        // We look for everything between the known PEM markers
+        const pkRegex = /-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----/;
+        let rawKeyMatch = tryContent.match(pkRegex);
+        let private_key;
 
-            const private_key = extract('private_key');
-            const client_email = extract('client_email');
-            const project_id = extract('project_id');
-
-            if (private_key && client_email && project_id) {
-                credentials = {
-                    type: 'service_account',
-                    project_id: project_id,
-                    private_key: private_key.replace(/\\n/g, '\n').replace(/\\\\n/g, '\n'),
-                    client_email: client_email
-                };
-                console.log(`[STORAGE] SUCCESS via surgical extraction for ${project_id}`);
-            } else {
-                console.error(`🛑 [STORAGE] SURGICAL EXTRACTION FAILED. Missing fields:`, {
-                    pk: !!private_key,
-                    ce: !!client_email,
-                    pid: !!project_id
-                });
-                throw new Error(`Unable to parse GCP_SERVICE_ACCOUNT_KEY. Error: ${e2.message}`);
+        if (rawKeyMatch) {
+            private_key = rawKeyMatch[0]
+                .replace(/\\n/g, '\n')
+                .replace(/\\\\n/g, '\n')
+                .replace(/\\r/g, '')
+                .replace(/\\/g, ''); // Clear residual shell slashes
+        } else {
+            // Fallback for non-headered key string
+            private_key = pluck('private_key');
+            if (private_key) {
+                private_key = `-----BEGIN PRIVATE KEY-----\n${private_key.replace(/\\n/g, '\n').replace(/\\\\n/g, '\n')}\n-----END PRIVATE KEY-----\n`;
             }
+        }
+
+        if (private_key && client_email && project_id) {
+            credentials = {
+                type: 'service_account',
+                project_id,
+                client_email,
+                private_key: private_key.trim() + '\n'
+            };
+            console.log(`[STORAGE] SUCCESS via ULTRA SURGICAL extraction for ${project_id}`);
+        } else {
+            console.error(`🛑 [STORAGE] ULTRA SURGICAL FAILED.`, {
+                pid: !!project_id,
+                ce: !!client_email,
+                pk: !!private_key
+            });
+            throw new Error("Unable to reconstruct GCP credentials from corrupted environment string.");
         }
     }
 
@@ -89,9 +93,9 @@ try {
         credentials,
         projectId: credentials.project_id || 'pini-print-bot'
     });
-    console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
+    console.log(`[STORAGE] SUCCESSFULLY initialized GCP client for ${credentials.project_id}`);
 } catch (e) {
-    console.error("🛑 [STORAGE] CRITICAL ERROR during initialization:", e.message);
+    console.error("🛑 [STORAGE] CRITICAL INITIALIZATION ERROR:", e.message);
     storage = new Storage();
 }
 
