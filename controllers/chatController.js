@@ -23,6 +23,19 @@ async function handleChat(req, res) {
 
         let finalResponse = { text: "שגיאה פנימית.", options: [], cart: session.cart };
 
+        // --- LAYER 1: Deterministic Vision Rejection ---
+        if (extraction.technicalMetadata) {
+            const kernelVerdict = analyzePrintReadyStatus(extraction.technicalMetadata, session);
+            if (kernelVerdict.status === 'REJECT_LOW_RES') {
+                const refusal = `עצור! המערכת זיהתה שהקובץ ברזולוציה נמוכה מדי להדפסה (${extraction.technicalMetadata.dpi} DPI). נדרש לפחות 150 DPI לתוצאה איכותית.\n\n[הערה סמנטית]: ${extraction.answer_text}`;
+                finalResponse.text = refusal;
+                finalResponse.status = 'REJECTED';
+                finalResponse.debug = extraction._debug;
+                cacheCompletedRequest(session, requestId, finalResponse);
+                return res.json(finalResponse);
+            }
+        }
+
         // 2. Handle System Intent vs Compiler Flow
         if (extraction.intent === 'reset') {
             session.cart = [];

@@ -69,8 +69,7 @@ const schema = {
                     product: { type: SchemaType.STRING },
                     confidence: { type: SchemaType.NUMBER }
                 },
-                required: ["product", "confidence"],
-                additionalProperties: false
+                required: ["product", "confidence"]
             }
         },
         parameters_detected: {
@@ -83,13 +82,11 @@ const schema = {
                     context: { type: SchemaType.STRING, description: "Product key or 'global'." },
                     confidence: { type: SchemaType.NUMBER }
                 },
-                required: ["key", "value", "context", "confidence"],
-                additionalProperties: false
+                required: ["key", "value", "context", "confidence"]
             }
         }
     },
-    required: ["intent", "answer_text", "products_detected", "parameters_detected"],
-    additionalProperties: false
+    required: ["intent", "answer_text", "products_detected", "parameters_detected"]
 };
 
 // Read Prompt configuration
