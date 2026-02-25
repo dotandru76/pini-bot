@@ -417,7 +417,9 @@
 
             <div class="input-area">
                 <div class="icon-btn" onclick="toggleMenu()" title="תפריט מהיר"><i class="fas fa-bars"></i></div>
-                <div class="icon-btn"><i class="fas fa-paperclip"></i></div>
+                <div class="icon-btn" onclick="document.getElementById('file-input').click()"><i
+                        class="fas fa-paperclip"></i></div>
+                <input type="file" id="file-input" style="display:none" onchange="handleFileUpload(this)">
                 <div class="input-wrapper">
                     <input type="text" id="user-input" placeholder="הקלד הודעה..." autocomplete="off">
                 </div>
@@ -468,7 +470,8 @@
             const el = document.getElementById('connection-status');
             if (el) {
                 el.innerText = text;
-                el.style.color = text.includes('מקליד') ? 'var(--primary-color)' : '#667781';
+                el.innerText = text;
+                el.style.color = text.includes('מקליד') || text.includes('מעלה') ? 'var(--primary-color)' : '#667781';
             }
         }
 
@@ -568,11 +571,66 @@
         }
 
         // --- Core Functions ---
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            // 10MB client-side check
+            if (file.size > 10 * 1024 * 1024) {
+                alert("קובץ גדול מדי (מקסימום 10MB)");
+                input.value = '';
+                return;
+            }
+
+            isProcessing = true;
+            updateStatus('מעלה קובץ...');
+            addMsg(`מעלה קובץ: ${file.name}...`, 'user');
+
+            try {
+                // 1. Get Signed URL
+                const signedRes = await fetch(`${PDF_URL}/signed-url`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: userId, fileName: file.name, fileSize: file.size })
+                });
+
+                if (!signedRes.ok) {
+                    const error = await signedRes.json();
+                    throw new Error(error.message || "נכשל בבקשת הכתובת להעלאה");
+                }
+
+                const { uploadUrl, remotePath } = await signedRes.json();
+
+                // 2. Direct upload to GCP
+                const uploadRes = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/octet-stream' },
+                    body: file
+                });
+
+                if (!uploadRes.ok) throw new Error("העלאת הקובץ לשרת נכשלה");
+
+                addMsg("הקובץ עלה בהצלחה! 🖼️", "bot");
+                updateStatus('מכין ניתוח...');
+
+                // 3. Send system message to chat
+                await sendMessage(`[IMAGE_UPLOADED: ${remotePath}]`, "מנתח קובץ...");
+
+            } catch (e) {
+                console.error(e);
+                addMsg(`שגיאה בהעלאה: ${e.message}`, 'bot');
+            } finally {
+                input.value = '';
+                isProcessing = false;
+                updateStatus('מחובר');
+            }
+        }
+
         async function downloadPDF() {
             if (currentCart.length === 0) return alert('העגלה ריקה');
             addMsg("מפיק מסמך PDF... ⏳", "bot");
             try {
-                const res = await fetch(PDF_URL, {
+                const res = await fetch(`${PDF_URL}/quote`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: userId, cart: currentCart })
@@ -611,7 +669,7 @@
 
         // --- TIKUN (FIX): Updated sendMessage to accept displayLabel ---
         async function sendMessage(text = null, displayLabel = null) {
-            if (isProcessing) return;
+            if (isProcessing && !text?.startsWith('[IMAGE_UPLOADED')) return;
 
             const inputField = document.getElementById('user-input');
             const valueToSend = text || inputField.value.trim(); // מה נשלח לשרת (קוד)
@@ -619,8 +677,10 @@
 
             if (!valueToSend) return;
 
-            // מציגים למשתמש את מה שהוא אמור לראות
-            addMsg(textToDisplay, 'user');
+            // מציגים למשתמש את מה שהוא אמור לראות (אלא אם זו הודעת מערכת פנימית של העלאה)
+            if (!text?.startsWith('[IMAGE_UPLOADED')) {
+                addMsg(textToDisplay, 'user');
+            }
 
             inputField.value = '';
             removeQuickReplies();

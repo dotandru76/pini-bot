@@ -1,6 +1,7 @@
 /** engine/classifier.js V98.0 - Data Integrity Fix */
 const { validateLLMResult } = require('./validator');
 const { routeWithLLM } = require('../services/llmService');
+const { downloadFile } = require('../services/storageService');
 
 const KEYWORDS = {
     reset: ['reset', 'התחל', 'איפוס', 'ריסט', 'תפריט'],
@@ -107,8 +108,25 @@ async function classify(text, session) {
 
     // 4. LLM Pipeline (למלל חופשי כמו "500")
     try {
-        const llmResult = await routeWithLLM(safeText, session);
-        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: ${llmResult.intent || 'chat'} (LLM Inference)\x1b[0m`);
+        let imageBuffer = null;
+
+        // --- PHASE 2.2: Vision Attachment Handling ---
+        if (safeText.includes('[IMAGE_UPLOADED:')) {
+            const match = safeText.match(/\[IMAGE_UPLOADED:\s*([^\]]+)\]/);
+            if (match) {
+                const remotePath = match[1].trim();
+                console.log(`📸 [CLASSIFIER] Vision Request detected. Fetching: ${remotePath}`);
+                try {
+                    imageBuffer = await downloadFile(remotePath);
+                } catch (e) {
+                    console.error("Failed to fetch vision buffer:", e);
+                    return { intent: 'chat', aiResponse: 'הקובץ עלה אך לא הצלחתי לנתח אותו טכנית. תוכל לשלוח שוב?' };
+                }
+            }
+        }
+
+        const llmResult = await routeWithLLM(safeText, session, imageBuffer);
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: ${llmResult.intent || 'chat'} (${imageBuffer ? 'Vision' : 'LLM'} Inference)\x1b[0m`);
         console.log(`🤖 [LLM RAW RESULT]:`, JSON.stringify(llmResult));
         const validated = validateLLMResult(llmResult, safeText, session);
 

@@ -22,7 +22,7 @@ try {
     console.error("❌ Failed loading wizardPrompt.txt");
 }
 
-async function routeWithLLM(message, session) {
+async function routeWithLLM(message, session, imageBuffer = null) {
     if (isBudgetExceeded()) {
         console.warn("🛑 [BUDGET] Daily limit reached. Blocking LLM request.");
         return { intent: 'chat', answer_text: "המערכת בתחזוקה רגעית (נחזור לפעילות מלאה מחר בבוקר)", confidence: 0 };
@@ -39,19 +39,29 @@ async function routeWithLLM(message, session) {
         }
     });
 
-    const finalPrompt = SYSTEM_PROMPT
-        + `\n[CURRENT STATE]: Active Product: ${session.currentProduct || "None"}`
-        + `\n[USER SAYS]: "${message}"\nJSON Output:`;
+    // Multimodal Payload Preparation
+    const promptParts = [
+        { text: SYSTEM_PROMPT },
+        { text: `\n[CURRENT STATE]: Active Product: ${session.currentProduct || "None"}` },
+        { text: `\n[USER SAYS]: "${message}"\nJSON Output:` }
+    ];
 
-    console.log(`\n=================== AI REQUEST ===================`);
-    console.log(`📝 [LLM] Payload length: ${finalPrompt.length} chars (~${Math.round(finalPrompt.length / 4)} tokens)`);
+    if (imageBuffer) {
+        logAI("📷 Image detected in payload. Activating Multimodal Vision.");
+        promptParts.push({
+            inlineData: {
+                data: imageBuffer.toString('base64'),
+                mimeType: "image/jpeg"
+            }
+        });
+    }
 
     // PHASE 1.3 Anti-Hallucination: Retry Strategy & Token-Level Parsing
     let attempts = 0;
     while (attempts < 2) {
         try {
             console.time(`⏱️ [LLM] Response Time (Attempt ${attempts + 1})`);
-            const result = await model.generateContent(finalPrompt);
+            const result = await model.generateContent({ contents: [{ role: "user", parts: promptParts }] });
             console.timeEnd(`⏱️ [LLM] Response Time (Attempt ${attempts + 1})`);
 
             const usage = result.response.usageMetadata;
@@ -84,7 +94,7 @@ async function routeWithLLM(message, session) {
 
             // --- PHASE 1.3: Injecting Debug Metadata ---
             parsedObj._debug = {
-                source: "LLM",
+                source: imageBuffer ? "Vision" : "LLM",
                 tokens: tokenData,
                 apiCost: apiCostStr
             };

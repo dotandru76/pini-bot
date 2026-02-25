@@ -41,6 +41,22 @@ async function generateSignedUploadUrl(sessionId, fileName) {
     }
 }
 
+/**
+ * Downloads a file from GCP bucket as a Buffer.
+ */
+async function downloadFile(remotePath) {
+    try {
+        const file = storage.bucket(BUCKET_NAME).file(remotePath);
+        const [buffer] = await file.download();
+        console.log(`[STORAGE] Downloaded file buffer: ${remotePath}`);
+        return buffer;
+    } catch (error) {
+        console.error("Error downloading file from GCP:", error);
+        throw error;
+    }
+}
+
 module.exports = {
-    generateSignedUploadUrl
+    generateSignedUploadUrl,
+    downloadFile
 };
