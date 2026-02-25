@@ -635,6 +635,8 @@
                     return v.toString(16);
                 });
 
+                console.log(`[DEBUG] Sending RequestID: ${requestId}`);
+
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

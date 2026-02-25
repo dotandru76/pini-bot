@@ -61,6 +61,19 @@ async function classify(text, session) {
             _debug: { source: "Regex Fast-Path", cost: "₪0" }
         };
     }
+
+    // --- PHASE 1.3: UAT Hotfix Alucobond Bypass ---
+    if (t.includes('אלוקובונד') || t.includes('alucobond')) {
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: quote (Alucobond Fast Path)\x1b[0m`);
+        return {
+            intent: 'quote',
+            product: 'alucobond',
+            mapped_params: {},
+            raw_text: safeText,
+            confidence: 1.0,
+            _debug: { source: "Regex Fast-Path", cost: "₪0" }
+        };
+    }
     // ------------------------------------------------------------------------
 
     // 3. Fast Path - מילות מפתח

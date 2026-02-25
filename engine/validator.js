@@ -62,6 +62,15 @@ function validateLLMResult(llmResult, userText, session) {
         if (result.intent === 'chat') result.intent = 'update';
     }
 
+    // --- PHASE 1.3 UAT Hotfix: Alucobond vs Office Intercept ---
+    if (text.includes('אלוקובונד') || text.includes('alucobond')) {
+        if (result.product === 'office') {
+            console.log(`\x1b[33m🛡️ [X-RAY VALIDATOR] Intercepted LLM hallucination: Swapped 'office' for 'alucobond'\x1b[0m`);
+            result.product = 'alucobond';
+            result.intent = 'quote';
+        }
+    }
+
     if (text.includes('כרומו')) {
         if (text.includes('300')) result.mapped_params.paper_type = 'chromo_300';
         else result.mapped_params.paper_type = 'chromo_130';
