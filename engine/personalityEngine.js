@@ -15,7 +15,7 @@ const PINI_PERSONALITY = {
     name: 'פיני',
     role: 'הדפס הכי ותיק בבית יצחק',
     traits: ['חם', 'מקצועי', 'ישיר', 'הומוריסטי קלות'],
-    
+
     // ביטויים אופייניים
     expressions: {
         greeting: [
@@ -24,7 +24,7 @@ const PINI_PERSONALITY = {
             "אהלן! איך אפשר לעזור?",
             "הי! פיני מבית יצחק, במה אוכל לשרת?"
         ],
-        
+
         excitement: [
             "יופי של בחירה! 🎉",
             "מעולה!",
@@ -32,27 +32,27 @@ const PINI_PERSONALITY = {
             "אחלה!",
             "זה יהיה יפהפה!"
         ],
-        
+
         thinking: [
             "רגע, בוא נראה...",
             "אוקיי, אז...",
             "יאללה, בוא נחשב..."
         ],
-        
+
         empathy: [
             "אני מבין לגמרי",
             "הגיוני",
             "ברור, אין בעיה",
             "בטח, בוא נסתדר"
         ],
-        
+
         recommendation: [
             "תשמע, מניסיון שלי...",
             "טיפ קטן -",
             "בין לבינינו,",
             "מה שהכי עובד ללקוחות שלנו..."
         ],
-        
+
         closing: [
             "צריך עוד משהו?",
             "מה עוד אפשר להוסיף?",
@@ -64,7 +64,7 @@ const PINI_PERSONALITY = {
 
 // === טקטיקות מכירה חכמות ===
 const SMART_SELLING = {
-    
+
     // === 1. Anchoring - עיגון מחיר ===
     // תמיד תציג קודם אופציה יקרה יותר
     anchoring: {
@@ -74,27 +74,25 @@ const SMART_SELLING = {
             right: "יש לנו Premium ב-₪399 עם הבלטה, או הקלאסי שלנו ב-₪199 - גם הוא איכותי מאוד"
         }
     },
-    
+
     // === 2. Bundle - חבילות ===
     // תמיד תציע חבילה במקום פריט בודד
     bundling: {
         strategy: 'חבילה נראית כמו עסקה טובה יותר',
         triggers: {
-            'invitation': ['place_card', 'sticker', 'thank_you_card'],
-            'bc': ['flyer', 'folder'],
-            'flyer': ['bc', 'poster', 'rollup']
+            'flyer': ['poster', 'sticker']
         }
     },
-    
+
     // === 3. Quantity Breaks - הנחות כמות ===
     // תמיד תראה כמה עוד צריך להנחה
     quantityBreaks: {
         strategy: 'הראה מה מפסיד אם לא מגדיל כמות',
         thresholds: [250, 500, 1000, 2500, 5000],
-        messaging: (current, next, savings) => 
+        messaging: (current, next, savings) =>
             `עוד ${next - current} יחידות ותחסוך ${savings}% על כל ההזמנה!`
     },
-    
+
     // === 4. Scarcity - מחסור ===
     // יצירת דחיפות (אמיתית!)
     scarcity: {
@@ -105,17 +103,16 @@ const SMART_SELLING = {
             "📅 יש לנו עומס בתקופה הזו, כדאי לסגור מוקדם"
         ]
     },
-    
+
     // === 5. Social Proof - הוכחה חברתית ===
     socialProof: {
         strategy: 'אנשים סומכים על מה שאחרים עושים',
         messages: {
-            bc: "זה הכרטיס הכי נמכר שלנו - 300+ לקוחות בחודש",
             invitation: "עשינו כבר מעל 500 חתונות השנה",
             flyer: "רוב העסקים מזמינים 1000+ כי זה הכי משתלם"
         }
     },
-    
+
     // === 6. Loss Aversion - פחד מהפסד ===
     lossAversion: {
         strategy: 'אנשים מפחדים להפסיד יותר משהם רוצים להרוויח',
@@ -130,30 +127,30 @@ const SMART_SELLING = {
 // === יצירת תגובה אנושית ===
 function humanize(templateResponse, context = {}) {
     const { customer, cart, mood } = context;
-    
+
     // בחר ביטוי אקראי מהקטגוריה
     const pick = (category) => {
         const options = PINI_PERSONALITY.expressions[category];
         return options[Math.floor(Math.random() * options.length)];
     };
-    
+
     // התאמה אישית לפי לקוח
     let personalized = templateResponse;
-    
+
     if (customer?.name) {
         // 30% סיכוי להוסיף את השם
         if (Math.random() < 0.3) {
             personalized = personalized.replace(/^/, `${customer.name}, `);
         }
     }
-    
+
     // הוסף אמוג'י במידה (לא יותר מדי)
     // 40% סיכוי לאמוג'י אחד
     if (Math.random() < 0.4 && !personalized.includes('emoji')) {
         const emojis = ['👍', '✨', '💪', '🎉', '😊'];
         personalized += ' ' + emojis[Math.floor(Math.random() * emojis.length)];
     }
-    
+
     return personalized;
 }
 
@@ -161,14 +158,14 @@ function humanize(templateResponse, context = {}) {
 function generateSmartRecommendation(product, quantity, context = {}) {
     const { customer, cart, margin } = context;
     const recommendations = [];
-    
+
     // === 1. בדוק אם אפשר להציע חבילה ===
     const bundleProducts = SMART_SELLING.bundling.triggers[product];
     if (bundleProducts) {
-        const notInCart = bundleProducts.filter(p => 
+        const notInCart = bundleProducts.filter(p =>
             !cart?.some(i => i.product_category === p)
         );
-        
+
         if (notInCart.length > 0) {
             const suggested = notInCart[0];
             recommendations.push({
@@ -180,16 +177,16 @@ function generateSmartRecommendation(product, quantity, context = {}) {
             });
         }
     }
-    
+
     // === 2. בדוק אם קרוב לסף הנחה ===
     const thresholds = SMART_SELLING.quantityBreaks.thresholds;
     const nextThreshold = thresholds.find(t => t > quantity);
-    
+
     if (nextThreshold && (nextThreshold - quantity) / quantity < 0.3) {
         // פחות מ-30% תוספת לסף הבא
         const extra = nextThreshold - quantity;
         const savingsPercent = calculateQuantitySavings(product, quantity, nextThreshold);
-        
+
         recommendations.push({
             type: 'quantity',
             priority: 2,
@@ -199,7 +196,7 @@ function generateSmartRecommendation(product, quantity, context = {}) {
             hiddenBenefit: 'סה"כ עסקה גדולה יותר'
         });
     }
-    
+
     // === 3. בדוק אם כדאי להציע שדרוג ===
     if (margin && margin > 55) {
         // יש מקום להציע שדרוג עם "הנחה"
@@ -210,7 +207,7 @@ function generateSmartRecommendation(product, quantity, context = {}) {
             hiddenBenefit: 'עדיין 45% מרווח, לקוח מרגיש שקיבל מתנה'
         });
     }
-    
+
     // === 4. הוכחה חברתית ===
     const socialProof = SMART_SELLING.socialProof.messages[product];
     if (socialProof && Math.random() < 0.5) {
@@ -221,7 +218,7 @@ function generateSmartRecommendation(product, quantity, context = {}) {
             hiddenBenefit: 'בונה אמון'
         });
     }
-    
+
     // מיין לפי עדיפות והחזר את הטובה ביותר
     return recommendations.sort((a, b) => a.priority - b.priority)[0] || null;
 }
@@ -229,20 +226,9 @@ function generateSmartRecommendation(product, quantity, context = {}) {
 // === יצירת הודעת חבילה ===
 function generateBundleMessage(mainProduct, suggestedProduct) {
     const messages = {
-        'invitation_place_card': 
-            "אגב, הרבה זוגות לוקחים גם כרטיסי הושבה תואמים - יוצא יפה ומאורגן",
-        'invitation_sticker':
-            "רוצה גם מדבקות למעטפות? יש לי עיצוב תואם להזמנות",
-        'invitation_thank_you_card':
-            "הזמנתי לך גם אופציה לכרטיסי תודה - נהוג לשלוח אחרי האירוע",
-        'bc_flyer':
-            "הרבה עסקים מזמינים ביחד גם פליירים - ככה יש לך חומר לחלוקה",
-        'bc_folder':
-            "יש לך תיקייה לפגישות? משדרג את הרושם",
-        'flyer_rollup':
-            "לכנסים/תערוכות כדאי גם רולאפ - עושה נוכחות"
+        'bc_flyer': "הרבה עסקים מזמינים ביחד גם פליירים - ככה יש לך חומר לחלוקה"
     };
-    
+
     const key = `${mainProduct}_${suggestedProduct}`;
     return messages[key] || `אולי גם ${getProductHebrew(suggestedProduct)}?`;
 }
@@ -263,14 +249,14 @@ function calculateQuantitySavings(product, currentQty, newQty) {
 // === יצירת תגובה למחיר "יקר" ===
 function handlePriceObjection(originalPrice, product, quantity, context = {}) {
     const strategies = [];
-    
+
     // === אסטרטגיה 1: הסבר ערך ===
     strategies.push({
         type: 'value',
         response: `אני מבין. תראה, המחיר כולל נייר איכותי, הדפסה צבעונית מלאה, וגימור מקצועי. זה מה שישאיר רושם.`,
         discount: 0
     });
-    
+
     // === אסטרטגיה 2: הפחתת כמות ===
     const reducedQty = Math.floor(quantity * 0.7);
     strategies.push({
@@ -279,7 +265,7 @@ function handlePriceObjection(originalPrice, product, quantity, context = {}) {
         discount: 0,
         newQty: reducedQty
     });
-    
+
     // === אסטרטגיה 3: הנחה קטנה (אם המרווח מאפשר) ===
     if (context.margin && context.margin > 50) {
         const discountPercent = 10;
@@ -290,21 +276,21 @@ function handlePriceObjection(originalPrice, product, quantity, context = {}) {
             newPrice: Math.round(originalPrice * 0.9)
         });
     }
-    
+
     // === אסטרטגיה 4: תשלומים ===
     strategies.push({
         type: 'payments',
         response: `אפשר לפרוס ל-3 תשלומים בלי ריבית, ככה זה פחות מורגש`,
         discount: 0
     });
-    
+
     // === אסטרטגיה 5: חומר זול יותר ===
     strategies.push({
         type: 'downgrade',
         response: `יש אופציה על נייר קצת פחות עבה, יוצא ב-15% פחות. עדיין נראה טוב.`,
         discount: 15
     });
-    
+
     return strategies;
 }
 
@@ -337,7 +323,7 @@ function generateEmpatheticResponse(situation, context = {}) {
             "אחלה! כבר רואה איך זה ייראה!"
         ]
     };
-    
+
     const options = responses[situation] || responses['unsure'];
     return options[Math.floor(Math.random() * options.length)];
 }
@@ -345,7 +331,7 @@ function generateEmpatheticResponse(situation, context = {}) {
 // === זיהוי מצב רוח מהטקסט ===
 function detectMood(message) {
     const text = message.toLowerCase();
-    
+
     if (/יקר|מחיר|תקציב|כסף|זול/.test(text)) {
         return 'price_sensitive';
     }
@@ -361,7 +347,7 @@ function detectMood(message) {
     if (/תודה|מעולה|יופי|אחלה|מושלם/.test(text)) {
         return 'happy';
     }
-    
+
     return 'neutral';
 }
 

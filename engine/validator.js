@@ -11,8 +11,6 @@ try {
 const VALID_PRODUCTS = new Set(Object.keys(productsDB));
 
 const PRODUCT_KEYWORDS_MAP = {
-    'כרטיס': 'bc', 'ביקור': 'bc', 'cards': 'bc',
-    'רולאפ': 'rollup', 'רול': 'rollup', 'rollup': 'rollup',
     'פוסטר': 'poster', 'poster': 'poster',
     'פלייר': 'flyer', 'flyer': 'flyer',
     'חובר': 'booklet', 'ספר': 'booklet', 'קטלוג': 'booklet', 'booklet': 'booklet',
@@ -57,7 +55,7 @@ function validateLLMResult(llmResult, userText, session) {
         result.intent = 'update';
     }
 
-    const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:x|X|\*|על)\s*(\d+(?:\.\d+)?)/);
+    const sizeMatch = text.match(/(\d+\.\d+|\d+)\s*(?:x|X|\*|על)\s*(\d+\.\d+|\d+)/);
     if (sizeMatch) {
         result.mapped_params.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
         console.log(`🛡️ [VALIDATOR] Detected Size with Decimals: ${result.mapped_params.size}`);

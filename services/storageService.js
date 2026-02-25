@@ -12,17 +12,18 @@ try {
     // We clean the string aggressively before parsing.
     let cleanCreds = creds.trim();
     if (cleanCreds.startsWith("'") && cleanCreds.endsWith("'")) cleanCreds = cleanCreds.slice(1, -1);
-    cleanCreds = cleanCreds.replace(/\\n/g, '\n'); // Ensure newlines in private key are preserved correctly
+    if (cleanCreds.startsWith('"') && cleanCreds.endsWith('"')) cleanCreds = cleanCreds.slice(1, -1);
+    cleanCreds = cleanCreds.replace(/\\n/g, '\n');
 
     const credentials = JSON.parse(cleanCreds);
 
     storage = new Storage({
         credentials,
-        projectId: credentials.project_id
+        projectId: credentials.project_id || 'pini-print-bot'
     });
-    console.log(`[STORAGE] SUCCESSFULLY initialized with project: ${credentials.project_id}`);
+    console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
 } catch (e) {
-    console.error("🛑 [STORAGE] CRITICAL: Failed to load GCP credentials. This will cause 500 errors on Signed URL requests.", e.message);
+    console.error("🛑 [STORAGE] CRITICAL ERROR:", e.message);
     storage = new Storage();
 }
 

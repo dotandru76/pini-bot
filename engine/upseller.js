@@ -31,7 +31,7 @@ function checkUpsell(cart, currentProductKey, eventContext) {
 
     // For safer checking, let's map the Hebrew names back to keys if we didn't store raw keys
     const PRODUCT_MAP_REVERSE = {
-        'כרטיסי ביקור': 'bc', 'פליירים': 'flyer', 'חוברות': 'booklet', 'רולאפ': 'rollup', 'מדבקות': 'sticker', 'פוסטרים': 'poster'
+        'פליירים': 'flyer', 'חוברות': 'booklet', 'מדבקות': 'sticker', 'פוסטרים': 'poster'
     };
 
     const cartKeys = cart.map(item => PRODUCT_MAP_REVERSE[item.productName] || item.productName);

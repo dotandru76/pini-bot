@@ -10,57 +10,6 @@
 
 const PRODUCT_CATALOG = {
 
-    // === כרטיסי ביקור ===
-    bc: {
-        name: 'כרטיסי ביקור',
-        emoji: '💼',
-        description: 'הכרטיס שמייצג אותך - הרושם הראשון שנשאר',
-
-        sizes: [
-            { name: 'סטנדרט', size: '9×5 ס"מ', popular: true },
-            { name: 'מרובע', size: '5.5×5.5 ס"מ', popular: false },
-            { name: 'מיני', size: '8×4 ס"מ', popular: false },
-            { name: 'מתקפל', size: '9×10 ס"מ (מתקפל ל-9×5)', popular: false }
-        ],
-
-        papers: [
-            { name: 'קרטון 350 גרם', desc: 'הסטנדרט - יציב ומקצועי', price_factor: 1.0, popular: true },
-            { name: 'קרטון 400 גרם', desc: 'עבה במיוחד - פרימיום', price_factor: 1.2 },
-            { name: 'כרומו 300 גרם', desc: 'מבריק - צבעים חזקים', price_factor: 1.0 },
-            { name: 'פנינה 300 גרם', desc: 'נצנוץ עדין - יוקרתי', price_factor: 1.3 },
-            { name: 'ממוחזר 350 גרם', desc: 'אקולוגי - מראה טבעי', price_factor: 1.15 },
-            { name: 'שחור 350 גרם', desc: 'קרטון שחור - דרמטי', price_factor: 1.4 },
-            { name: 'שקוף PVC', desc: 'פלסטיק שקוף - וואו!', price_factor: 2.5 }
-        ],
-
-        finishings: [
-            { name: 'ללא גימור', desc: 'פשוט ונקי', price_add: 0 },
-            { name: 'למינציה מט', desc: 'מגן + מראה אלגנטי', price_add: 30, popular: true },
-            { name: 'למינציה מבריקה', desc: 'מגן + ברק', price_add: 30 },
-            { name: 'למינציה מט + ספוט UV', desc: 'הלוגו בולט ומבריק', price_add: 80, premium: true },
-            { name: 'הבלטה (סקודיקס)', desc: 'תלת מימד על הלוגו', price_add: 100, premium: true },
-            { name: 'פויל זהב/כסף', desc: 'הטבעה מתכתית', price_add: 120, premium: true },
-            { name: 'פינות מעוגלות', desc: 'מראה מודרני', price_add: 20 },
-            { name: 'חיתוך צורני', desc: 'צורה מיוחדת', price_add: 150 }
-        ],
-
-        printing: [
-            { name: 'צד אחד', desc: 'חזית בלבד', price_factor: 0.7 },
-            { name: 'דו-צדדי', desc: 'חזית + גב', price_factor: 1.0, popular: true }
-        ],
-
-        quantities: [100, 250, 500, 1000, 2000, 5000],
-        min_qty: 100,
-        production_days: 5,
-        express_available: true,
-
-        tips: [
-            'ב-500 כרטיסים המחיר ליחידה יורד ב-30%',
-            'למינציה מט מגנה ונותנת מראה מקצועי',
-            'פויל על הלוגו = רושם ראשון בלתי נשכח'
-        ]
-    },
-
     // === פליירים ===
     flyer: {
         name: 'פליירים / עלונים',

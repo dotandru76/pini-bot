@@ -105,12 +105,13 @@ function planActions(intentData, session) {
         let qty = payload.qty;
 
         // --- FIX: Default to last item if index is missing (common for "update qty to 500") ---
-        if (index === undefined && session.cart.length > 0) {
+        if (index === undefined && session.cart && session.cart.length > 0) {
             index = session.cart.length - 1;
             console.log(`\x1b[33m🔄 [PLANNER] Index missing in update payload. Defaulting to last item (Index ${index}).\x1b[0m`);
         }
 
-        if (index !== undefined && session.cart[index]) {
+        if (index !== undefined && session.cart && session.cart[index]) {
+            console.log(`\x1b[33m🔄 [PLANNER] MATCHED index ${index} in cart for update.\x1b[0m`);
             // If qty is missing from payload, try to extract it ONLY if the intent is update_qty
             if (!qty) {
                 const params = intentData.mapped_params || {};
@@ -141,9 +142,11 @@ function planActions(intentData, session) {
                     session.cart[index].qty = newQty;
                 }
                 const successMsg = qty ? `✅ הכמות עודכנה ל-${newQty}.` : `✅ הפריט עודכן.`;
+                console.log(`\x1b[33m🔄 [PLANNER] Update successful. Returning early.\x1b[0m`);
                 return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: successMsg, quickReplies: [] } }] };
             }
         }
+        console.log(`\x1b[31m🔄 [PLANNER] Update intent detected but NO MATCH in cart (Index: ${index}, Cart Size: ${session.cart?.length}). Falling through to Wizard.\x1b[0m`);
     }
 
     // 2. Product & Queue Logic
