@@ -8,20 +8,35 @@ try {
     const creds = process.env.GCP_SERVICE_ACCOUNT_KEY;
     if (!creds) throw new Error("GCP_SERVICE_ACCOUNT_KEY is missing from environment");
 
-    // ULTRA-ROBUST FIX: Some environments escape newlines or use single quotes.
-    // We clean the string aggressively before parsing.
+    // ULTRA-ROBUST FIX: Handle missing quotes, double escaping, and literal newlines.
     let cleanCreds = creds.trim();
     if (cleanCreds.startsWith("'") && cleanCreds.endsWith("'")) cleanCreds = cleanCreds.slice(1, -1);
     if (cleanCreds.startsWith('"') && cleanCreds.endsWith('"')) cleanCreds = cleanCreds.slice(1, -1);
-    cleanCreds = cleanCreds.replace(/\\n/g, '\n');
 
-    const credentials = JSON.parse(cleanCreds);
+    // Replace literal newlines with escaped ones, then convert escaped ones to real ones for the RSA key
+    cleanCreds = cleanCreds.replace(/\n/g, '\\n').replace(/\\n/g, '\n');
 
-    storage = new Storage({
-        credentials,
-        projectId: credentials.project_id || 'pini-print-bot'
-    });
-    console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
+    try {
+        const credentials = JSON.parse(cleanCreds);
+        storage = new Storage({
+            credentials,
+            projectId: credentials.project_id || 'pini-print-bot'
+        });
+        console.log(`[STORAGE] SUCCESSFULLY initialized GCP for ${credentials.project_id}`);
+    } catch (parseError) {
+        console.error(`🛑 [STORAGE] JSON Parse Error at pos ${parseError.message.match(/\d+/)?.[0]}:`, parseError.message);
+        // Attempt to show a snippet around the error position if available
+        const errorPosMatch = parseError.message.match(/\d+/);
+        const errorPos = errorPosMatch ? parseInt(errorPosMatch[0], 10) : -1;
+        if (errorPos !== -1) {
+            const snippetStart = Math.max(0, errorPos - 20);
+            const snippetEnd = Math.min(cleanCreds.length, errorPos + 20);
+            console.error(`🛑 [STORAGE] Snippet: ...${cleanCreds.substring(snippetStart, snippetEnd)}...`);
+        } else {
+            console.error(`🛑 [STORAGE] Full string (first 200 chars): ${cleanCreds.substring(0, 200)}...`);
+        }
+        storage = new Storage(); // Fallback to default storage initialization
+    }
 } catch (e) {
     console.error("🛑 [STORAGE] CRITICAL ERROR:", e.message);
     storage = new Storage();
