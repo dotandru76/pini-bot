@@ -1,0 +1,95 @@
+{
+  "test1": {
+    "input": "צריך 1000 כרטיסי ביקור",
+    "classification": {
+      "intent": "quote",
+      "product": "bc",
+      "mapped_params": {
+        "qty": 1000
+      },
+      "raw_text": "צריך 1000 כרטיסי ביקור",
+      "confidence": 1,
+      "_debug": {
+        "source": "Regex Fast-Path",
+        "cost": "₪0"
+      }
+    }
+  },
+  "test2": {
+    "input": "אהלן פיני, מה העניינים? אני רוצה להדפיס חוברת שירים לסבתא שלי.",
+    "classification": {
+      "intent": "quote",
+      "product": "booklet",
+      "event_context": null,
+      "answer_text": "שלום! איזה כיף! חוברת שירים לסבתא זה רעיון מקסים. אוכל לעזור לך עם זה. מה הכמות שתרצה?",
+      "recommended_products": [],
+      "mapped_params": {},
+      "_debug": {
+        "source": "LLM",
+        "tokens": {
+          "in": 467,
+          "out": 95,
+          "total": 562
+        },
+        "apiCost": "$0.00013"
+      },
+      "raw_text": "אהלן פיני, מה העניינים? אני רוצה להדפיס חוברת שירים לסבתא שלי."
+    },
+    "planner_question": "מצוין, מה גודל העמוד ברוטו? (💡 טיפ מפיני: ספרי קריאה רגילים מדפיסים ב-A5. אם אתה צריך A4, שתדע שאנחנו לרוב מדפיסים את הפנים על גלילי A3 ומקפלים, זה מנצל נפלא את הנייר)"
+  },
+  "test3": {
+    "input": "אני רוצה שלט אלוקובונד קטן, 10 על 10 ס\"מ.",
+    "classification": {
+      "intent": "quote",
+      "product": "alucobond",
+      "mapped_params": {
+        "qty": 1,
+        "size": "10x10"
+      },
+      "raw_text": "אני רוצה שלט אלוקובונד קטן, 10 על 10 ס\"מ.",
+      "confidence": 1,
+      "_debug": {
+        "source": "Regex Fast-Path",
+        "cost": "₪0"
+      },
+      "allDetectedProducts": [
+        "alucobond"
+      ]
+    },
+    "planner_actions": [
+      {
+        "type": "CALCULATE_AND_ADD",
+        "payload": {
+          "product": "שילוט אלוקובונד",
+          "description": "1 יח' פורמט רחב",
+          "qty": 1,
+          "client_price": 100,
+          "unit_price": "100.00",
+          "production_cost": "86.50",
+          "margin_warning": true,
+          "productName": "שילוט אלוקובונד",
+          "attributes": {
+            "qty": 1,
+            "size": "10x10"
+          }
+        }
+      },
+      {
+        "type": "GENERATE_RESPONSE",
+        "payload": {
+          "text": "✅ הוספתי לעגלה: שילוט אלוקובונד\n📝 מפרט: 1 יח' פורמט רחב\n💵 סה\"כ: ₪100",
+          "quickReplies": [
+            {
+              "label": "סיום וצ'ק אאוט",
+              "value": "checkout"
+            },
+            {
+              "label": "הוסף עוד פריט",
+              "value": "reset"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

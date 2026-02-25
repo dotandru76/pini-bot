@@ -42,7 +42,7 @@ async function classify(text, session) {
 
     // --- PHASE 1.3 Anti-Hallucination: Hybrid Detection (Regex Fast Path) ---
     // Bypass LLM completely for common structural requests like "1000 פליירים" or "500 כרטיסי ביקור"
-    const regexMatch = t.match(/^(\d+)\s*(פליירים|פלייר|כרטיסים|כרטיס|רולאפ|רולאפים|רול אפ)$/);
+    const regexMatch = t.match(/(\d+)\s*(פליירים|פלייר|כרטיסים|כרטיס|רולאפ|רולאפים|רול אפ)/);
     if (regexMatch) {
         let qty = parseInt(regexMatch[1]);
         let prodTerm = regexMatch[2];
@@ -65,14 +65,16 @@ async function classify(text, session) {
     // --- PHASE 1.3: UAT Hotfix Alucobond Bypass ---
     if (t.includes('אלוקובונד') || t.includes('alucobond')) {
         console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: quote (Alucobond Fast Path)\x1b[0m`);
-        return {
+        let fastPathObj = {
             intent: 'quote',
             product: 'alucobond',
-            mapped_params: {},
+            mapped_params: { qty: 1 }, // Default qty to 1 for Alucobond if missing
             raw_text: safeText,
             confidence: 1.0,
             _debug: { source: "Regex Fast-Path", cost: "₪0" }
         };
+        // העברת האובייקט בוולידטור כדי לדלות מידות (לדוגמה 10x10) דרך ה-Regex של הוולידטור
+        return validateLLMResult(fastPathObj, safeText, session);
     }
     // ------------------------------------------------------------------------
 

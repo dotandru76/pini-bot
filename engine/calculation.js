@@ -112,8 +112,9 @@ function calculateWideFormat(cart, params, productKey) {
         costPerSqm = PRICES.wide_base.cost_per_sqm_alucobond;
     }
 
-    let totalCost = totalSqm * costPerSqm;
-    let finalPrice = Math.max(PRICES.wide_base.min_price, Math.ceil(totalCost * PRICES.margins.wide_multiplier));
+    let totalCost = (totalSqm * costPerSqm) + (PRICES.wide_base.setup_fee || 0);
+    // המחיר ללקוח מבוסס תמיד על מינימום או עלות חומר מוכפלת (לא כולל המסה של סטראפ עלות ללקוח, אחרת השלט הקטן יהפוך למאות שקלים)
+    let finalPrice = Math.max(PRICES.wide_base.min_price, Math.ceil((totalSqm * costPerSqm) * PRICES.margins.wide_multiplier));
 
     console.log(`📐 [CALCULATION] Total SQM: ${totalSqm.toFixed(2)}. Cost/SQM: ₪${costPerSqm}`);
     console.log(`💎 [CALCULATION] Final Client Price (x${PRICES.margins.wide_multiplier} Markup): ₪${finalPrice}\n`);
