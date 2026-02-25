@@ -42,15 +42,19 @@ async function classify(text, session) {
     }
 
     // --- PHASE 1.3 Anti-Hallucination: Hybrid Detection (Regex Fast Path) ---
-    // Bypass LLM completely for common structural requests like "1000 פליירים" or "500 כרטיסי ביקור"
-    const regexMatch = t.match(/(\d+)\s*(פליירים|פלייר|כרטיסים|כרטיס|רולאפ|רולאפים|רול אפ)/);
+    // Bypass LLM completely for common structural requests like "1000 פליירים"
+    // CRITICAL FIX: Skip this if update keywords are present to avoid duplication.
+    const updateKeywords = ["תשנה", "תחליף", "עדכן", "כמות", "ל-", "למעלה", "למטה", "במקום", "update", "qty", "change", "replace", "fix"];
+    const isUpdateIntent = updateKeywords.some(k => t.includes(k));
+
+    const regexMatch = !isUpdateIntent && t.match(/(\d+)\s*(פליירים|פלייר|מדבקות|מדבקה|חוברת|חוברות|קטלוג)/);
     if (regexMatch) {
         let qty = parseInt(regexMatch[1]);
         let prodTerm = regexMatch[2];
         let detectedProduct = 'flyer';
 
-        if (prodTerm.includes('כרטיס')) detectedProduct = 'bc';
-        if (prodTerm.includes('רול')) detectedProduct = 'rollup';
+        if (prodTerm.includes('מדבק')) detectedProduct = 'sticker';
+        if (prodTerm.includes('חובר') || prodTerm.includes('קטלוג')) detectedProduct = 'booklet';
 
         console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: quote (Hybrid Regex Fast Path) | Product: ${detectedProduct} | Qty: ${qty}\x1b[0m`);
         return {
@@ -58,7 +62,7 @@ async function classify(text, session) {
             product: detectedProduct,
             mapped_params: { qty },
             raw_text: safeText,
-            confidence: 1.0, // Maximum confidence because it's a regex match
+            confidence: 1.0,
             _debug: { source: "Regex Fast-Path", cost: "₪0" }
         };
     }
