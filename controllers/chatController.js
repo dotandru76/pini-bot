@@ -1,113 +1,62 @@
 const { classifyMessage } = require('../engine/classifier');
-const { planActions } = require('../engine/planner');
+const { compileOrder } = require('../engine/planner');
 const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest } = require('../services/sessionManager');
 const { processImageUpload } = require('../engine/imageProcessor');
 const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
 
-/**
- * Handles incoming chat messages from the user.
- * Connects the router payload to the engine logic.
- */
 async function handleChat(req, res) {
-    const { message, userId, requestId } = req.body; // <--- requestId is now expected from Client
-
-    // --- PHASE 1.2: Hardening - Strict UUID Validation ---
-    if (!requestId) {
-        console.error(`💥 [API ERROR] 400 Bad Request: Missing requestId in payload for User: ${userId}`);
-        return res.status(400).json({ text: "Bad Request: Missing requestId UUID." });
-    }
-    if (!/^[0-9a-fA-F-]{36}$/.test(requestId)) {
-        console.error(`💥 [API ERROR] 400 Bad Request: Malformed requestId UUID '${requestId}' for User: ${userId}`);
-        return res.status(400).json({ text: "Bad Request: Invalid requestId UUID format." });
-    }
-
-    // Default fallback if a user doesn't provide an ID
+    const { message, userId, requestId } = req.body;
     const sessionID = userId || 'default_user';
     const session = getSession(sessionID);
 
-    console.log(`\n🔵 [${sessionID}] User: "${message}"`);
+    if (!requestId || !/^[0-9a-fA-F-]{36}$/.test(requestId)) {
+        return res.status(400).json({ text: "Bad Request: Invalid requestId UUID." });
+    }
 
-    // --- PHASE 1.2: Idempotency & Double Submit Guard ---
-    // פעולה סינכרונית - בדיקה ונעילה לפני כל גישה ל-AI או לוגיקה כבדה
     const lockResult = checkAndLockRequest(session, requestId, message);
-
-    if (lockResult.status === 'MISMATCH_ERROR') {
-        return res.status(400).json({ text: "שגיאת אבטחה: אי ההתאמה בתוכן הבקשה." });
-    }
-    if (lockResult.status === 'PROCESSING_ERROR') {
-        return res.status(429).json({ text: "אני כבר מעבד את הבקשה הזו, רק רגע..." });
-    }
-    if (lockResult.status === 'COMPLETED') {
-        // מתן תשובה מהדיקט בזיכרון (Idempotent Hit)
-        return res.json(lockResult.cachedResponse);
-    }
-    // ----------------------------------------------------
+    if (lockResult.status === 'PROCESSING_ERROR') return res.status(429).json({ text: "אני כבר מעבד את הבקשה הזו..." });
+    if (lockResult.status === 'COMPLETED') return res.json(lockResult.cachedResponse);
 
     try {
-        // 1. Comprehension (Classifier)
-        const classification = await classifyMessage(message, session);
+        // 1. Comprehension (Extractor)
+        const extraction = await classifyMessage(message, session);
 
-        // 2. Planning (Planner)
-        const plan = planActions(classification, session);
+        let finalResponse = { text: "שגיאה פנימית.", options: [], cart: session.cart };
 
-        // 3. Execution & Workflow Management
-        let responseText = "";
-        let quickReplies = [];
+        // 2. Handle System Intent vs Compiler Flow
+        if (extraction.intent === 'reset') {
+            session.cart = [];
+            session.currentProduct = null;
+            finalResponse.text = "המערכת אופסה. מה תרצה להזמין?";
+        }
+        else if (extraction.intent === 'show_cart') {
+            finalResponse.text = session.cart.length > 0 ? "זה מה שיש לנו בינתיים:" : "העגלה ריקה.";
+        }
+        else {
+            // 3. Planning (Conversational Compiler v4.0)
+            const compilation = compileOrder(extraction);
 
-        // --- PHASE 1.3 Anti-Hallucination: The Governance Bug Fix ---
-        // רשימה מורשית קשיחה המונעת מה-LLM להמציא פקודות ביצוע שאינן קיימות
-        const ALLOWED_ACTIONS = new Set(['PRESENT_OPTIONS', 'CALCULATE_AND_ADD', 'REMOVE_FROM_CART', 'GENERATE_RESPONSE', 'CLEAR_SESSION_CONTEXT']);
-
-        for (const action of plan.actions) {
-            if (!ALLOWED_ACTIONS.has(action.type)) {
-                console.error(`🛡️ [GOVERNANCE] Unauthorized LLM action rejected: ${action.type}`);
-                continue;
+            if (compilation.status === 'READY') {
+                // Bulk Add
+                compilation.data.forEach(item => session.cart.push(item));
+                finalResponse.text = extraction.answer_text + (compilation.data.length > 1 ? `\n(הוספתי ${compilation.data.length} פריטים לעגלה)` : "");
             }
-
-            else if (action.type === 'PRESENT_OPTIONS') {
-                session.currentProduct = action.product;
-                session.draftAttributes = action.saveDraft;
-                responseText = action.question;
-                quickReplies = action.options || [];
+            else if (compilation.status === 'CLARIFICATION_REQUIRED') {
+                finalResponse.text = compilation.clarification_blocks.join("\n");
+                finalResponse.options = ['כן, תמשיך', 'לא, בטל']; // Basic options
             }
-            else if (action.type === 'CALCULATE_AND_ADD') {
-                session.cart.push(action.payload);
-            }
-            else if (action.type === 'REMOVE_FROM_CART') {
-                if (session.cart.length > 0) session.cart.pop();
-            }
-            else if (action.type === 'GENERATE_RESPONSE') {
-                responseText = action.payload.text || action.template;
-                quickReplies = action.payload.quickReplies || [];
-            }
-            else if (action.type === 'CLEAR_SESSION_CONTEXT') {
-                session.currentProduct = null;
-                session.draftAttributes = {};
+            else if (compilation.status === 'HARD_FAIL') {
+                finalResponse.text = "משהו לא היה ברור בבקשה. " + (compilation.reason === 'AMBIGUOUS_QUANTITY' ? "לא ידעתי לאיזו כמות התכוונת לכל מוצר." : "תוכל לפרט יותר?");
             }
         }
 
-        const finalResponse = {
-            text: responseText,
-            options: quickReplies,
-            cart: session.cart,
-            debug: classification._debug // <-- Routing Debug Metadata
-        };
-
-        // --- PHASE 1.2: שמירת התשובה במטמון ושחרור הנעילה בהצלחה ---
+        finalResponse.debug = extraction._debug;
         cacheCompletedRequest(session, requestId, finalResponse);
-        // ------------------------------------------------------------
-
-        // Return final payload to the client
         res.json(finalResponse);
 
     } catch (error) {
-        console.error("💥 Controller Error handling chat:", error);
-
-        // --- PHASE 1.2: CLEANUP ON ERROR ---
-        // שחרור הנעילה במקרה של קריסה כדי למנוע דדלוק על הבקשה הזו
+        console.error("💥 Controller Error:", error);
         releaseFailedRequest(session, requestId);
-        // -----------------------------------
-
         res.status(500).json({ text: "אופס, נתקלתי בבעיה. נסה שוב." });
     }
 }

@@ -13,9 +13,43 @@ try {
     }
 } catch (e) { logAI("⚠️ Error: No API Key"); }
 
-// Definition of the Response Schema (AI Governance Law v1.0)
+/**
+ * Robust JSON Extraction & Schema Validation (CTO Mandate Phase 4)
+ */
+function extractAndValidateLLMResponse(rawText) {
+    // 1. Regex Extraction (Mandatory Layer)
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        throw new Error("HARD_FAIL: No JSON object found in LLM response.");
+    }
+
+    // 2. Cleanup: Strip code fences and trailing commas
+    let cleanJson = jsonMatch[0]
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .replace(/,\s*([\]}])/g, '$1'); // Remove trailing commas
+
+    let parsedData;
+    try {
+        parsedData = JSON.parse(cleanJson);
+    } catch (e) {
+        throw new Error(`HARD_FAIL: JSON Parsing failed after cleanup. Error: ${e.message}`);
+    }
+
+    // 3. Schema Validation Layer
+    if (!parsedData.products_detected || !Array.isArray(parsedData.products_detected)) {
+        throw new Error("HARD_FAIL: Missing or invalid 'products_detected' array.");
+    }
+    if (!parsedData.parameters_detected || !Array.isArray(parsedData.parameters_detected)) {
+        throw new Error("HARD_FAIL: Missing or invalid 'parameters_detected' array.");
+    }
+
+    return parsedData;
+}
+
+// Definition of the Response Schema (Phase 4 - Conversational Compiler)
 const schema = {
-    description: "Pini Engine Response Schema",
+    description: "Pini Compiler Schema v4.0",
     type: SchemaType.OBJECT,
     properties: {
         intent: {
@@ -23,46 +57,39 @@ const schema = {
             enum: ["quote", "consult", "chat", "remove", "reset", "update"],
             description: "The primary intention of the user."
         },
-        product: {
-            type: SchemaType.STRING,
-            nullable: true,
-            description: "The product key identified (e.g., 'flyer', 'sticker')."
-        },
-        event_context: {
-            type: SchemaType.STRING,
-            nullable: true,
-            enum: ["wedding", "exhibition", "business", "other"],
-            description: "The semantic context of the event."
-        },
         answer_text: {
             type: SchemaType.STRING,
-            description: "The Hebrew response to the user."
+            description: "Friendly Hebrew response."
         },
-        recommended_products: {
+        products_detected: {
             type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
-            description: "Strictly empty array per governance rules."
+            items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                    product: { type: SchemaType.STRING },
+                    confidence: { type: SchemaType.NUMBER }
+                },
+                required: ["product", "confidence"],
+                additionalProperties: false
+            }
         },
-        mapped_params: {
-            type: SchemaType.OBJECT,
-            properties: {
-                qty: { type: SchemaType.NUMBER, nullable: true },
-                paper: { type: SchemaType.STRING, nullable: true },
-                size: { type: SchemaType.STRING, nullable: true }
-            },
-            description: "Extracted non-technical parameters."
-        },
-        semantic_analysis: {
-            type: SchemaType.OBJECT,
-            properties: {
-                has_logo: { type: SchemaType.BOOLEAN, description: "Whether a logo is visible." },
-                is_legible: { type: SchemaType.BOOLEAN, description: "Whether the text is readable." },
-                style: { type: SchemaType.STRING, description: "Elegant, Modern, etc." }
-            },
-            description: "Semantic vision interpretation for Layer 2."
+        parameters_detected: {
+            type: SchemaType.ARRAY,
+            items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                    key: { type: SchemaType.STRING },
+                    value: { type: SchemaType.STRING },
+                    context: { type: SchemaType.STRING, description: "Product key or 'global'." },
+                    confidence: { type: SchemaType.NUMBER }
+                },
+                required: ["key", "value", "context", "confidence"],
+                additionalProperties: false
+            }
         }
     },
-    required: ["intent", "answer_text", "recommended_products"]
+    required: ["intent", "answer_text", "products_detected", "parameters_detected"],
+    additionalProperties: false
 };
 
 // Read Prompt configuration
@@ -81,7 +108,6 @@ async function routeWithLLM(message, session, imageBuffer = null) {
 
     if (!genAI) return { intent: 'chat', answer_text: "שגיאת חיבור ל-AI (חסר מפתח API)" };
 
-    // AI Governance: Deterministic structured output
     const model = genAI.getGenerativeModel({
         model: "gemini-2.0-flash",
         generationConfig: {
@@ -92,7 +118,6 @@ async function routeWithLLM(message, session, imageBuffer = null) {
         }
     });
 
-    // Inject Deterministic Layer 1 metadata into context if available
     const technicalContext = session.lastImageMetadata ?
         `\n[DETERMINISTIC METADATA (CODE-FIXED)]: ${JSON.stringify(session.lastImageMetadata)}` : "";
 
@@ -103,7 +128,7 @@ async function routeWithLLM(message, session, imageBuffer = null) {
     ];
 
     if (imageBuffer) {
-        logAI("📷 Image detected. Activating Layer 2 Semantic Vision.");
+        logAI("📷 Image detected. Activating Multimodal context.");
         promptParts.push({
             inlineData: {
                 data: imageBuffer.toString('base64'),
@@ -113,30 +138,38 @@ async function routeWithLLM(message, session, imageBuffer = null) {
     }
 
     try {
-        console.time(`⏱️ [LLM] Governance Response`);
+        console.time(`⏱️ [LLM] Phase 4 Request`);
         const result = await model.generateContent({ contents: [{ role: "user", parts: promptParts }] });
-        console.timeEnd(`⏱️ [LLM] Governance Response`);
+        console.timeEnd(`⏱️ [LLM] Phase 4 Request`);
+
+        const response = result.response;
+        const rawText = response.text();
+
+        // 1. New Extraction & Validation Logic
+        const parsedObj = extractAndValidateLLMResponse(rawText);
 
         const usage = result.response.usageMetadata;
         let tokenData = usage ? { in: usage.promptTokenCount, out: usage.candidatesTokenCount, total: usage.totalTokenCount } : null;
-
-        const response = result.response;
-        const parsedObj = JSON.parse(response.text());
 
         const apiCostRaw = tokenData ? ((tokenData.in * 0.075 / 1000000) + (tokenData.out * 0.30 / 1000000)) : 0;
         recordInferenceCost(apiCostRaw);
 
         parsedObj._debug = {
-            source: imageBuffer ? "Vision-Layer2" : "LLM-Structured",
             tokens: tokenData,
-            governance: "v1.0-Structured"
+            governance: "v4.0-Compiler"
         };
 
         return parsedObj;
 
     } catch (error) {
-        console.error(`[GOVERNANCE AI ERROR]:`, error.message);
-        return { intent: "chat", answer_text: "סליחה, אני חווה קושי קטן בניתוח הסמנטי. ננסה שוב?", recommended_products: [] };
+        console.error(`[COMPILER AI ERROR]:`, error.message);
+        // Soft fail to a consistent structure
+        return {
+            intent: "chat",
+            answer_text: "סליחה, אני חווה קושי קטן בעיבוד הבקשה. נסה שוב?",
+            products_detected: [],
+            parameters_detected: []
+        };
     }
 }
 
