@@ -30,7 +30,7 @@ const PRODUCT_NAMES_HE = {
     'roll_stickers': 'מדבקות בגלילים',
     'scodix': 'כרטיסי יוקרה סקודיקס'
 };
-const MAIN_MENU_BUTTONS = []; // UI Purge: Removed Main Menu, BC, and Rollup buttons as requested.
+const MAIN_MENU_BUTTONS = [{ label: 'דבר עם נציג 📞', value: 'human' }]; // UI Purge: Only human rep button allowed in fallback.
 
 const PRODUCT_KEYWORDS = {
     'bc': ['כרטיס', 'ביקור', 'cards'],
@@ -103,31 +103,39 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: intentData.payload.index } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ הפריט הוסר מהעגלה.`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    if (intentData.intent === 'update_qty' || (intentData.intent === 'update' && intentData.payload && intentData.payload.index !== undefined)) {
-        const { index, qty } = intentData.payload || intentData;
-        if (session.cart[index]) {
-            console.log(`\x1b[33m🔄 [PLANNER] Recalculating Item ${index} after Qty Update to ${qty}...\x1b[0m`);
+    if (intentData.intent === 'update_qty' || intentData.intent === 'update') {
+        const payload = intentData.payload || {};
+        let index = payload.index;
+        let qty = payload.qty;
 
-            // Temporary attributes for recalculation
-            const attributes = { ...session.cart[index].attributes, qty, product: session.cart[index].productKey || session.cart[index].product };
+        // --- FIX: Default to last item if index is missing (common for "update qty to 500") ---
+        if (index === undefined && session.cart.length > 0) {
+            index = session.cart.length - 1;
+            console.log(`\x1b[33m🔄 [PLANNER] Index missing in update payload. Defaulting to last item (Index ${index}).\x1b[0m`);
+        }
 
-            try {
-                // Calculate WITHOUT appending (pass empty array as baseline cart)
-                const calcResult = calculate_custom_job([], attributes);
-
-                if (calcResult && calcResult.lastAdded) {
-                    session.cart[index] = {
-                        ...session.cart[index],
-                        ...calcResult.lastAdded,
-                        qty: qty // Ensure qty is explicitly set
-                    };
-                }
-            } catch (e) {
-                console.error("[PLANNER] Error during qty recalculation:", e.message);
-                session.cart[index].qty = qty; // Fallback to just updating qty
+        if (index !== undefined && session.cart[index]) {
+            // If qty is missing from payload, try to extract it from mapped_params or raw text
+            if (!qty) {
+                const params = intentData.mapped_params || {};
+                qty = params.qty || parseInt(String(intentData.raw_text).match(/\d+/)?.[0]);
             }
 
-            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `✅ הכמות עודכנה ל-${qty}.`, quickReplies: [] } }] };
+            if (qty) {
+                console.log(`\x1b[33m🔄 [PLANNER] Replacing Item ${index} with updated Qty ${qty}...\x1b[0m`);
+                const attributes = { ...session.cart[index].attributes, qty, product: session.cart[index].productKey || session.cart[index].product };
+
+                try {
+                    const calcResult = calculate_custom_job([], attributes);
+                    if (calcResult && calcResult.lastAdded) {
+                        session.cart[index] = { ...session.cart[index], ...calcResult.lastAdded, qty };
+                    }
+                } catch (e) {
+                    console.error("[PLANNER] Error during qty recalculation:", e.message);
+                    session.cart[index].qty = qty;
+                }
+                return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `✅ הכמות עודכנה ל-${qty}.`, quickReplies: [] } }] };
+            }
         }
     }
 

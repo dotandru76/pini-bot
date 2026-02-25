@@ -52,7 +52,7 @@ function validateLLMResult(llmResult, userText, session) {
     }
 
     // שאר הקוד נשאר אותו דבר...
-    const updateKeywords = ["תשנה", "תחליף", "עדכן", "כמות", "ל-", "למעלה", "למטה", "במקום"];
+    const updateKeywords = ["תשנה", "תחליף", "עדכן", "כמות", "ל-", "למעלה", "למטה", "במקום", "update", "qty", "change", "replace", "fix"];
     if (updateKeywords.some(k => text.includes(k))) {
         result.intent = 'update';
     }

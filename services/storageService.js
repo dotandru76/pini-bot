@@ -8,18 +8,21 @@ try {
     const creds = process.env.GCP_SERVICE_ACCOUNT_KEY;
     if (!creds) throw new Error("GCP_SERVICE_ACCOUNT_KEY is missing from environment");
 
-    // Clean potential whitespace or hidden chars that sometimes sneak into env vars
-    const cleanCreds = creds.trim();
+    // ULTRA-ROBUST FIX: Some environments escape newlines or use single quotes.
+    // We clean the string aggressively before parsing.
+    let cleanCreds = creds.trim();
+    if (cleanCreds.startsWith("'") && cleanCreds.endsWith("'")) cleanCreds = cleanCreds.slice(1, -1);
+    cleanCreds = cleanCreds.replace(/\\n/g, '\n'); // Ensure newlines in private key are preserved correctly
+
     const credentials = JSON.parse(cleanCreds);
 
     storage = new Storage({
         credentials,
         projectId: credentials.project_id
     });
-    console.log(`[STORAGE] Successfully initialized with project: ${credentials.project_id}`);
+    console.log(`[STORAGE] SUCCESSFULLY initialized with project: ${credentials.project_id}`);
 } catch (e) {
-    console.error("🛑 [STORAGE] CRITICAL: Failed to load GCP credentials", e.message);
-    // Nuclear fallback to avoid total crash, but signed URLs will fail if env is broken
+    console.error("🛑 [STORAGE] CRITICAL: Failed to load GCP credentials. This will cause 500 errors on Signed URL requests.", e.message);
     storage = new Storage();
 }
 
