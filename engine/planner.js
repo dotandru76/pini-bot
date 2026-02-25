@@ -30,7 +30,7 @@ const PRODUCT_NAMES_HE = {
     'roll_stickers': 'מדבקות בגלילים',
     'scodix': 'כרטיסי יוקרה סקודיקס'
 };
-const MAIN_MENU_BUTTONS = [{ label: '📋 תפריט ראשי', value: 'reset' }, { label: 'כרטיסי ביקור', value: 'bc' }, { label: 'רולאפ', value: 'rollup' }];
+const MAIN_MENU_BUTTONS = []; // UI Purge: Removed Main Menu, BC, and Rollup buttons as requested.
 
 const PRODUCT_KEYWORDS = {
     'bc': ['כרטיס', 'ביקור', 'cards'],
@@ -69,7 +69,7 @@ function planActions(intentData, session) {
                     type: 'GENERATE_RESPONSE',
                     payload: {
                         text: rejectionMsg + "\n\nננסה שוב? אפשר להעלות קובץ חדש או לתאר מה לשנות.",
-                        quickReplies: [{ label: 'דבר עם נציג', value: 'human' }, { label: 'תפריט ראשי', value: 'reset' }]
+                        quickReplies: [{ label: 'דבר עם נציג', value: 'human' }]
                     }
                 }]
             };
@@ -103,25 +103,31 @@ function planActions(intentData, session) {
         return { actions: [{ type: 'REMOVE_FROM_CART', payload: { index: intentData.payload.index } }, { type: 'GENERATE_RESPONSE', payload: { text: `🗑️ הפריט הוסר מהעגלה.`, quickReplies: MAIN_MENU_BUTTONS } }] };
     }
 
-    if (intentData.intent === 'update_qty') {
-        const { index, qty } = intentData.payload;
+    if (intentData.intent === 'update_qty' || (intentData.intent === 'update' && intentData.payload && intentData.payload.index !== undefined)) {
+        const { index, qty } = intentData.payload || intentData;
         if (session.cart[index]) {
-            // In a full implementation, we would recalculate the price here instead of just updating qty
-            // For now, we update the qty and calculate a rough new price if it's strictly proportional, or ideally trigger a recalculate action.
-            session.cart[index].qty = qty;
+            console.log(`\x1b[33m🔄 [PLANNER] Recalculating Item ${index} after Qty Update to ${qty}...\x1b[0m`);
 
-            // Quick recalculation for the specific item
+            // Temporary attributes for recalculation
+            const attributes = { ...session.cart[index].attributes, qty, product: session.cart[index].productKey || session.cart[index].product };
+
             try {
-                const { calculateCustom } = require('../services/productionEngine');
-                const calcResult = calculateCustom(session.cart[index].attributes || session.cart[index]);
-                if (calcResult && calcResult.client_price) {
-                    session.cart[index].client_price = calcResult.client_price;
+                // Calculate WITHOUT appending (pass empty array as baseline cart)
+                const calcResult = calculate_custom_job([], attributes);
+
+                if (calcResult && calcResult.lastAdded) {
+                    session.cart[index] = {
+                        ...session.cart[index],
+                        ...calcResult.lastAdded,
+                        qty: qty // Ensure qty is explicitly set
+                    };
                 }
             } catch (e) {
-                console.log("Could not recalculate automatically");
+                console.error("[PLANNER] Error during qty recalculation:", e.message);
+                session.cart[index].qty = qty; // Fallback to just updating qty
             }
 
-            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `✅ הכמות עודכנה ל-${qty}.`, quickReplies: MAIN_MENU_BUTTONS } }] };
+            return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: `✅ הכמות עודכנה ל-${qty}.`, quickReplies: [] } }] };
         }
     }
 
@@ -150,13 +156,20 @@ function planActions(intentData, session) {
 
     if (!currentProductKey) {
         let aiTalk = intentData.answer_text || intentData.aiResponse || "מה נדפיס היום?";
-        let customButtons = [];
+        let customButtons = [{ label: 'דבר עם נציג', value: 'human' }]; // Minimalist fallback
 
         if (intentData.recommended_products && intentData.recommended_products.length > 0) {
-            customButtons = intentData.recommended_products.map(key => {
-                return { label: PRODUCT_NAMES_HE[key] || key, value: key };
-            });
+            // UI Purge: Hard filter to prevent "Ghost Buttons" (BC, Rollup, Main Menu) from appearing
+            const BANNED_BUTTONS = ['bc', 'rollup', 'main_menu', 'reset'];
+            customButtons = intentData.recommended_products
+                .filter(key => !BANNED_BUTTONS.includes(key))
+                .map(key => {
+                    return { label: PRODUCT_NAMES_HE[key] || key, value: key };
+                });
         }
+
+        // If after filtering we have no buttons, default to human rep
+        if (customButtons.length === 0) customButtons = [{ label: 'דבר עם נציג', value: 'human' }];
 
         return { actions: [{ type: 'GENERATE_RESPONSE', payload: { text: aiTalk, quickReplies: customButtons } }] };
     }

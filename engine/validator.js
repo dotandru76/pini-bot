@@ -52,11 +52,12 @@ function validateLLMResult(llmResult, userText, session) {
     }
 
     // שאר הקוד נשאר אותו דבר...
-    if (text.includes("תשנה") || text.includes("תחליף")) {
+    const updateKeywords = ["תשנה", "תחליף", "עדכן", "כמות", "ל-", "למעלה", "למטה", "במקום"];
+    if (updateKeywords.some(k => text.includes(k))) {
         result.intent = 'update';
     }
 
-    const sizeMatch = text.match(/(\d+)\s*(?:x|X|\*|על)\s*(\d+)/);
+    const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:x|X|\*|על)\s*(\d+(?:\.\d+)?)/);
     if (sizeMatch) {
         result.mapped_params.size = `${sizeMatch[1]}x${sizeMatch[2]}`;
         if (result.intent === 'chat') result.intent = 'update';

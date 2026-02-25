@@ -62,11 +62,11 @@ async function handleChat(req, res) {
                 continue;
             }
 
-            if (action.type === 'PRESENT_OPTIONS') {
+            else if (action.type === 'PRESENT_OPTIONS') {
                 session.currentProduct = action.product;
                 session.draftAttributes = action.saveDraft;
                 responseText = action.question;
-                quickReplies = action.options || []; // <--- Ensuring explicit override
+                quickReplies = action.options || [];
             }
             else if (action.type === 'CALCULATE_AND_ADD') {
                 session.cart.push(action.payload);
@@ -76,7 +76,7 @@ async function handleChat(req, res) {
             }
             else if (action.type === 'GENERATE_RESPONSE') {
                 responseText = action.payload.text || action.template;
-                quickReplies = action.payload.quickReplies || []; // <--- Explicit clear/override
+                quickReplies = action.payload.quickReplies || [];
             }
             else if (action.type === 'CLEAR_SESSION_CONTEXT') {
                 session.currentProduct = null;

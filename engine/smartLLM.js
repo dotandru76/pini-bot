@@ -27,9 +27,9 @@ const TASK_PROMPTS = {
  */
 async function handleWithSmartLLM(message, session, customer) {
     if (!model) {
-        return { 
-            content: "סליחה, המוח שלי קצת עמוס. בוא ננסה לבחור מהתפריט.", 
-            quickReplies: [] 
+        return {
+            content: "סליחה, המוח שלי קצת עמוס. בוא ננסה לבחור מהתפריט.",
+            quickReplies: []
         };
     }
 
@@ -39,10 +39,10 @@ async function handleWithSmartLLM(message, session, customer) {
         הודעה: "${message}"
         הנחיה: ענה בעברית, קצר (עד 20 מילים). אל תמציא מחירים.
         `;
-        
+
         const result = await model.generateContent(context);
         const response = result.response.text();
-        
+
         return {
             content: response,
             quickReplies: [] // אפשר להוסיף לוגיקה כאן אם רוצים
@@ -51,8 +51,8 @@ async function handleWithSmartLLM(message, session, customer) {
     } catch (error) {
         console.error("LLM Error:", error);
         return {
-            content: "לא הצלחתי להבין לגמרי. תוכל לבחור מהתפריט?",
-            quickReplies: [{text: "תפריט ראשי", value: "start"}]
+            content: "לא הצלחתי להבין לגמרי. אולי תנסה לנסח אחרת?",
+            quickReplies: []
         };
     }
 }

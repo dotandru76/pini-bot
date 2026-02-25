@@ -2,9 +2,27 @@
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 
-// Initialize GCP Storage. In production, credentials should be in environment variables (GCP_SERVICE_ACCOUNT_KEY)
-// or use the server's default service account metadata.
-const storage = new Storage();
+// Initialize GCP Storage using credentials parsed directly from ENV
+let storage;
+try {
+    const creds = process.env.GCP_SERVICE_ACCOUNT_KEY;
+    if (!creds) throw new Error("GCP_SERVICE_ACCOUNT_KEY is missing from environment");
+
+    // Clean potential whitespace or hidden chars that sometimes sneak into env vars
+    const cleanCreds = creds.trim();
+    const credentials = JSON.parse(cleanCreds);
+
+    storage = new Storage({
+        credentials,
+        projectId: credentials.project_id
+    });
+    console.log(`[STORAGE] Successfully initialized with project: ${credentials.project_id}`);
+} catch (e) {
+    console.error("🛑 [STORAGE] CRITICAL: Failed to load GCP credentials", e.message);
+    // Nuclear fallback to avoid total crash, but signed URLs will fail if env is broken
+    storage = new Storage();
+}
+
 const BUCKET_NAME = process.env.GCP_STORAGE_BUCKET || 'pini-print-uploads';
 
 /**
