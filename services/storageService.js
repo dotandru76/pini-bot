@@ -17,34 +17,48 @@ try {
     cleanCreds = cleanCreds.replace(/\r?\n/g, '\\n').replace(/\\\\n/g, '\\n');
 
     let credentials;
-    try {
-        // Try direct parse first
-        credentials = JSON.parse(cleanCreds);
-    } catch (parseError) {
-        console.warn(`[STORAGE] Direct JSON parse failed (${parseError.message}), attempting line-by-line fix...`);
-        // The most common error is literal newlines in the private_key value.
-        // We replace newlines with escaped \n if they look like they are inside a string.
-        // A simpler, safer way for GCP keys: Just replace all newlines with \n but then 
-        // restore structural JSON elements.
-        const fixed = cleanCreds
-            .replace(/\r?\n/g, '\\n') // Escape all newlines
-            .replace(/\\n\s*{\\n/g, '{\n') // Restore object starts
-            .replace(/\\n\s*}\\n/g, '\n}') // Restore object ends
-            .replace(/\\n\s*",/g, '",\n') // Restore comma separation
-            .replace(/\\n\s*"/g, '\n"'); // Restore key starts
+    let tryContent = cleanCreds;
 
+    // --- STEP 1: Aggressive Unquoting ---
+    // Handle cases where the key is wrapped in multiple layers of escaped quotes
+    for (let i = 0; i < 3; i++) {
+        tryContent = tryContent.trim();
+        if (tryContent.startsWith('\\"') && tryContent.endsWith('\\"')) {
+            tryContent = tryContent.slice(2, -2);
+        } else if (tryContent.startsWith('"') && tryContent.endsWith('"')) {
+            tryContent = tryContent.slice(1, -1);
+        } else if (tryContent.startsWith("'") && tryContent.endsWith("'")) {
+            tryContent = tryContent.slice(1, -1);
+        } else {
+            break;
+        }
+    }
+
+    // --- STEP 2: Multi-Stage Parsing ---
+    try {
+        // Try direct parse
+        credentials = JSON.parse(tryContent);
+    } catch (parseError) {
+        console.warn(`[STORAGE] Direct JSON parse failed (${parseError.message}), attempting normalization...`);
+
+        // Handle literal newlines and internal escape corruption
+        let normalized = tryContent
+            .replace(/\r?\n/g, '\\n') // Escape real newlines
+            .replace(/\\\\n/g, '\\n') // Fix double-escaped newlines
+            .replace(/\\"/g, '"');    // Unescape internal quotes if they were escaped globally
+
+        // Final sanity check: if it starts with "{" but ends with "}" and still fails, 
+        // it might have escaped control characters.
         try {
-            credentials = JSON.parse(fixed);
+            credentials = JSON.parse(normalized);
         } catch (e2) {
-            console.error(`🛑 [STORAGE] Line-by-line fix ALSO failed:`, e2.message);
-            // Last resort: If it's a multi-line string, it might just need the "one-line" treatment
-            // and relying on the RSA parser to handle the key.
+            console.error(`🛑 [STORAGE] Normalization failed. Last resort - "One-Line" try.`);
             try {
-                const oneLiner = cleanCreds.replace(/\r?\n/g, ' ');
+                const oneLiner = tryContent.replace(/\r?\n/g, ' ').replace(/\\n/g, '\n');
                 credentials = JSON.parse(oneLiner);
             } catch (e3) {
-                console.error(`🛑 [STORAGE] One-liner fix failed:`, e3.message);
-                throw new Error("Unable to parse GCP_SERVICE_ACCOUNT_KEY JSON");
+                console.error(`🛑 [STORAGE] ALL PARSING ATTEMPTS FAILED.`);
+                throw new Error(`Unable to parse GCP_SERVICE_ACCOUNT_KEY JSON. Error: ${e3.message}`);
             }
         }
     }
