@@ -1,6 +1,8 @@
 const { classifyMessage } = require('../engine/classifier');
 const { planActions } = require('../engine/planner');
 const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest } = require('../services/sessionManager');
+const { processImageUpload } = require('../engine/imageProcessor');
+const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
 
 /**
  * Handles incoming chat messages from the user.
@@ -110,6 +112,53 @@ async function handleChat(req, res) {
     }
 }
 
+/**
+ * Handles image uploads deterministically (AI Governance Layer 1).
+ */
+async function handleImageUpload(req, res) {
+    const { userId } = req.body;
+    const sessionID = userId || 'default_user';
+    const session = getSession(sessionID);
+
+    if (!req.file) {
+        return res.status(400).json({ text: "לא הועלה קובץ." });
+    }
+
+    try {
+        console.log(`📸 [${sessionID}] Image Upload Received: ${req.file.originalname}`);
+
+        // 1. LAYER 1: Deterministic Extraction (Code is Judge)
+        const technicalPayload = await processImageUpload(req.file.buffer);
+
+        // 2. GOVERNANCE: Consult the Decision Kernel
+        const kernelVerdict = analyzePrintReadyStatus(technicalPayload, session);
+
+        if (kernelVerdict.status === 'REJECT_LOW_RES') {
+            const refusal = `עצור! המערכת זיהתה שהקובץ ברזולוציה נמוכה מדי להדפסה (${technicalPayload.dpi} DPI). נדרש לפחות 150 DPI לתוצאה איכותית. אנא העלה קובץ איכותי יותר.`;
+            return res.json({
+                text: refusal,
+                status: kernelVerdict.status,
+                technical: technicalPayload
+            });
+        }
+
+        // 3. If passed Layer 1, store metadata and proceed to Layer 2 (Semantic)
+        session.lastImageMetadata = technicalPayload;
+
+        return res.json({
+            text: "הקובץ נבדק טכנית ונמצא תקין! על מה נדפיס אותו?",
+            status: kernelVerdict.status,
+            technical: technicalPayload,
+            options: ['פליירים', 'פוסטרים', 'מדבקות']
+        });
+
+    } catch (error) {
+        console.error("💥 Controller Error handling image upload:", error);
+        res.status(500).json({ text: error.message || "אופס, נתקלתי בבעיה בעיבוד התמונה." });
+    }
+}
+
 module.exports = {
-    handleChat
+    handleChat,
+    handleImageUpload
 };

@@ -130,14 +130,12 @@ async function classify(text, session) {
         }
 
         const llmResult = await routeWithLLM(safeText, session, imageBuffer);
-        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: ${llmResult.intent || 'chat'} (${imageBuffer ? 'Vision' : 'LLM'} Inference)\x1b[0m`);
-        console.log(`🤖 [LLM RAW RESULT]:`, JSON.stringify(llmResult));
+        console.log(`\x1b[35m🔍 [X-RAY CLASSIFIER] Intent: ${llmResult.intent || 'chat'} (${imageBuffer ? 'Vision-Layer2' : 'LLM-Structured'})\x1b[0m`);
+
+        // --- GOVERNANCE FIX: Preserve Raw Text for Planner ---
+        llmResult.raw_text = safeText;
+
         const validated = validateLLMResult(llmResult, safeText, session);
-
-        // --- FIX V98.0: הצמדת הטקסט המקורי ---
-        // זה מבטיח שה-Planner יקבל את המספר "500" גם אם ה-LLM פספס אותו
-        validated.raw_text = safeText;
-
         return validated;
     } catch (e) {
         console.error("Classifier Error:", e);
