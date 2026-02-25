@@ -108,6 +108,10 @@ function calculateWideFormat(cart, params, productKey) {
     }
 
     let costPerSqm = PRICES.wide_base.cost_per_sqm;
+    if (productKey === 'alucobond') {
+        costPerSqm = PRICES.wide_base.cost_per_sqm_alucobond;
+    }
+
     let totalCost = totalSqm * costPerSqm;
     let finalPrice = Math.max(PRICES.wide_base.min_price, Math.ceil(totalCost * PRICES.margins.wide_multiplier));
 

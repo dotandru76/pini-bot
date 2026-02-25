@@ -7,6 +7,7 @@
     },
     "wide_base": {
         "cost_per_sqm": 50,
+        "cost_per_sqm_alucobond": 150,
         "min_price": 100
     },
     "margins": {

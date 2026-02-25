@@ -242,9 +242,11 @@ function planActions(intentData, session) {
     if (nextQuestion) {
         const productNameHE = PRODUCT_NAMES_HE[currentProductKey] || currentProductKey;
         // --- PHASE 1.3: Persona Injection ---
-        const warmGreetings = ["בשמחה!", "מעולה.", "מצוין, בוא נתקדם.", "בטח!", "סגור."];
+        const warmGreetings = ["בטח", "בשמחה", "מעולה", "קיבלתי", "מצוין"];
         const randomGreeting = warmGreetings[Math.floor(Math.random() * warmGreetings.length)];
-        const prefix = Object.keys(draft).length === 0 ? `${randomGreeting} אני מכין לך הצעה על ${productNameHE}.\n\n` : ``;
+        const prefix = Object.keys(draft).length === 0 ?
+            `${randomGreeting}, בוא נתקדם עם ה${productNameHE} שלך.\n\n` :
+            `${randomGreeting}, `;
 
         console.log(`\x1b[33m🔍 [X-RAY PLANNER] Missing Data! Asking question for key: ${nextQuestion.key}\x1b[0m`);
 
