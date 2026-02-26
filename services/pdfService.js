@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Creates a PDF quote natively using PDFKit.
@@ -8,15 +10,11 @@ const PDFDocument = require('pdfkit');
  * @param {Object} customerProfile - Customer details
  * @returns {Promise<Buffer>} - Resolves with the PDF file buffer
  */
-async function generateQuotePDF(cart, customerProfile) {
+async function generateQuotePDF(cart, customerProfile, isDraft = false) {
     return new Promise((resolve, reject) => {
         try {
-            console.log("🚀 Generating PDF Quote (PDFKit Mode)...");
+            console.log(`🚀 Generating PDF Quote (PDFKit Mode, isDraft: ${isDraft})...`);
 
-            // Create a document
-            // We use 'hebrew' settings where appropriate, though PDFKit has limitations with RTL text natively.
-            // For simple quotes, basic left-to-right English or carefully placed Hebrew strings work, 
-            // but for full right-to-left Hebrew shaping we need to reverse the text or use a font that supports Hebrew well.
             const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
             const buffers = [];
@@ -31,33 +29,39 @@ async function generateQuotePDF(cart, customerProfile) {
                 reject(err);
             });
 
-            // Register a unicode font (crucial for Hebrew!). 
-            // In a real production app, ensure you have a .ttf file in a /fonts directory.
-            // Fallback to standard Helvetica if no custom font is provided right now.
-            // doc.font('fonts/Heebo-Regular.ttf');
+            const fontPath = path.join(__dirname, '../public/fonts/Arimo-Regular.ttf');
+            const hasHebrewFont = fs.existsSync(fontPath);
 
             const customerName = customerProfile?.name || 'Dear Customer';
             const dateStr = new Date().toLocaleDateString('he-IL');
 
             // Header Section
-            doc.fontSize(24).fillColor('#008069').text('Price Quote', { align: 'center' });
-            doc.fontSize(14).fillColor('#666666').text('Dfus Beit Yitzhak', { align: 'center' });
+            if (hasHebrewFont) doc.font(fontPath);
+            doc.fontSize(24).fillColor('#008069').text(reverseHebrew('הצעת מחיר - דפוס בית יצחק'), { align: 'center' });
+            doc.fontSize(14).fillColor('#666666').text('Price Quote', { align: 'center' });
+
+            if (isDraft) {
+                doc.moveDown(1);
+                doc.fontSize(16).fillColor('#d32f2f').text(reverseHebrew('טיוטה - חסר מפרט טכני'), { align: 'center' });
+                doc.fontSize(10).text(reverseHebrew('המחיר הסופי עשוי להשתנות עם השלמת הפרטים.'), { align: 'center' });
+            }
+
             doc.moveDown(2);
 
             // Customer Info Box
             doc.rect(50, doc.y, 495, 60).fillAndStroke('#f8f9fa', '#eeeeee');
-            doc.fillColor('#333333').fontSize(12);
+            doc.fillColor('#333333').fontSize(12).font('Helvetica');
             doc.text(`For: ${customerName}`, 60, doc.y - 45);
             doc.text(`Date: ${dateStr}`, 60, doc.y + 5);
             doc.moveDown(3);
 
             // Table Header
             const tableTop = doc.y;
-            doc.font('Helvetica-Bold').fontSize(12).fillColor('#008069');
-            doc.text('#', 50, tableTop);
-            doc.text('Item', 100, tableTop);
-            doc.text('Qty', 350, tableTop);
-            doc.text('Price (ILS)', 450, tableTop);
+            doc.fontSize(12).fillColor('#008069');
+            doc.text('#', 545, tableTop);
+            doc.text(reverseHebrew('מוצר'), 400, tableTop, { align: 'right' });
+            doc.text(reverseHebrew('כמות'), 150, tableTop, { align: 'right' });
+            doc.text(reverseHebrew('מחיר (₪)'), 50, tableTop, { align: 'right' });
 
             doc.moveTo(50, tableTop + 20).lineTo(545, tableTop + 20).stroke('#dddddd');
 
@@ -66,26 +70,26 @@ async function generateQuotePDF(cart, customerProfile) {
 
             // Table Rows
             cart.forEach((item, index) => {
-                const price = item.client_price || 0;
+                // Phase 5.3: Robust Mapping (V3 vs V4)
+                const isPending = item.isPending === true;
+                const price = isPending ? 0 : (item.pricing_snapshot?.client_price || item.client_price || 0);
+                const qty = item.validated_params?.qty || item.qty || 0;
+                const label = item.displayName || item.product_name || item.product || 'פריט';
 
                 // Print Row
-                doc.text(`${index + 1}`, 50, y);
-                doc.text(item.product_name || 'Item', 100, y);
-                doc.text(`${item.qty}`, 350, y);
-                doc.text(`ILS ${price}`, 450, y);
+                doc.text(`${index + 1}`, 545, y);
+                doc.text(reverseHebrew(label), 300, y, { align: 'right', width: 220 });
+                doc.text(`${qty > 0 ? qty : '-'}`, 150, y, { align: 'right' });
+                doc.text(isPending ? reverseHebrew('ממתין') : `₪${price.toLocaleString()}`, 50, y, { align: 'right' });
 
                 y += 15;
 
                 // Description (if any)
-                if (item.description) {
+                const desc = item.description || item.validated_params?.paper_type || '';
+                if (desc) {
                     doc.fillColor('#888888').fontSize(8);
-
-                    // We need to strip or translate Hebrew for now if font isn't loaded, 
-                    // but for code replacement sake we place the description.
-                    doc.text(item.description, 100, y, { width: 230 });
-
-                    // Advance Y based on description height
-                    y += doc.heightOfString(item.description, { width: 230 }) + 5;
+                    doc.text(reverseHebrew(desc), 100, y, { width: 420, align: 'right' });
+                    y += doc.heightOfString(desc, { width: 420 }) + 5;
                     doc.fillColor('#333333').fontSize(10);
                 } else {
                     y += 5;
@@ -98,9 +102,14 @@ async function generateQuotePDF(cart, customerProfile) {
 
             // Total
             y += 10;
-            const total = cart.reduce((sum, i) => sum + (i.client_price || 0), 0);
-            doc.font('Helvetica-Bold').fontSize(14).fillColor('#008069');
-            doc.text(`Total to Pay: ILS ${total}`, 50, y, { align: 'right' });
+            const total = cart.reduce((sum, i) => sum + (i.isPending ? 0 : (i.pricing_snapshot?.client_price || i.client_price || 0)), 0);
+            doc.fontSize(14).fillColor('#008069');
+            doc.text(reverseHebrew(`סה"כ לתשלום: ₪${total.toLocaleString()}`), 50, y, { align: 'right' });
+
+            if (isDraft) {
+                y += 20;
+                doc.fontSize(10).fillColor('#d32f2f').text('* Final total may change upon specification completion.', 50, y, { align: 'right' });
+            }
 
             // Footer & Visual Trust Section (Phase 5.3)
             doc.y = 700;

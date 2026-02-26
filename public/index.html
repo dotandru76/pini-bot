@@ -557,22 +557,32 @@
                 </div>`;
             } else {
                 cart.forEach((item, index) => {
-                    const price = item.client_price || 0;
+                    // Phase 5.3: Cross-compatible mapping (V3 vs V4)
+                    const price = item.pricing_snapshot?.client_price || item.client_price || 0;
+                    const qty = item.validated_params?.qty || item.qty || 0;
+                    const label = item.displayName || item.product_name || item.product || 'פריט';
+                    const desc = item.description || item.validated_params?.paper_type || '';
+
+                    const isPending = item.isPending === true;
+                    const priceDisplay = isPending ? '<span style="color: #d32f2f; font-size: 0.8rem;">ממתין למפרט</span>' : `₪${price.toLocaleString()}`;
+
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'cart-item';
+                    itemDiv.style.opacity = isPending ? '0.7' : '1';
+
                     itemDiv.innerHTML = `
-                        <div class="cart-item-title">${item.product_name || item.product || 'פריט'} (${item.qty} יח')</div>
-                        <div class="cart-item-price">₪${price}</div>
+                        <div class="cart-item-title">${label} ${qty > 0 ? `(${qty} יח')` : ''}</div>
+                        <div class="cart-item-price">${priceDisplay}</div>
                         <div style="clear:both;"></div>
-                        <div class="cart-item-details">${item.description || ''}</div>
+                        <div class="cart-item-details">${isPending ? 'נא ציין כמות ומפרט כדי לקבל מחיר' : desc}</div>
                         <div class="cart-item-actions">
                             <button class="cart-action-btn danger" onclick="removeCartItem(${index})" title="הסר פריט"><i class="fas fa-trash"></i> הסר</button>
-                            <button class="cart-action-btn" onclick="requestQtyChange(${index})" title="שנה כמות"><i class="fas fa-edit"></i> כמות</button>
+                            ${!isPending ? `<button class="cart-action-btn" onclick="requestQtyChange(${index})" title="שנה כמות"><i class="fas fa-edit"></i> כמות</button>` : ''}
                         </div>
                         <div style="clear:both;"></div>
                     `;
                     container.appendChild(itemDiv);
-                    total += price;
+                    if (!isPending) total += price;
                 });
             }
             totalDisplay.innerText = '₪' + total.toLocaleString();

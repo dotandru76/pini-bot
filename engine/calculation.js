@@ -3,11 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const { calculateImposition } = require('./optimizer');
 
-let materials = {}, productsDB = {}, pricesDB = {};
+let materials = {}, productsDB = {}, pricesDB = {}, DOMAIN_TEMPLATES = { products: {} };
 try {
     materials = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/materials.json'), 'utf8'));
     productsDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/products.json'), 'utf8'));
     pricesDB = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/prices.json'), 'utf8'));
+    DOMAIN_TEMPLATES = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/domainTemplates.json'), 'utf8'));
 } catch (e) {
     console.error("Failed loading DB files in calculation.js", e);
 }
@@ -118,8 +119,10 @@ const { assembleProductionItem } = require('./integrity');
 
 function buildResult(cart, product, params, price, qty, desc, cost) {
     // 1. Initial Calc Object (Pre-Hardening)
+    const productMeta = DOMAIN_TEMPLATES.products[product] || {};
     const calcResult = {
         product,
+        displayName: productMeta.label || product,
         client_price: price,
         unit_price: (price / qty).toFixed(2),
         production_cost: cost?.toFixed(2),

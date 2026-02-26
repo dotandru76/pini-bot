@@ -11,9 +11,13 @@ async function handlePdfQuote(req, res) {
 
     // Fetch cart from body, or fallback to server session state
     let cart = clientCart;
-    if (!cart && userId) {
+    let isDraft = false;
+    if (userId) {
         const session = getSession(userId);
-        cart = session.cart;
+        if (!cart) cart = session.cart;
+        if (session.draftAttributes && Object.keys(session.draftAttributes).length > 0) {
+            isDraft = true;
+        }
     }
 
     if (!cart || cart.length === 0) {
@@ -21,10 +25,10 @@ async function handlePdfQuote(req, res) {
     }
 
     try {
-        console.log("📄 Generating PDF Quote via DocumentController...");
+        console.log(`📄 Generating PDF Quote (isDraft: ${isDraft}) via DocumentController...`);
 
         // Build PDF Buffer
-        const pdfBuffer = await generateQuotePDF(cart, { name: "לקוח יקר" });
+        const pdfBuffer = await generateQuotePDF(cart, { name: "לקוח יקר" }, isDraft);
 
         // Define headers for file download
         res.set({

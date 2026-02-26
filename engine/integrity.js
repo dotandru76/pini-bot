@@ -62,6 +62,7 @@ function deepFreeze(obj) {
 function assembleProductionItem(calcResult, originalParams) {
     const item = {
         product: calcResult.product,
+        displayName: calcResult.displayName || calcResult.product,
         validated_params: { ...originalParams },
         pricing_snapshot: {
             client_price: calcResult.client_price,

@@ -4,6 +4,7 @@ const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedReq
 const { processImageUpload } = require('../engine/imageProcessor');
 const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
 const { calculate_custom_job } = require('../engine/calculation');
+const DOMAIN_TEMPLATES = require('../db/domainTemplates.json');
 
 async function handleChat(req, res) {
     const { message, userId, requestId } = req.body;
@@ -93,19 +94,62 @@ async function handleChat(req, res) {
                 });
 
                 let responseMsg = extraction.answer_text;
+
+                // Phase 5.3: Partial Transparency Logic
+                const draftProducts = Object.keys(session.draftAttributes || {});
+                if (draftProducts.length > 0) {
+                    const pendingLabels = draftProducts.map(p => DOMAIN_TEMPLATES.products[p]?.label || p);
+                    const readyLabels = session.cart.map(i => i.displayName);
+
+                    if (readyLabels.length > 0) {
+                        responseMsg += `\n\n📌 [עדכון סטטוס]: יש לנו מחיר ל${readyLabels.join(' ו-')}, אבל כדי לחשב סך הכל סופי חסר לנו המפרט של ${pendingLabels.join(' ו-')}.`;
+                    }
+                }
+
                 if (compilation.clarification_blocks && compilation.clarification_blocks.length > 0) {
                     responseMsg += "\n\n" + compilation.clarification_blocks.join("\n");
                 }
 
+                // --- PARTIAL TRANSPARENCY ENHANCEMENT ---
+                const uiCart = [...session.cart];
+                draftProducts.forEach(prodKey => {
+                    const meta = DOMAIN_TEMPLATES.products[prodKey] || {};
+                    uiCart.push({
+                        product: prodKey,
+                        displayName: meta.label || prodKey,
+                        isPending: true,
+                        client_price: 0,
+                        qty: session.draftAttributes[prodKey].params?.qty || 0
+                    });
+                });
+
                 finalResponse.text = responseMsg;
-                finalResponse.cart = session.cart;
+                finalResponse.cart = uiCart;
             }
             else if (compilation.status === 'CONSULTATIVE_ACTIVE' || compilation.status === 'CLARIFICATION_REQUIRED') {
                 // Handle Security Block for Instability
                 if (compilation.reason === 'PARAMETER_INSTABILITY') {
                     session.blockState = { reason: "PARAMETER_INSTABILITY", ttl: 2 };
                 }
+
+                // --- PARTIAL TRANSPARENCY ENHANCEMENT ---
+                const uiCart = [...session.cart];
+                const draftProducts = Object.keys(session.draftAttributes || {});
+                draftProducts.forEach(prodKey => {
+                    if (!uiCart.find(c => c.product === prodKey)) {
+                        const meta = DOMAIN_TEMPLATES.products[prodKey] || {};
+                        uiCart.push({
+                            product: prodKey,
+                            displayName: meta.label || prodKey,
+                            isPending: true,
+                            client_price: 0,
+                            qty: session.draftAttributes[prodKey].params?.qty || 0
+                        });
+                    }
+                });
+
                 finalResponse.text = compilation.clarification_blocks.join("\n");
+                finalResponse.cart = uiCart;
             }
             else if (compilation.status === 'HARD_FAIL') {
                 finalResponse.text = "משהו לא היה ברור בבקשה. " + (compilation.reason === 'AMBIGUOUS_QUANTITY' ? "לא ידעתי לאיזו כמות התכוונת לכל מוצר." : "תוכל לפרט יותר?");
