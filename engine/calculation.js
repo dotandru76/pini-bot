@@ -70,13 +70,16 @@ function calculateDigital(cart, params, productKey) {
 
     if (impResult.ups === 0) throw new Error("מוצר גדול מדי למכונה");
 
-    const rawSheets = Math.ceil(qty / impResult.ups);
+    const pages = parseInt(params.pages) || 1;
+    const clicksPerPage = 2; // Duplex assumption
+
+    const rawSheets = Math.ceil((qty * (pages / 2)) / impResult.ups);
     const wasteSheets = Math.max(PRICES.margins.min_waste_sheets, Math.ceil(rawSheets * PRICES.margins.waste_factor));
     const totalSheets = rawSheets + wasteSheets;
 
     // Core Costs
     const costPaper = totalSheets * paperData.cost_sheet;
-    const costClicks = totalSheets * PRICES.digital_base.cost_per_click_color;
+    const costClicks = (totalSheets * 2) * PRICES.digital_base.cost_per_click_color;
     const totalCost = costPaper + costClicks + PRICES.digital_base.setup_fee;
 
     console.log(`💵 [CALCULATION] Sheets Needed: ${totalSheets} (Includes waste). Raw Paper Cost: ₪${costPaper.toFixed(2)}`);

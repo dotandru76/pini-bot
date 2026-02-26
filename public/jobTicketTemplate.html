@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            padding: 40px;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #008069;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #008069;
+        }
+
+        .quote-info {
+            margin: 20px 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            background: #008069;
+            color: white;
+            padding: 12px;
+            text-align: right;
+        }
+
+        td {
+            border-bottom: 1px solid #eee;
+            padding: 12px;
+            text-align: right;
+        }
+
+        .total {
+            margin-top: 30px;
+            text-align: left;
+            font-size: 20px;
+            font-weight: bold;
+            color: #008069;
+            border-top: 2px solid #008069;
+            padding-top: 10px;
+        }
+
+        .trust-section {
+            margin-top: 50px;
+            border: 1px dashed #ccc;
+            padding: 20px;
+            font-size: 11px;
+            color: #666;
+            background: #fff;
+        }
+
+        .hash-line {
+            font-family: 'Courier New', monospace;
+            direction: ltr;
+            text-align: left;
+            border-bottom: 1px dotted #eee;
+            padding: 5px 0;
+        }
+
+        .pending {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="logo">הצעת מחיר - דפוס בית יצחק</div>
+        <div style="font-size: 16px;">Price Quote #{{traceIdTail}}</div>
+    </div>
+
+    <div class="quote-info">
+        <div><strong>לקוח:</strong> {{customerName}}</div>
+        <div><strong>תאריך:</strong> {{date}}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>מוצר</th>
+                <th>מפרט טכני</th>
+                <th>כמות</th>
+                <th>מחיר</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{rowsData}}
+        </tbody>
+    </table>
+
+    <div class="total">סה"כ לתשלום: ₪{{total}}</div>
+
+    <div class="trust-section">
+        <div style="text-align: center; font-weight: bold; margin-bottom: 15px; color: #008069;">VISUAL TRUST SECTION
+            (Integrity Verification)</div>
+        {{integrityHashes}}
+    </div>
+
+    <div style="text-align: center; margin-top: 40px; font-size: 11px; color: #999;">
+        הצעת מחיר זו הופקה באופן אוטומטי ע"י Pini Bot עבור דפוס בית יצחק. ט.ל.ח.
+    </div>
+</body>
+
+</html>

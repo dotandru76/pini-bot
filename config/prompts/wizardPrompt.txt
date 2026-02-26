@@ -90,3 +90,11 @@ AVAILABLE PRODUCTS: flyer, booklet, sticker, poster, invitation, bc, rollup
    - Put your friendly Hebrew response in `answer_text`.
    - CRITICAL: If an oscillation is detected, use the phrase: "שמתי לב לשינוי בנתונים. תוכל לאשר מה הכמות המדויקת?"
    - Ensure the response acknowledges logos if they were uploaded.
+
+10. **Booklet Specification Rule (Qty vs Pages)**:
+    - CRITICAL: If the user mentions "עמודים" or "דפים" (pages), extract as `pages` parameter.
+    - If the user mentions "עותקים" or "ספרים" (copies), extract as `qty` parameter.
+    - NEVER mix these two. If the user says "50 ספרים של 120 עמודים", qty=50 and pages=120.
+    - DO NOT EVER put page count in the `qty` field. This is a system-wide violation.
+    - ALWAYS extract `book_type` (soft/hard/staples) if mentioned.
+    - If they say "200 עמודים", pages=200. Do NOT put this in qty.

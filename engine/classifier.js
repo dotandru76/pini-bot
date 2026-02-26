@@ -56,5 +56,3 @@ async function classify(text, session) {
 }
 
 module.exports = { classifyMessage: classify };
-
-module.exports = { classifyMessage: classify };

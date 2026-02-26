@@ -66,14 +66,18 @@ async function handleChat(req, res) {
                     compilation.deleted_items.forEach(product => {
                         console.log(`🗑️ [CONTROLLER] Removing product from cart: ${product}`);
                         session.cart = session.cart.filter(item => item.product !== product);
+                        // Hard cleanup: also remove from draft
+                        delete session.draftAttributes[product];
                     });
                 }
-                // A. Handle Deletions from intent (Spec v5.2)
+                // A. Handle Deletions from intent (Spec v5.2/5.6)
                 if (extraction.intent === 'cancel') {
-                    compilation.items.forEach(item => { // In case LLM extracted partially
-                        session.cart = session.cart.filter(c => c.product !== item.product);
+                    extraction.products_detected.forEach(item => {
+                        const norm = normalizeEntity(item.product);
+                        console.log(`🗑️ [CONTROLLER] Intent-based cancellation: ${norm}`);
+                        session.cart = session.cart.filter(c => c.product !== norm);
+                        delete session.draftAttributes[norm];
                     });
-                    // planner.js already handles draftAttributes deletion if passed session correctly
                 }
 
                 // B. Process READY items (Upsert Model)

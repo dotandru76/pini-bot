@@ -51,14 +51,51 @@ const PARAM_MAPPING = {
 };
 
 /**
+ * Deterministic Sanitizer (Spec v5.6.1)
+ * Protects against LLM semantic errors by verifying if a 'qty' extraction
+ * actually refers to 'pages' based on the original user text context.
+ */
+function applyDeterministicSanitizer(extractedData, session) {
+    extractedData.parameters_detected.forEach(param => {
+        const normContext = normalizeEntity(param.context);
+
+        if (param.key === 'qty' && normContext === 'booklet') {
+            const val = String(param.value);
+            // Regex to detect if the value is tied to "pages" terminology in Hebrew/English
+            const pageRegex = new RegExp(`${val}\\s*(עמודים|דפים|דף|עמוד|pages|page)`, 'i');
+            const reversePageRegex = new RegExp(`(עמודים|דפים|דף|עמוד|pages|page)\\s*(של|של-)?\\s*${val}`, 'i');
+
+            if (pageRegex.test(extractedData.raw_text) || reversePageRegex.test(extractedData.raw_text)) {
+                console.log(`🛡️ [SANITIZER] Caught semantic error: '${val}' is PAGES, not QTY. Correcting...`);
+
+                // 1. Swap key to pages
+                param.key = 'pages';
+
+                // 2. RESTORE previous qty if it exists in draft (prevent overwrite regression)
+                const existingDraft = session.draftAttributes[normContext];
+                if (existingDraft && existingDraft.params.qty) {
+                    console.log(`🛡️ [SANITIZER] Restoring previous qty: ${existingDraft.params.qty}`);
+                    // We don't push a new param here to avoid oscillation, 
+                    // we just ensure the draft keeps its value or the current extraction doesn't ruin it.
+                    // But since compileOrder iterates params, we simply "unset" this param from ruining QTY.
+                }
+            }
+        }
+    });
+}
+
+/**
  * Compiles LLM extracted entities into a normalized order state.
  * v5.2 - CTO Hardened with Draft Persistence & Oscillation Resolution
  */
 function compileOrder(extractedData, session) {
     try {
-        console.log("🧩 [COMPILER] Processing turn (v5.2 - Draft Persistence)...");
+        console.log("🧩 [COMPILER] Processing turn (v5.6.1 - Deterministic Sanitizer)...");
 
         if (!session.draftAttributes) session.draftAttributes = {};
+
+        // Spec v5.6.1: Run Deterministic Sanitizer before processing
+        applyDeterministicSanitizer(extractedData, session);
 
         let unassignedParams = [];
         let buckets = {};
@@ -84,8 +121,8 @@ function compileOrder(extractedData, session) {
             }
             if (item.confidence >= 0.6) session.draftAttributes[normProduct].status = 'EXTRACTED';
 
-            if (isDeleteIntent && extractedData.raw_text.includes(normProduct)) {
-                console.log(`🗑️ [COMPILER] Deleting ${normProduct} from draft.`);
+            if (isDeleteIntent && (extractedData.raw_text.includes(normProduct) || extractedData.raw_text.includes(DOMAIN_TEMPLATES.products[normProduct]?.label))) {
+                console.log(`🗑️ [COMPILER] Garbage Collection: Deleting ${normProduct} from draft.`);
                 delete session.draftAttributes[normProduct];
             }
         });
@@ -137,12 +174,13 @@ function compileOrder(extractedData, session) {
             let itemUnstable = false;
 
             // Instability Resolution
+            const EXEMPT_FROM_LOCK = ["pages", "size", "paper_type", "material"];
             for (const [key, history] of Object.entries(data.history)) {
                 const uniqueValues = new Set(history.map(v => String(v)));
                 if (uniqueValues.size > 1) {
-                    // Check if block state released
-                    if (!session.blockState || session.blockState.reason === null) {
-                        console.log(`✨ [COMPILER] Resolving oscillation for ${product}.${key}`);
+                    // Check if block state released OR field is exempt from lock (Spec v5.6)
+                    if (!session.blockState || session.blockState.reason === null || EXEMPT_FROM_LOCK.includes(key)) {
+                        console.log(`✨ [COMPILER] Resolving oscillation for ${product}.${key} (Exempt or Released)`);
                         data.history[key] = [data.params[key]]; // Reset to last choice
                     } else {
                         itemUnstable = true;
