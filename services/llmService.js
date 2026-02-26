@@ -14,13 +14,22 @@ try {
 } catch (e) { logAI("⚠️ Error: No API Key"); }
 
 /**
- * Robust JSON Extraction & Schema Validation (CTO Mandate Phase 4)
+ * Robust JSON Extraction & Schema Validation (CTO Mandate Spec v5.7)
+ * Implements mandatory Regex Parsing Guardrail.
  */
 function extractAndValidateLLMResponse(rawText) {
-    // 1. Regex Extraction (Mandatory Layer)
+    // 🛡️ [PARSING GUARDRAIL] Mandatory Regex Extraction
+    // re.search(r'\{.*\}', text, re.DOTALL) equivalent in JS
     const jsonMatch = rawText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+        console.error("❌ [PARSING] No JSON found in raw text:", rawText);
         throw new Error("HARD_FAIL: No JSON object found in LLM response.");
+    }
+
+    // Capture the potential text before JSON for logging if needed
+    const preJsonText = rawText.substring(0, jsonMatch.index).trim();
+    if (preJsonText) {
+        console.log(`ℹ️ [AI CHATTER DETECTED]: "${preJsonText}"`);
     }
 
     // 2. Cleanup: Strip code fences and trailing commas
@@ -47,9 +56,9 @@ function extractAndValidateLLMResponse(rawText) {
     return parsedData;
 }
 
-// Definition of the Response Schema (Phase 4 - Conversational Compiler)
+// Definition of the Response Schema
 const schema = {
-    description: "Pini Compiler Schema v4.0",
+    description: "Pini Advisor Schema v5.7",
     type: SchemaType.OBJECT,
     properties: {
         intent: {
@@ -97,6 +106,9 @@ try {
     console.error("❌ Failed loading wizardPrompt.txt");
 }
 
+/**
+ * Spec v5.7: Multi-turn Stateful Route
+ */
 async function routeWithLLM(message, session, imageBuffer = null) {
     if (isBudgetExceeded()) {
         console.warn("🛑 [BUDGET] Daily limit reached. Blocking LLM request.");
@@ -116,16 +128,29 @@ async function routeWithLLM(message, session, imageBuffer = null) {
     });
 
     const technicalContext = session.lastImageMetadata ?
-        `\n[DETERMINISTIC METADATA (CODE-FIXED)]: ${JSON.stringify(session.lastImageMetadata)}` : "";
+        `\n[DETERMINISTIC METADATA]: ${JSON.stringify(session.lastImageMetadata)}` : "";
+
+    // Build History Context (Turns)
+    let historyContext = "";
+    if (session.history && session.history.length > 0) {
+        historyContext = "\n[RECENT HISTORY]:\n" + session.history.map(h => `${h.role === 'user' ? 'Customer' : 'Bot'}: ${h.text}`).join("\n");
+    }
+
+    // Build Stateful Payload (Phase 5.7 - Building the payload)
+    const statefulPayload = session.statefulContext ? `\n[BUSINESS STATE]: ${JSON.stringify(session.statefulContext)}` : "";
+    const jitKnowledge = session.jitKnowledge ? `\n[JIT KNOWLEDGE]: ${session.jitKnowledge}` : "";
 
     const promptParts = [
         { text: SYSTEM_PROMPT },
-        { text: `\n[CURRENT STATE]: Active Product: ${session.currentProduct || "None"}${technicalContext}` },
-        { text: `\n[USER SAYS]: "${message}"` }
+        { text: historyContext },
+        { text: statefulPayload },
+        { text: jitKnowledge },
+        { text: `\n[CURRENT PRODUCT]: ${session.currentProduct || "None"}${technicalContext}` },
+        { text: `\n[USER INPUT]: "${message}"` }
     ];
 
     if (imageBuffer) {
-        logAI("📷 Image detected. Activating Multimodal context.");
+        logAI("📷 Image detected.");
         promptParts.push({
             inlineData: {
                 data: imageBuffer.toString('base64'),
@@ -135,14 +160,14 @@ async function routeWithLLM(message, session, imageBuffer = null) {
     }
 
     try {
-        console.time(`⏱️ [LLM] Phase 4 Request`);
+        console.time(`⏱️ [LLM] Phase 5.7 Request`);
         const result = await model.generateContent({ contents: [{ role: "user", parts: promptParts }] });
-        console.timeEnd(`⏱️ [LLM] Phase 4 Request`);
+        console.timeEnd(`⏱️ [LLM] Phase 5.7 Request`);
 
         const response = result.response;
         const rawText = response.text();
 
-        // 1. New Extraction & Validation Logic
+        // 🛡️ [PARSING GUARDRAIL]
         const parsedObj = extractAndValidateLLMResponse(rawText);
 
         const usage = result.response.usageMetadata;
@@ -153,14 +178,13 @@ async function routeWithLLM(message, session, imageBuffer = null) {
 
         parsedObj._debug = {
             tokens: tokenData,
-            governance: "v4.0-Compiler"
+            governance: "v5.7-StatefulAdvisor"
         };
 
         return parsedObj;
 
     } catch (error) {
-        console.error(`[COMPILER AI ERROR]:`, error.message);
-        // Soft fail to a consistent structure
+        console.error(`[AI ERROR]:`, error.message);
         return {
             intent: "chat",
             answer_text: "סליחה, אני חווה קושי קטן בעיבוד הבקשה. נסה שוב?",

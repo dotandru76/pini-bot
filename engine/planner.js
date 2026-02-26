@@ -10,6 +10,14 @@ try {
     console.error("⚠️ [COMPILER] Failed to load domainTemplates.json:", e.message);
 }
 
+// Load Domain Knowledge (Spec v5.7)
+let DOMAIN_KNOWLEDGE = {};
+try {
+    DOMAIN_KNOWLEDGE = JSON.parse(fs.readFileSync(path.join(__dirname, '../db/domainKnowledge.json'), 'utf8'));
+} catch (e) {
+    console.warn("⚠️ [COMPILER] No domainKnowledge.json found.");
+}
+
 const PRODUCT_WHITELIST = {
     flyer: ["qty", "paper_type", "size", "sides", "lamination", "finishing"],
     booklet: ["qty", "pages", "cover", "binding", "size", "paper_type", "finishings", "book_type"],
@@ -52,210 +60,202 @@ const PARAM_MAPPING = {
 
 /**
  * Deterministic Sanitizer (Spec v5.6.1)
- * Protects against LLM semantic errors by verifying if a 'qty' extraction
- * actually refers to 'pages' based on the original user text context.
  */
 function applyDeterministicSanitizer(extractedData, session) {
     extractedData.parameters_detected.forEach(param => {
         const normContext = normalizeEntity(param.context);
-
         if (param.key === 'qty' && normContext === 'booklet') {
             const val = String(param.value);
-            // Regex to detect if the value is tied to "pages" terminology in Hebrew/English
             const pageRegex = new RegExp(`${val}\\s*(עמודים|דפים|דף|עמוד|pages|page)`, 'i');
             const reversePageRegex = new RegExp(`(עמודים|דפים|דף|עמוד|pages|page)\\s*(של|של-)?\\s*${val}`, 'i');
-
             if (pageRegex.test(extractedData.raw_text) || reversePageRegex.test(extractedData.raw_text)) {
                 console.log(`🛡️ [SANITIZER] Caught semantic error: '${val}' is PAGES, not QTY. Correcting...`);
-
-                // 1. Swap key to pages
                 param.key = 'pages';
-
-                // 2. RESTORE previous qty if it exists in draft (prevent overwrite regression)
-                const existingDraft = session.draftAttributes[normContext];
-                if (existingDraft && existingDraft.params.qty) {
-                    console.log(`🛡️ [SANITIZER] Restoring previous qty: ${existingDraft.params.qty}`);
-                    // We don't push a new param here to avoid oscillation, 
-                    // we just ensure the draft keeps its value or the current extraction doesn't ruin it.
-                    // But since compileOrder iterates params, we simply "unset" this param from ruining QTY.
-                }
             }
         }
     });
 }
 
 /**
+ * Spec v5.7: Structured Session State Builder
+ */
+function buildSessionStateContext(session) {
+    const product = session.currentProduct || "unknown";
+    const draft = session.draftAttributes[product] || { params: {} };
+    let missing = [];
+    const template = DOMAIN_TEMPLATES.products[product];
+    if (template && template.mandatory) {
+        missing = template.mandatory.filter(p => !draft.params[p]);
+    }
+    return {
+        current_intent: session.lastIntent || "unknown",
+        active_product: product,
+        extracted_slots: draft.params,
+        missing_mandatory_slots: missing,
+        conversation_phase: missing.length > 0 ? "slot_filling" : (product !== "unknown" ? "ready_for_quote" : "discovery"),
+        last_bot_question: session.lastBotMessage || "None"
+    };
+}
+
+/**
+ * Spec v5.7: JIT Knowledge Lookup (Mini-RAG)
+ * Enhanced to support intent-aware proactive injection.
+ */
+function getJITKnowledge(text, extraction = null) {
+    let snippetsSet = new Set();
+    const cleanText = text.toLowerCase();
+
+    // 1. Keyword-based matching
+    const isComparisonQuery = ["הבדל", "הבדלים", "שוני", "מה עדיף", "איזה עדיף", "מה ההבדל"].some(k => cleanText.includes(k));
+
+    for (const category in DOMAIN_KNOWLEDGE) {
+        for (const itemKey in DOMAIN_KNOWLEDGE[category]) {
+            const item = DOMAIN_KNOWLEDGE[category][itemKey];
+            if (item.keywords && item.keywords.some(k => cleanText.includes(k.toLowerCase()))) {
+                snippetsSet.add(`${itemKey.toUpperCase()}: ${item.description}`);
+
+                // If comparison, pull siblings in the same category
+                if (isComparisonQuery) {
+                    for (const siblingKey in DOMAIN_KNOWLEDGE[category]) {
+                        const sibling = DOMAIN_KNOWLEDGE[category][siblingKey];
+                        snippetsSet.add(`${siblingKey.toUpperCase()}: ${sibling.description}`);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Intent-driven proactive injection (CTO Directive)
+    if (extraction) {
+        const products = (extraction.products_detected || []).map(p => normalizeEntity(p.product));
+        const isAdviceRequest = ["איך", "כיצד", "המלצה", "הצעה", "מה כדאי", "מה מומלץ", "איך אפשר"].some(k => cleanText.includes(k));
+
+        // Helper to inject entire category
+        const injectCategory = (cat) => {
+            if (DOMAIN_KNOWLEDGE[cat]) {
+                for (const key in DOMAIN_KNOWLEDGE[cat]) {
+                    snippetsSet.add(`${key.toUpperCase()}: ${DOMAIN_KNOWLEDGE[cat][key].description}`);
+                }
+            }
+        };
+
+        // Targeting logic
+        if (products.includes('bc')) {
+            injectCategory('paper_types');
+            injectCategory('laminations');
+        }
+        if (products.includes('booklet')) {
+            injectCategory('paper_types');
+            injectCategory('bindings');
+        }
+        if (isComparisonQuery || extraction.intent === 'consult' || isAdviceRequest) {
+            injectCategory('finishes');
+        }
+    }
+
+    return Array.from(snippetsSet).slice(0, 8).join("\n");
+}
+
+/**
  * Compiles LLM extracted entities into a normalized order state.
- * v5.2 - CTO Hardened with Draft Persistence & Oscillation Resolution
  */
 function compileOrder(extractedData, session) {
     try {
-        console.log("🧩 [COMPILER] Processing turn (v5.6.1 - Deterministic Sanitizer)...");
-
+        console.log("🧩 [COMPILER] Processing turn (v5.7 - Stateful Advisor)...");
         if (!session.draftAttributes) session.draftAttributes = {};
-
-        // Spec v5.6.1: Run Deterministic Sanitizer before processing
         applyDeterministicSanitizer(extractedData, session);
 
-        let unassignedParams = [];
         let buckets = {};
-        let clarificationBlocks = [];
+        let fallbackGuidance = [];
 
-        // 0. Handle Deletion Intent 
+        // Update currentProduct from extraction if found
+        if (extractedData.products_detected.length > 0) {
+            const firstProduct = normalizeEntity(extractedData.products_detected[0].product);
+            if (DOMAIN_TEMPLATES.products[firstProduct]) {
+                session.currentProduct = firstProduct;
+            }
+        }
+
         const deletionSignals = ["מחק", "בטל", "תוריד", "delete", "remove", "cancel"];
         const isDeleteIntent = extractedData.intent === 'cancel' || deletionSignals.some(s => extractedData.raw_text.includes(s));
+        let deletedItems = [];
 
-        // 1. Sync Draft State with current Extraction
         extractedData.products_detected.forEach(item => {
             const normProduct = normalizeEntity(item.product);
-
-            // 🛡️ [DOMAIN VALIDATION GATE]
-            // Ensure product is recognized in Beit Yitzhak ecosystem
-            if (!DOMAIN_TEMPLATES.products[normProduct]) {
-                console.warn(`🛡️ [GATE] Blocked unrecognized product: ${normProduct}`);
-                return;
-            }
-
+            if (!DOMAIN_TEMPLATES.products[normProduct]) return;
             if (!session.draftAttributes[normProduct]) {
                 session.draftAttributes[normProduct] = { params: {}, history: {}, status: 'PENDING' };
             }
             if (item.confidence >= 0.6) session.draftAttributes[normProduct].status = 'EXTRACTED';
-
             if (isDeleteIntent && (extractedData.raw_text.includes(normProduct) || extractedData.raw_text.includes(DOMAIN_TEMPLATES.products[normProduct]?.label))) {
-                console.log(`🗑️ [COMPILER] Garbage Collection: Deleting ${normProduct} from draft.`);
                 delete session.draftAttributes[normProduct];
+                if (session.cart) session.cart = session.cart.filter(c => c.product !== normProduct);
+                deletedItems.push(normProduct);
             }
         });
 
-        // Merge Parameters into Draft
         extractedData.parameters_detected.forEach(param => {
             if (PARAM_MAPPING[param.key]) param.key = PARAM_MAPPING[param.key];
             const contextKey = normalizeEntity(param.context);
-
-            if (contextKey === 'global') {
-                unassignedParams.push(param);
-                return;
-            }
-
-            // [GATE] Check if context (product) is valid
+            if (contextKey === 'global') return;
             if (!DOMAIN_TEMPLATES.products[contextKey]) return;
-
             if (!session.draftAttributes[contextKey]) {
                 session.draftAttributes[contextKey] = { params: {}, history: {}, status: 'PENDING' };
             }
-
             const target = session.draftAttributes[contextKey];
             const allowedParams = PRODUCT_WHITELIST[contextKey] || [];
-
             if (allowedParams.includes(param.key)) {
-                // 🛡️ [POISON OVERRIDE PROTECTION]
-                // Never let "unknown" or "1" (heuristic error) overwrite a valid existing value
-                const lowerVal = String(param.value).toLowerCase();
-                const isPoison = ["unknown", "null", "undefined", "n/a", "1", "לא ידוע"].includes(lowerVal);
-
-                if (isPoison && target.params[param.key] && String(target.params[param.key]).length > 0) {
-                    console.log(`🛡️ [GATE] Blocked poison override for ${contextKey}.${param.key}: ${param.value}`);
-                    return;
-                }
-
                 if (!target.history[param.key]) target.history[param.key] = [];
                 target.history[param.key].push(param.value);
                 target.params[param.key] = param.value;
-
-                // Update lastSpecChangeTime in session (Phase 5.3)
                 session.lastSpecChangeTime = Date.now();
             }
         });
 
-        console.log("📝 [COMPILER] Merged Draft State:", JSON.stringify(session.draftAttributes, null, 2));
-
-        // 2. Process Buckets Logic
         for (const [product, data] of Object.entries(session.draftAttributes)) {
             let itemUnstable = false;
-
-            // Instability Resolution
-            const EXEMPT_FROM_LOCK = ["pages", "size", "paper_type", "material"];
             for (const [key, history] of Object.entries(data.history)) {
                 const uniqueValues = new Set(history.map(v => String(v)));
-                if (uniqueValues.size > 1) {
-                    // Check if block state released OR field is exempt from lock (Spec v5.6)
-                    if (!session.blockState || session.blockState.reason === null || EXEMPT_FROM_LOCK.includes(key)) {
-                        console.log(`✨ [COMPILER] Resolving oscillation for ${product}.${key} (Exempt or Released)`);
-                        data.history[key] = [data.params[key]]; // Reset to last choice
-                    } else {
-                        itemUnstable = true;
-                    }
-                }
+                if (uniqueValues.size > 1) itemUnstable = true;
             }
-
-            // Multiplication Math
             let finalParams = { ...data.params };
-            if (finalParams.team_size && finalParams.qty) {
-                const qtyVal = parseInt(finalParams.qty);
-                const teamVal = parseInt(finalParams.team_size);
-                if (!isNaN(qtyVal) && !isNaN(teamVal)) {
-                    finalParams.qty = qtyVal * teamVal;
-                    finalParams.is_multi_entity = true;
-                }
-            }
-
             buckets[product] = {
                 status: data.status === 'EXTRACTED' ? "READY_FOR_INTEGRITY" : "PENDING_CONFIRMATION",
-                behavioral_mode: "NORMAL",
                 params: finalParams,
                 unstable: itemUnstable
             };
         }
 
-        // 3. Validation Layer (Consultation)
         for (const [product, data] of Object.entries(buckets)) {
             const template = DOMAIN_TEMPLATES.products[product];
             if (template && template.mandatory) {
                 const missing = template.mandatory.filter(p => !data.params[p]);
                 if (missing.length > 0) {
                     data.status = "NEEDS_SPECIFICATION";
-                    data.behavioral_mode = "CONSULTATIVE_ACTIVE";
-                    if (!clarificationBlocks.includes(template.guidance)) {
-                        clarificationBlocks.push(template.guidance);
-                    }
+                    // Change: This is now explicitly 'fallback'
+                    if (!fallbackGuidance.includes(template.guidance)) fallbackGuidance.push(template.guidance);
                 }
             }
         }
 
-        // 4. Results
         let validatedItems = [];
         let specificInstability = null;
-
         for (const [product, data] of Object.entries(buckets)) {
-            if (data.unstable) {
-                specificInstability = product;
-                clarificationBlocks.push(`שמתי לב לשינוי בנתונים עבור ${product}. תוכל לאשר מה הכמות המדויקת?`);
-                continue;
-            }
-            if (data.status === "READY_FOR_INTEGRITY") {
-                validatedItems.push({ product, params: data.params });
-            }
-        }
-
-        let status = "READY";
-        if (Object.values(buckets).some(b => b.behavioral_mode === "CONSULTATIVE_ACTIVE")) {
-            status = "CONSULTATIVE_ACTIVE";
-        } else if (clarificationBlocks.length > 0) {
-            status = validatedItems.length > 0 ? "PARTIAL_READY" : "CLARIFICATION_REQUIRED";
+            if (data.unstable) { specificInstability = product; continue; }
+            if (data.status === "READY_FOR_INTEGRITY") validatedItems.push({ product, params: data.params });
         }
 
         return {
-            status,
+            status: fallbackGuidance.length > 0 ? "CONSULTATIVE_ACTIVE" : "READY",
             items: validatedItems,
-            deleted_items: [], // Deprecated in favor of draft mutation
-            clarification_blocks: clarificationBlocks,
+            deleted_items: deletedItems,
+            fallback_guidance: fallbackGuidance,
             reason: specificInstability ? "PARAMETER_INSTABILITY" : null
         };
-
     } catch (error) {
         console.error("❌ [COMPILER] Error:", error);
         return { status: "ERROR", message: error.message };
     }
 }
 
-module.exports = { compileOrder };
+module.exports = { compileOrder, buildSessionStateContext, getJITKnowledge, normalizeEntity };

@@ -12,6 +12,8 @@ const sessions = {};
 const SESSION_TIMEOUT = 30 * 60 * 1000;
 // כמות מקסימלית של מזהי בקשות לשמירה (למניעת Memory Leak)
 const MAX_PROCESSED_REQUESTS = 50;
+// Spec v5.7: Max history items (5 turns = 10 items)
+const MAX_HISTORY_ITEMS = 10;
 
 function getSession(userId) {
     if (!sessions[userId]) {
@@ -24,12 +26,27 @@ function getSession(userId) {
             processedRequests: new Map(),
             lastActive: Date.now(),
             lastSpecChangeTime: Date.now(), // Tracking for Semantic Aging
-            blockState: { reason: null, ttl: 0 } // Phase 4.2: Built-in Turn-Based Memory
+            blockState: { reason: null, ttl: 0 }, // Phase 4.2: Built-in Turn-Based Memory
+
+            // Spec v5.7: Stateful Advisor Additions
+            history: [],
+            lastBotMessage: null
+        };
+    }
+
+    const session = sessions[userId];
+
+    // Spec v5.7: History Management Helper
+    if (!session.addToHistory) {
+        session.addToHistory = (role, text) => {
+            session.history.push({ role, text });
+            if (session.history.length > MAX_HISTORY_ITEMS) {
+                session.history.shift();
+            }
         };
     }
 
     // Phase 5.3: Semantic Aging (Drift Detection)
-    const session = sessions[userId];
     const driftDelta = (Date.now() - session.lastSpecChangeTime) / 1000 / 60; // in minutes
     if (driftDelta >= 8 && driftDelta <= 12 && session.draftAttributes && Object.keys(session.draftAttributes).length > 0) {
         session.driftDetected = true;
@@ -37,6 +54,7 @@ function getSession(userId) {
     } else {
         session.driftDetected = false;
     }
+
     if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
         if (session.blockState.ttl > 0) {
             session.blockState.ttl--;
@@ -59,19 +77,18 @@ function getSession(userId) {
  * בודק אם הבקשה כבר קיימת/מעובדת, ונועל אותה באופן סינכרוני
  */
 function checkAndLockRequest(session, requestId, payloadText) {
-    if (!requestId) return { status: 'NEW' }; // אם הקליינט ישן ולא שלח ID
+    if (!requestId) return { status: 'NEW' };
 
     const existing = session.processedRequests.get(requestId);
 
     if (existing) {
-        // בדוק סכנת מניפולציה (Payload Mismatch)
         if (existing.payload !== payloadText) {
             console.warn(`🚨 SECURITY ALERT: Payload Mismatch for requestId ${requestId}`);
             return { status: 'MISMATCH_ERROR' };
         }
 
         if (existing.status === 'PROCESSING') {
-            return { status: 'PROCESSING_ERROR' }; // בקשה מתחרה נדחית
+            return { status: 'PROCESSING_ERROR' };
         }
 
         if (existing.status === 'COMPLETED') {
@@ -80,7 +97,6 @@ function checkAndLockRequest(session, requestId, payloadText) {
         }
     }
 
-    // נעילה סינכרונית - Atomicity שומר על ה-Thread מפני כניסה כפולה מיידית
     session.processedRequests.set(requestId, {
         payload: payloadText,
         status: 'PROCESSING',
@@ -88,7 +104,6 @@ function checkAndLockRequest(session, requestId, payloadText) {
         response: null
     });
 
-    // הגנה מ-Memory Leak: לנקות מידע ישן
     if (session.processedRequests.size > MAX_PROCESSED_REQUESTS) {
         const oldestKey = session.processedRequests.keys().next().value;
         session.processedRequests.delete(oldestKey);
@@ -97,24 +112,15 @@ function checkAndLockRequest(session, requestId, payloadText) {
     return { status: 'NEW' };
 }
 
-/**
- * Phase 1.2: Release & Cache
- * מעדכן את הסטטוס לסיום יחד עם שמירת התשובה למטמון להחזרה חוזרת
- */
 function cacheCompletedRequest(session, requestId, responseBody) {
     if (!requestId) return;
     const reqData = session.processedRequests.get(requestId);
     if (reqData && reqData.status === 'PROCESSING') {
         reqData.status = 'COMPLETED';
-        // --- PHASE 1.2 Hardening: ניתוק רפרנסים (Deep Clone) למניעת קריסות Cache Mutation ---
         reqData.response = JSON.parse(JSON.stringify(responseBody));
     }
 }
 
-/**
- * Phase 1.2: Cleanup on Error
- * משחרר נעילה במקרה של קריסת AI או Validation Error, כדי לא לתקוע לקוח לנצח.
- */
 function releaseFailedRequest(session, requestId) {
     if (!requestId) return;
     const reqData = session.processedRequests.get(requestId);
@@ -126,9 +132,10 @@ function releaseFailedRequest(session, requestId) {
 
 function clearSession(userId) {
     if (sessions[userId]) {
-        // שומרים על העגלה ועל מזהי הבקשות (שלא ידפוק רענון), מאפסים רק את השיחה הנוכחית
         sessions[userId].currentProduct = null;
         sessions[userId].draftAttributes = {};
+        sessions[userId].history = [];
+        sessions[userId].lastBotMessage = null;
         console.log(`🧹 Session context cleared for: ${userId}`);
     }
 }
@@ -138,13 +145,14 @@ function clearCart(userId) {
         sessions[userId].cart = [];
         sessions[userId].currentProduct = null;
         sessions[userId].draftAttributes = {};
+        sessions[userId].history = [];
+        sessions[userId].lastBotMessage = null;
         console.log(`🗑️ Cart emptied for: ${userId}`);
     }
 }
 
 /**
  * Phase 4: Secure Push to Cart
- * Enforces traceId uniqueness and prevents silent overwrites.
  */
 function pushToSessionCart(session, item) {
     if (!item.traceId) {

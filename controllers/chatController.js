@@ -1,5 +1,5 @@
 const { classifyMessage } = require('../engine/classifier');
-const { compileOrder } = require('../engine/planner');
+const { compileOrder, buildSessionStateContext, getJITKnowledge, normalizeEntity } = require('../engine/planner');
 const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest, pushToSessionCart } = require('../services/sessionManager');
 const { processImageUpload } = require('../engine/imageProcessor');
 const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
@@ -26,9 +26,17 @@ async function handleChat(req, res) {
             return res.json({ text: blockRefusal, cart: session.cart });
         }
 
+        // --- Spec v5.7: Stateful Advisor Preparation ---
+        session.statefulContext = buildSessionStateContext(session);
+
+        if (session.addToHistory) session.addToHistory('user', message);
+
         // 1. Comprehension (Extractor)
         const extraction = await classifyMessage(message, session);
         console.log("🧩 [EXTRACTION DATA]:", JSON.stringify(extraction, null, 2));
+
+        // 2. Build JIT Knowledge (Mini-RAG) - Now Intent-Aware
+        session.jitKnowledge = getJITKnowledge(message, extraction);
 
         let finalResponse = { text: "שגיאה פנימית.", options: [], cart: session.cart };
 
@@ -40,6 +48,8 @@ async function handleChat(req, res) {
                 finalResponse.text = refusal;
                 finalResponse.status = 'REJECTED';
                 finalResponse.debug = extraction._debug;
+
+                if (session.addToHistory) session.addToHistory('assistant', refusal);
                 cacheCompletedRequest(session, requestId, finalResponse);
                 return res.json(finalResponse);
             }
@@ -50,73 +60,73 @@ async function handleChat(req, res) {
             session.cart = [];
             session.currentProduct = null;
             session.blockState = { reason: null, ttl: 0 };
+            session.history = [];
             finalResponse.text = "המערכת אופסה. מה תרצה להזמין?";
         }
         else if (extraction.intent === 'show_cart') {
             finalResponse.text = session.cart.length > 0 ? "זה מה שיש לנו בינתיים:" : "העגלה ריקה.";
         }
         else {
-            // 3. Planning (Conversational Compiler v5.2 - Draft Persistence)
+            // 3. Planning (Conversational Compiler v5.7)
             const compilation = compileOrder(extraction, session);
+
+            // --- SMART RESPONSE SELECTION (BLOCKER FIX: Priority logic) ---
+            // RULE: LLM 'answer_text' is the primary voice. Fallback guidance only if LLM fails or is too short.
+            let responseMsg = extraction.answer_text || "";
 
             if (compilation.status === 'READY' || compilation.status === 'PARTIAL_READY' || (compilation.items && compilation.items.length > 0) || (compilation.deleted_items && compilation.deleted_items.length > 0)) {
 
-                // A. Handle Deletions (Spec v5.1)
+                // A. Handle Deletions
                 if (compilation.deleted_items && compilation.deleted_items.length > 0) {
                     compilation.deleted_items.forEach(product => {
-                        console.log(`🗑️ [CONTROLLER] Removing product from cart: ${product}`);
                         session.cart = session.cart.filter(item => item.product !== product);
-                        // Hard cleanup: also remove from draft
                         delete session.draftAttributes[product];
                     });
                 }
-                // A. Handle Deletions from intent (Spec v5.2/5.6)
-                if (extraction.intent === 'cancel') {
-                    extraction.products_detected.forEach(item => {
-                        const norm = normalizeEntity(item.product);
-                        console.log(`🗑️ [CONTROLLER] Intent-based cancellation: ${norm}`);
-                        session.cart = session.cart.filter(c => c.product !== norm);
-                        delete session.draftAttributes[norm];
-                    });
-                }
 
-                // B. Process READY items (Upsert Model)
+                // B. Process READY items
                 compilation.items.forEach(item => {
-                    // Phase 5.1 Hardening: Prevent duplication by removing existing product of same type
                     session.cart = session.cart.filter(c => c.product !== item.product);
-
                     const productionItem = calculate_custom_job(session.cart, {
                         product: item.product,
                         ...item.params
                     });
-
-                    // Secure Push
-                    if (pushToSessionCart(session, productionItem)) {
-                        // Phase 5.2: Success! Remove from Draft State
-                        delete session.draftAttributes[item.product];
-                    }
+                    pushToSessionCart(session, productionItem);
+                    delete session.draftAttributes[item.product];
                 });
 
-                let responseMsg = extraction.answer_text;
-
-                // Phase 5.3: Partial Transparency Logic
+                // C. Status Updates (Only append if LLM didn't explain the status)
                 const draftProducts = Object.keys(session.draftAttributes || {});
-                if (draftProducts.length > 0) {
+                if (draftProducts.length > 0 && !responseMsg.includes("📌") && !responseMsg.includes("חסר")) {
                     const pendingLabels = draftProducts.map(p => DOMAIN_TEMPLATES.products[p]?.label || p);
                     const readyLabels = session.cart.map(i => i.displayName);
-
                     if (readyLabels.length > 0) {
-                        responseMsg += `\n\n📌 [עדכון סטטוס]: יש לנו מחיר ל${readyLabels.join(' ו-')}, אבל כדי לחשב סך הכל סופי חסר לנו המפרט של ${pendingLabels.join(' ו-')}.`;
+                        responseMsg += `\n\n📌 [עדכון סטטוס]: יש מחיר ל${readyLabels.join(' ו-')}, חסר מפרט ל${pendingLabels.join(' ו-')}.`;
                     }
                 }
-
-                if (compilation.clarification_blocks && compilation.clarification_blocks.length > 0) {
-                    responseMsg += "\n\n" + compilation.clarification_blocks.join("\n");
+            }
+            else if (compilation.status === 'CONSULTATIVE_ACTIVE' || compilation.status === 'CLARIFICATION_REQUIRED') {
+                if (compilation.reason === 'PARAMETER_INSTABILITY') {
+                    session.blockState = { reason: "PARAMETER_INSTABILITY", ttl: 2 };
                 }
 
-                // --- PARTIAL TRANSPARENCY ENHANCEMENT ---
-                const uiCart = [...session.cart];
-                draftProducts.forEach(prodKey => {
+                // D. Advisor Priority Check
+                // If LLM didn't provide a substantial response, use the static fallback guidance
+                if (responseMsg.length < 10 && compilation.fallback_guidance && compilation.fallback_guidance.length > 0) {
+                    responseMsg = compilation.fallback_guidance.join("\n");
+                }
+            }
+
+            // Absolute Fallback
+            if (!responseMsg || responseMsg.trim() === "") {
+                responseMsg = (compilation.fallback_guidance && compilation.fallback_guidance.length > 0)
+                    ? compilation.fallback_guidance.join("\n")
+                    : "אני כאן, על מה תרצה שנדבר?";
+            }
+
+            const uiCart = [...session.cart];
+            Object.keys(session.draftAttributes || {}).forEach(prodKey => {
+                if (!uiCart.find(c => c.product === prodKey)) {
                     const meta = DOMAIN_TEMPLATES.products[prodKey] || {};
                     uiCart.push({
                         product: prodKey,
@@ -125,40 +135,17 @@ async function handleChat(req, res) {
                         client_price: 0,
                         qty: session.draftAttributes[prodKey].params?.qty || 0
                     });
-                });
-
-                finalResponse.text = responseMsg;
-                finalResponse.cart = uiCart;
-            }
-            else if (compilation.status === 'CONSULTATIVE_ACTIVE' || compilation.status === 'CLARIFICATION_REQUIRED') {
-                // Handle Security Block for Instability
-                if (compilation.reason === 'PARAMETER_INSTABILITY') {
-                    session.blockState = { reason: "PARAMETER_INSTABILITY", ttl: 2 };
                 }
+            });
 
-                // --- PARTIAL TRANSPARENCY ENHANCEMENT ---
-                const uiCart = [...session.cart];
-                const draftProducts = Object.keys(session.draftAttributes || {});
-                draftProducts.forEach(prodKey => {
-                    if (!uiCart.find(c => c.product === prodKey)) {
-                        const meta = DOMAIN_TEMPLATES.products[prodKey] || {};
-                        uiCart.push({
-                            product: prodKey,
-                            displayName: meta.label || prodKey,
-                            isPending: true,
-                            client_price: 0,
-                            qty: session.draftAttributes[prodKey].params?.qty || 0
-                        });
-                    }
-                });
-
-                finalResponse.text = compilation.clarification_blocks.join("\n");
-                finalResponse.cart = uiCart;
-            }
-            else if (compilation.status === 'HARD_FAIL') {
-                finalResponse.text = "משהו לא היה ברור בבקשה. " + (compilation.reason === 'AMBIGUOUS_QUANTITY' ? "לא ידעתי לאיזו כמות התכוונת לכל מוצר." : "תוכל לפרט יותר?");
-            }
+            finalResponse.text = responseMsg;
+            finalResponse.cart = uiCart;
         }
+
+        // --- Spec v5.7: Tracking Finish ---
+        if (session.addToHistory) session.addToHistory('assistant', finalResponse.text);
+        session.lastBotMessage = finalResponse.text;
+        session.lastIntent = extraction.intent;
 
         finalResponse.debug = extraction._debug;
         cacheCompletedRequest(session, requestId, finalResponse);
@@ -178,41 +165,28 @@ async function handleImageUpload(req, res) {
     const sessionID = userId || 'default_user';
     const session = getSession(sessionID);
 
-    if (!req.file) {
-        return res.status(400).json({ text: "לא הועלה קובץ." });
-    }
+    if (!req.file) return res.status(400).json({ text: "לא הועלה קובץ." });
 
     try {
-        console.log(`📸 [${sessionID}] Image Upload Received: ${req.file.originalname}`);
-
         const technicalPayload = await processImageUpload(req.file.buffer);
         const kernelVerdict = analyzePrintReadyStatus(technicalPayload, session);
 
         if (kernelVerdict.status === 'REJECT_LOW_RES') {
-            const refusal = `עצור! המערכת זיהתה שהקובץ ברזולוציה נמוכה מדי להדפסה (${technicalPayload.dpi} DPI). נדרש לפחות 150 DPI לתוצאה איכותית. אנא העלה קובץ איכותי יותר.`;
-            return res.json({
-                text: refusal,
-                status: kernelVerdict.status,
-                technical: technicalPayload
-            });
+            const refusal = `עצור! המערכת זיהתה שהקובץ ברזולוציה נמוכה מדי (${technicalPayload.dpi} DPI). נדרש 150 DPI.`;
+            return res.json({ text: refusal, status: kernelVerdict.status, technical: technicalPayload });
         }
 
         session.lastImageMetadata = technicalPayload;
-
         return res.json({
             text: "הקובץ נבדק טכנית ונמצא תקין! על מה נדפיס אותו?",
             status: kernelVerdict.status,
             technical: technicalPayload,
             options: ['פליירים', 'פוסטרים', 'מדבקות']
         });
-
     } catch (error) {
-        console.error("💥 Controller Error handling image upload:", error);
-        res.status(500).json({ text: error.message || "אופס, נתקלתי בבעיה בעיבוד התמונה." });
+        console.error("💥 Upload Error:", error);
+        res.status(500).json({ text: "אופס, נתקלתי בבעיה בעיבוד התמונה." });
     }
 }
 
-module.exports = {
-    handleChat,
-    handleImageUpload
-};
+module.exports = { handleChat, handleImageUpload };
