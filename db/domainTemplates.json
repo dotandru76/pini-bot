@@ -1,0 +1,64 @@
+{
+    "products": {
+        "flyer": {
+            "mandatory": [
+                "qty",
+                "size",
+                "paper_type"
+            ],
+            "guidance": "איזה גודל פלייר תרצה (A4/A5/A6)? ובאיזה סוג נייר?"
+        },
+        "booklet": {
+            "mandatory": [
+                "qty",
+                "pages",
+                "size",
+                "book_type"
+            ],
+            "guidance": "כדי לתמחר ספר, אני צריך לדעת: כמה עמודים יש בו? מה הגודל (A4/A5)? ואיזה סוג כריכה (רכה/קשה/סיכות)?"
+        },
+        "sticker": {
+            "mandatory": [
+                "qty",
+                "size",
+                "material",
+                "cut"
+            ],
+            "guidance": "לגבי המדבקות: מה הגודל? איזה חומר (ויניל/נייר/שקוף)? ואיזה חיתוך (מרובע/צורני)?"
+        },
+        "poster": {
+            "mandatory": [
+                "qty",
+                "size",
+                "paper_type"
+            ],
+            "guidance": "לפוסטר: מה הגודל שאתה צריך? ועל איזה נייר נדפיס?"
+        },
+        "bc": {
+            "mandatory": [
+                "qty",
+                "paper_type"
+            ],
+            "guidance": "בכרטיסי ביקור: כמה יחידות? ואיזה סוג נייר (רגיל/יוקרתי)?"
+        },
+        "invitation": {
+            "mandatory": [
+                "qty",
+                "size",
+                "paper_type"
+            ],
+            "guidance": "להזמנה: מה הגודל? ועל איזה נייר תרצה להדפיס (פנינה/אקוורלו/כרומו)?"
+        },
+        "rollup": {
+            "mandatory": [
+                "qty",
+                "size",
+                "material"
+            ],
+            "guidance": "לרולאפ: מה הגודל? ואיזה חומר (נפוץ ביותר זה שמשונית)?"
+        }
+    },
+    "general": {
+        "re_anchor": "אנחנו מדברים על הדפסת [product_name]. בוא נסגור את המפרט כדי שאוכל לתמחר בצורה מדויקת."
+    }
+}

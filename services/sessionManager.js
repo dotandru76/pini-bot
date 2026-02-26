@@ -23,13 +23,20 @@ function getSession(userId) {
             draftAttributes: {},  // תשובות זמניות (לפני חישוב)
             processedRequests: new Map(),
             lastActive: Date.now(),
+            lastSpecChangeTime: Date.now(), // Tracking for Semantic Aging
             blockState: { reason: null, ttl: 0 } // Phase 4.2: Built-in Turn-Based Memory
         };
     }
 
-    // Phase 4.2 Security Patch: Turn-based TTL decrement
-    // Only release PARAMETER_INSTABILITY (Oscillation) blocks
+    // Phase 5.3: Semantic Aging (Drift Detection)
     const session = sessions[userId];
+    const driftDelta = (Date.now() - session.lastSpecChangeTime) / 1000 / 60; // in minutes
+    if (driftDelta >= 8 && driftDelta <= 12 && session.draftAttributes && Object.keys(session.draftAttributes).length > 0) {
+        session.driftDetected = true;
+        console.log(`⏳ [SESSION] Semantic Aging detected for ${userId}: ${driftDelta.toFixed(1)}m`);
+    } else {
+        session.driftDetected = false;
+    }
     if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
         if (session.blockState.ttl > 0) {
             session.blockState.ttl--;

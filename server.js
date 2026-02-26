@@ -1,5 +1,6 @@
 /** server.js V32.0 - MVC Refactoring */
 const express = require('express');
+const path = require('path');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 require('dotenv').config();
@@ -25,7 +26,6 @@ app.get('/api/health', (req, res) => {
 });
 
 // Serve frontend files
-const path = require('path');
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/', (req, res) => {

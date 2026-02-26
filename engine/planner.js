@@ -1,29 +1,35 @@
-/**
- * Pini Print Bot - Conversational Order Compiler (Planner v4.2)
- * CTO Mandate: The Smart Gateway Architecture
- */
+const fs = require('fs');
+const path = require('path');
+
+// Load Domain Templates (Spec v5)
+const templatesPath = path.join(__dirname, '../db/domainTemplates.json');
+let DOMAIN_TEMPLATES = { products: {} };
+try {
+    DOMAIN_TEMPLATES = JSON.parse(fs.readFileSync(templatesPath, 'utf8'));
+} catch (e) {
+    console.error("⚠️ [COMPILER] Failed to load domainTemplates.json:", e.message);
+}
 
 const PRODUCT_WHITELIST = {
     flyer: ["qty", "paper_type", "size", "sides", "lamination", "finishing"],
-    booklet: ["qty", "pages", "cover", "binding", "size", "paper_type", "finishings"],
+    booklet: ["qty", "pages", "cover", "binding", "size", "paper_type", "finishings", "book_type"],
     sticker: ["qty", "shape", "material", "cut", "size", "lamination"],
     poster: ["qty", "size", "paper_type", "lamination"],
-    bc: ["qty", "paper_type", "corners", "lamination", "finishing"],
+    bc: ["qty", "paper_type", "corners", "lamination", "finishing", "team_size", "instances"],
     invitation: ["qty", "size", "paper_type", "finishing", "extras"],
     rollup: ["qty", "size", "material"]
 };
 
-// Expanded to catch common hallucinations seen in Chaos Test
 const CANONICAL_PRODUCTS = {
     "bc": ["business card", "business cards", "cards", "visiting card", "כרטיס ביקור", "כרטיסי ביקור", "place_card", "office"],
     "flyer": ["flyer", "flyers", "pamphlet", "פלייר"],
     "rollup": ["rollup", "rollups", "roll up", "רולאפ", "roll_stickers"],
-    "poster": ["poster", "posters", "פוסטר"]
+    "poster": ["poster", "posters", "פוסטר"],
+    "booklet": ["book", "books", "ספר", "ספרים", "חוברת", "חוברות"]
 };
 
 function normalizeEntity(rawName) {
     if (!rawName) return rawName;
-    // Replace underscores with spaces and trim
     const cleanName = rawName.toLowerCase().trim().replace(/_/g, " ");
     for (const [canonical, synonyms] of Object.entries(CANONICAL_PRODUCTS)) {
         if (synonyms.some(s => s.toLowerCase() === cleanName) || canonical === cleanName) {
@@ -39,127 +45,171 @@ const PARAM_MAPPING = {
     "paper_weight": "paper_type",
     "paper": "paper_type",
     "material_type": "material",
-    "dimensions": "size"
+    "dimensions": "size",
+    "multiplier": "team_size",
+    "people": "team_size"
 };
 
 /**
  * Compiles LLM extracted entities into a normalized order state.
+ * v5.2 - CTO Hardened with Draft Persistence & Oscillation Resolution
  */
-function compileOrder(extractedData) {
+function compileOrder(extractedData, session) {
     try {
-        console.log("🧩 [COMPILER] Processing turn (v4.2 - Smart Gateway)...");
+        console.log("🧩 [COMPILER] Processing turn (v5.2 - Draft Persistence)...");
+
+        if (!session.draftAttributes) session.draftAttributes = {};
 
         let unassignedParams = [];
         let buckets = {};
         let clarificationBlocks = [];
 
-        // 1. Partial Commit Model (State Isolation)
-        // Note: Global Mixed Confidence Rejection REMOVED per CTO mandate.
+        // 0. Handle Deletion Intent 
+        const deletionSignals = ["מחק", "בטל", "תוריד", "delete", "remove", "cancel"];
+        const isDeleteIntent = extractedData.intent === 'cancel' || deletionSignals.some(s => extractedData.raw_text.includes(s));
+
+        // 1. Sync Draft State with current Extraction
         extractedData.products_detected.forEach(item => {
             const normProduct = normalizeEntity(item.product);
 
-            if (item.confidence >= 0.6) {
-                buckets[normProduct] = {
-                    status: "READY_FOR_INTEGRITY",
-                    params: {},
-                    history: {},
-                    unstable: false
-                };
-            } else if (item.confidence >= 0.3) {
-                buckets[normProduct] = {
-                    status: "PENDING_CONFIRMATION",
-                    params: {},
-                    history: {},
-                    unstable: false
-                };
-                clarificationBlocks.push(`זיהיתי שביקשת ${normProduct}, האם לאשר ולתמחר?`);
+            // 🛡️ [DOMAIN VALIDATION GATE]
+            // Ensure product is recognized in Beit Yitzhak ecosystem
+            if (!DOMAIN_TEMPLATES.products[normProduct]) {
+                console.warn(`🛡️ [GATE] Blocked unrecognized product: ${normProduct}`);
+                return;
+            }
+
+            if (!session.draftAttributes[normProduct]) {
+                session.draftAttributes[normProduct] = { params: {}, history: {}, status: 'PENDING' };
+            }
+            if (item.confidence >= 0.6) session.draftAttributes[normProduct].status = 'EXTRACTED';
+
+            if (isDeleteIntent && extractedData.raw_text.includes(normProduct)) {
+                console.log(`🗑️ [COMPILER] Deleting ${normProduct} from draft.`);
+                delete session.draftAttributes[normProduct];
             }
         });
 
-        // 2. Param Isolation & Oscillation Detection
+        // Merge Parameters into Draft
         extractedData.parameters_detected.forEach(param => {
-            if (PARAM_MAPPING[param.key]) {
-                param.key = PARAM_MAPPING[param.key];
+            if (PARAM_MAPPING[param.key]) param.key = PARAM_MAPPING[param.key];
+            const contextKey = normalizeEntity(param.context);
+
+            if (contextKey === 'global') {
+                unassignedParams.push(param);
+                return;
             }
 
-            const contextKey = normalizeEntity(param.context);
-            const targetBucket = buckets[contextKey];
+            // [GATE] Check if context (product) is valid
+            if (!DOMAIN_TEMPLATES.products[contextKey]) return;
 
-            if (targetBucket) {
-                const allowedParams = PRODUCT_WHITELIST[contextKey] || [];
-                if (!allowedParams.includes(param.key)) {
-                    console.log(`🛡️ [COMPILER] Dropping invalid param: ${param.key} for ${contextKey}`);
+            if (!session.draftAttributes[contextKey]) {
+                session.draftAttributes[contextKey] = { params: {}, history: {}, status: 'PENDING' };
+            }
+
+            const target = session.draftAttributes[contextKey];
+            const allowedParams = PRODUCT_WHITELIST[contextKey] || [];
+
+            if (allowedParams.includes(param.key)) {
+                // 🛡️ [POISON OVERRIDE PROTECTION]
+                // Never let "unknown" or "1" (heuristic error) overwrite a valid existing value
+                const lowerVal = String(param.value).toLowerCase();
+                const isPoison = ["unknown", "null", "undefined", "n/a", "1", "לא ידוע"].includes(lowerVal);
+
+                if (isPoison && target.params[param.key] && String(target.params[param.key]).length > 0) {
+                    console.log(`🛡️ [GATE] Blocked poison override for ${contextKey}.${param.key}: ${param.value}`);
                     return;
                 }
 
-                if (!targetBucket.history[param.key]) targetBucket.history[param.key] = [];
-                targetBucket.history[param.key].push(param.value);
+                if (!target.history[param.key]) target.history[param.key] = [];
+                target.history[param.key].push(param.value);
+                target.params[param.key] = param.value;
 
-                if (targetBucket.history[param.key].length > 1) {
-                    const uniqueValues = new Set(targetBucket.history[param.key]);
-                    if (uniqueValues.size > 1) {
-                        targetBucket.unstable = true;
-                    }
-                }
-                targetBucket.params[param.key] = param.value;
-            } else {
-                unassignedParams.push(param);
+                // Update lastSpecChangeTime in session (Phase 5.3)
+                session.lastSpecChangeTime = Date.now();
             }
         });
 
-        // 3. Bucket-Scoped Ambiguity Rule
-        const isQtyGlobal = unassignedParams.some(p => (p.key === "qty" || p.key === "quantity"));
-        const anyBucketHasQty = Object.values(buckets).some(b => b.params.qty);
+        console.log("📝 [COMPILER] Merged Draft State:", JSON.stringify(session.draftAttributes, null, 2));
 
-        if (isQtyGlobal && !anyBucketHasQty) {
-            console.log("🚨 [COMPILER] HARD_FAIL: Ambiguous Quantity.");
-            return { status: "HARD_FAIL", reason: "AMBIGUOUS_QUANTITY" };
+        // 2. Process Buckets Logic
+        for (const [product, data] of Object.entries(session.draftAttributes)) {
+            let itemUnstable = false;
+
+            // Instability Resolution
+            for (const [key, history] of Object.entries(data.history)) {
+                const uniqueValues = new Set(history.map(v => String(v)));
+                if (uniqueValues.size > 1) {
+                    // Check if block state released
+                    if (!session.blockState || session.blockState.reason === null) {
+                        console.log(`✨ [COMPILER] Resolving oscillation for ${product}.${key}`);
+                        data.history[key] = [data.params[key]]; // Reset to last choice
+                    } else {
+                        itemUnstable = true;
+                    }
+                }
+            }
+
+            // Multiplication Math
+            let finalParams = { ...data.params };
+            if (finalParams.team_size && finalParams.qty) {
+                const qtyVal = parseInt(finalParams.qty);
+                const teamVal = parseInt(finalParams.team_size);
+                if (!isNaN(qtyVal) && !isNaN(teamVal)) {
+                    finalParams.qty = qtyVal * teamVal;
+                    finalParams.is_multi_entity = true;
+                }
+            }
+
+            buckets[product] = {
+                status: data.status === 'EXTRACTED' ? "READY_FOR_INTEGRITY" : "PENDING_CONFIRMATION",
+                behavioral_mode: "NORMAL",
+                params: finalParams,
+                unstable: itemUnstable
+            };
         }
 
-        // Push clarification for significant unassigned params
-        if (unassignedParams.length > 0) {
-            const significantKeys = [...new Set(unassignedParams.filter(p => p.confidence > 0.6).map(p => p.key))];
-            if (significantKeys.length > 0) {
-                clarificationBlocks.push(`יש לי כמה פרטים (${significantKeys.join(", ")}) שאני לא בטוח לאיזה מוצר הם שייכים.`);
+        // 3. Validation Layer (Consultation)
+        for (const [product, data] of Object.entries(buckets)) {
+            const template = DOMAIN_TEMPLATES.products[product];
+            if (template && template.mandatory) {
+                const missing = template.mandatory.filter(p => !data.params[p]);
+                if (missing.length > 0) {
+                    data.status = "NEEDS_SPECIFICATION";
+                    data.behavioral_mode = "CONSULTATIVE_ACTIVE";
+                    if (!clarificationBlocks.includes(template.guidance)) {
+                        clarificationBlocks.push(template.guidance);
+                    }
+                }
             }
         }
 
-        // 4. Final Validation & Stability Check
+        // 4. Results
         let validatedItems = [];
         let specificInstability = null;
 
-        console.log("   Final Buckets Check:", JSON.stringify(buckets, null, 2));
-
         for (const [product, data] of Object.entries(buckets)) {
             if (data.unstable) {
-                console.log(`🚨 [COMPILER] Instability detected for ${product}`);
                 specificInstability = product;
                 clarificationBlocks.push(`שמתי לב לשינוי בנתונים עבור ${product}. תוכל לאשר מה הכמות המדויקת?`);
-                continue; // Skip this item but allow others
+                continue;
             }
-
-            // ONLY READY_FOR_INTEGRITY items are eligible for processing
             if (data.status === "READY_FOR_INTEGRITY") {
-                console.log(`✅ [COMPILER] Validating READY item: ${product}`);
-                validatedItems.push({
-                    product,
-                    params: data.params
-                });
-            } else {
-                console.log(`⏳ [COMPILER] Item ${product} is ${data.status}`);
+                validatedItems.push({ product, params: data.params });
             }
         }
 
-        console.log("   Final Validated Items Count:", validatedItems.length);
-
         let status = "READY";
-        if (clarificationBlocks.length > 0) {
+        if (Object.values(buckets).some(b => b.behavioral_mode === "CONSULTATIVE_ACTIVE")) {
+            status = "CONSULTATIVE_ACTIVE";
+        } else if (clarificationBlocks.length > 0) {
             status = validatedItems.length > 0 ? "PARTIAL_READY" : "CLARIFICATION_REQUIRED";
         }
 
         return {
             status,
             items: validatedItems,
+            deleted_items: [], // Deprecated in favor of draft mutation
             clarification_blocks: clarificationBlocks,
             reason: specificInstability ? "PARAMETER_INSTABILITY" : null
         };

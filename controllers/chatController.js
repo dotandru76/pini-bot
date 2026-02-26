@@ -55,19 +55,41 @@ async function handleChat(req, res) {
             finalResponse.text = session.cart.length > 0 ? "זה מה שיש לנו בינתיים:" : "העגלה ריקה.";
         }
         else {
-            // 3. Planning (Conversational Compiler v4.2 - The Smart Gateway)
-            const compilation = compileOrder(extraction);
+            // 3. Planning (Conversational Compiler v5.2 - Draft Persistence)
+            const compilation = compileOrder(extraction, session);
 
-            if (compilation.status === 'READY' || (compilation.items && compilation.items.length > 0)) {
-                // Process READY items
+            if (compilation.status === 'READY' || compilation.status === 'PARTIAL_READY' || (compilation.items && compilation.items.length > 0) || (compilation.deleted_items && compilation.deleted_items.length > 0)) {
+
+                // A. Handle Deletions (Spec v5.1)
+                if (compilation.deleted_items && compilation.deleted_items.length > 0) {
+                    compilation.deleted_items.forEach(product => {
+                        console.log(`🗑️ [CONTROLLER] Removing product from cart: ${product}`);
+                        session.cart = session.cart.filter(item => item.product !== product);
+                    });
+                }
+                // A. Handle Deletions from intent (Spec v5.2)
+                if (extraction.intent === 'cancel') {
+                    compilation.items.forEach(item => { // In case LLM extracted partially
+                        session.cart = session.cart.filter(c => c.product !== item.product);
+                    });
+                    // planner.js already handles draftAttributes deletion if passed session correctly
+                }
+
+                // B. Process READY items (Upsert Model)
                 compilation.items.forEach(item => {
+                    // Phase 5.1 Hardening: Prevent duplication by removing existing product of same type
+                    session.cart = session.cart.filter(c => c.product !== item.product);
+
                     const productionItem = calculate_custom_job(session.cart, {
                         product: item.product,
                         ...item.params
                     });
 
                     // Secure Push
-                    pushToSessionCart(session, productionItem);
+                    if (pushToSessionCart(session, productionItem)) {
+                        // Phase 5.2: Success! Remove from Draft State
+                        delete session.draftAttributes[item.product];
+                    }
                 });
 
                 let responseMsg = extraction.answer_text;
@@ -78,7 +100,7 @@ async function handleChat(req, res) {
                 finalResponse.text = responseMsg;
                 finalResponse.cart = session.cart;
             }
-            else if (compilation.status === 'CLARIFICATION_REQUIRED') {
+            else if (compilation.status === 'CONSULTATIVE_ACTIVE' || compilation.status === 'CLARIFICATION_REQUIRED') {
                 // Handle Security Block for Instability
                 if (compilation.reason === 'PARAMETER_INSTABILITY') {
                     session.blockState = { reason: "PARAMETER_INSTABILITY", ttl: 2 };
