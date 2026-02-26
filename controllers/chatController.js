@@ -3,6 +3,7 @@ const { compileOrder } = require('../engine/planner');
 const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest } = require('../services/sessionManager');
 const { processImageUpload } = require('../engine/imageProcessor');
 const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
+const { calculate_custom_job } = require('../engine/calculation');
 
 async function handleChat(req, res) {
     const { message, userId, requestId } = req.body;
@@ -51,9 +52,17 @@ async function handleChat(req, res) {
             const compilation = compileOrder(extraction);
 
             if (compilation.status === 'READY') {
-                // Bulk Add
-                compilation.data.forEach(item => session.cart.push(item));
+                // Bridge to Price Engine (CTO Mandate: Phase 4 Integration)
+                compilation.data.forEach(item => {
+                    const calcResult = calculate_custom_job(session.cart, {
+                        product: item.product,
+                        ...item.mapped_params
+                    });
+                    session.cart = calcResult.updatedCart;
+                });
+
                 finalResponse.text = extraction.answer_text + (compilation.data.length > 1 ? `\n(הוספתי ${compilation.data.length} פריטים לעגלה)` : "");
+                finalResponse.cart = session.cart;
             }
             else if (compilation.status === 'CLARIFICATION_REQUIRED') {
                 finalResponse.text = compilation.clarification_blocks.join("\n");
