@@ -1,6 +1,6 @@
 const { classifyMessage } = require('../engine/classifier');
 const { compileOrder } = require('../engine/planner');
-const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest } = require('../services/sessionManager');
+const { getSession, checkAndLockRequest, cacheCompletedRequest, releaseFailedRequest, pushToSessionCart } = require('../services/sessionManager');
 const { processImageUpload } = require('../engine/imageProcessor');
 const { analyzePrintReadyStatus } = require('../engine/decisionKernel');
 const { calculate_custom_job } = require('../engine/calculation');
@@ -19,6 +19,12 @@ async function handleChat(req, res) {
     if (lockResult.status === 'COMPLETED') return res.json(lockResult.cachedResponse);
 
     try {
+        // 0. Security Layer: Check for existing Block State
+        if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
+            const blockRefusal = `אני עדיין מחכה שתבצע סדר בבלגן. תוכל לאשר כמות אחת מדויקת עבור המוצר ששינית? (חסימה תשתחרר בעוד ${session.blockState.ttl} הודעות)`;
+            return res.json({ text: blockRefusal, cart: session.cart });
+        }
+
         // 1. Comprehension (Extractor)
         const extraction = await classifyMessage(message, session);
         console.log("🧩 [EXTRACTION DATA]:", JSON.stringify(extraction, null, 2));
@@ -42,31 +48,42 @@ async function handleChat(req, res) {
         if (extraction.intent === 'reset') {
             session.cart = [];
             session.currentProduct = null;
+            session.blockState = { reason: null, ttl: 0 };
             finalResponse.text = "המערכת אופסה. מה תרצה להזמין?";
         }
         else if (extraction.intent === 'show_cart') {
             finalResponse.text = session.cart.length > 0 ? "זה מה שיש לנו בינתיים:" : "העגלה ריקה.";
         }
         else {
-            // 3. Planning (Conversational Compiler v4.0)
+            // 3. Planning (Conversational Compiler v4.2 - The Smart Gateway)
             const compilation = compileOrder(extraction);
 
-            if (compilation.status === 'READY') {
-                // Bridge to Price Engine (CTO Mandate: Phase 4 Integration)
-                compilation.data.forEach(item => {
-                    const calcResult = calculate_custom_job(session.cart, {
+            if (compilation.status === 'READY' || (compilation.items && compilation.items.length > 0)) {
+                // Process READY items
+                compilation.items.forEach(item => {
+                    const productionItem = calculate_custom_job(session.cart, {
                         product: item.product,
-                        ...item.mapped_params
+                        ...item.params
                     });
-                    session.cart = calcResult.updatedCart;
+
+                    // Secure Push
+                    pushToSessionCart(session, productionItem);
                 });
 
-                finalResponse.text = extraction.answer_text + (compilation.data.length > 1 ? `\n(הוספתי ${compilation.data.length} פריטים לעגלה)` : "");
+                let responseMsg = extraction.answer_text;
+                if (compilation.clarification_blocks && compilation.clarification_blocks.length > 0) {
+                    responseMsg += "\n\n" + compilation.clarification_blocks.join("\n");
+                }
+
+                finalResponse.text = responseMsg;
                 finalResponse.cart = session.cart;
             }
             else if (compilation.status === 'CLARIFICATION_REQUIRED') {
+                // Handle Security Block for Instability
+                if (compilation.reason === 'PARAMETER_INSTABILITY') {
+                    session.blockState = { reason: "PARAMETER_INSTABILITY", ttl: 2 };
+                }
                 finalResponse.text = compilation.clarification_blocks.join("\n");
-                finalResponse.options = ['כן, תמשיך', 'לא, בטל']; // Basic options
             }
             else if (compilation.status === 'HARD_FAIL') {
                 finalResponse.text = "משהו לא היה ברור בבקשה. " + (compilation.reason === 'AMBIGUOUS_QUANTITY' ? "לא ידעתי לאיזו כמות התכוונת לכל מוצר." : "תוכל לפרט יותר?");
@@ -80,13 +97,12 @@ async function handleChat(req, res) {
     } catch (error) {
         console.error("💥 Controller Error:", error);
         releaseFailedRequest(session, requestId);
-        res.status(500).json({ text: "אופס, נתקלתי בבעיה. נסה שוב." });
+        if (!res.headersSent) {
+            res.status(500).json({ text: "אופס, נתקלתי בבעיה. נסה שוב." });
+        }
     }
 }
 
-/**
- * Handles image uploads deterministically (AI Governance Layer 1).
- */
 async function handleImageUpload(req, res) {
     const { userId } = req.body;
     const sessionID = userId || 'default_user';
@@ -99,10 +115,7 @@ async function handleImageUpload(req, res) {
     try {
         console.log(`📸 [${sessionID}] Image Upload Received: ${req.file.originalname}`);
 
-        // 1. LAYER 1: Deterministic Extraction (Code is Judge)
         const technicalPayload = await processImageUpload(req.file.buffer);
-
-        // 2. GOVERNANCE: Consult the Decision Kernel
         const kernelVerdict = analyzePrintReadyStatus(technicalPayload, session);
 
         if (kernelVerdict.status === 'REJECT_LOW_RES') {
@@ -114,7 +127,6 @@ async function handleImageUpload(req, res) {
             });
         }
 
-        // 3. If passed Layer 1, store metadata and proceed to Layer 2 (Semantic)
         session.lastImageMetadata = technicalPayload;
 
         return res.json({

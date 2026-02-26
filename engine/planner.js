@@ -1,7 +1,6 @@
 /**
- * Pini Print Bot - Conversational Order Compiler (Planner v4.0)
- * CTO Mandate: Phase 4 Rewrite
- * Dual Threshold, Weighted Ambiguity, Oscillation, Strict Contract
+ * Pini Print Bot - Conversational Order Compiler (Planner v4.2)
+ * CTO Mandate: The Smart Gateway Architecture
  */
 
 const PRODUCT_WHITELIST = {
@@ -10,8 +9,29 @@ const PRODUCT_WHITELIST = {
     sticker: ["qty", "shape", "material", "cut", "size", "lamination"],
     poster: ["qty", "size", "paper_type", "lamination"],
     bc: ["qty", "paper_type", "corners", "lamination", "finishing"],
-    invitation: ["qty", "size", "paper_type", "finishing", "extras"]
+    invitation: ["qty", "size", "paper_type", "finishing", "extras"],
+    rollup: ["qty", "size", "material"]
 };
+
+// Expanded to catch common hallucinations seen in Chaos Test
+const CANONICAL_PRODUCTS = {
+    "bc": ["business card", "business cards", "cards", "visiting card", "כרטיס ביקור", "כרטיסי ביקור", "place_card", "office"],
+    "flyer": ["flyer", "flyers", "pamphlet", "פלייר"],
+    "rollup": ["rollup", "rollups", "roll up", "רולאפ", "roll_stickers"],
+    "poster": ["poster", "posters", "פוסטר"]
+};
+
+function normalizeEntity(rawName) {
+    if (!rawName) return rawName;
+    // Replace underscores with spaces and trim
+    const cleanName = rawName.toLowerCase().trim().replace(/_/g, " ");
+    for (const [canonical, synonyms] of Object.entries(CANONICAL_PRODUCTS)) {
+        if (synonyms.some(s => s.toLowerCase() === cleanName) || canonical === cleanName) {
+            return canonical;
+        }
+    }
+    return cleanName;
+}
 
 const PARAM_MAPPING = {
     "quantity": "qty",
@@ -24,58 +44,54 @@ const PARAM_MAPPING = {
 
 /**
  * Compiles LLM extracted entities into a normalized order state.
- * Enforces strict CTO logic for stability and ambiguity.
  */
 function compileOrder(extractedData) {
     try {
+        console.log("🧩 [COMPILER] Processing turn (v4.2 - Smart Gateway)...");
+
         let unassignedParams = [];
         let buckets = {};
         let clarificationBlocks = [];
 
-        // 1. Dual Confidence Threshold (CTO Correction #2)
-        // Mixed Confidence Rule: If any product is marginal, reject the turn for clarification.
-        const isMixedConfidence = extractedData.products_detected.some(item => item.confidence < 0.85 && item.confidence >= 0.75);
-
-        if (isMixedConfidence) {
-            return {
-                status: "CLARIFICATION_REQUIRED",
-                clarification_blocks: ["שמתי לב לכמה פריטים שאני לא בטוח לגביהם. תוכל לאשר מה בדיוק אתה רוצה להזמין?"],
-                reason: "MIXED_CONFIDENCE_REJECTION"
-            };
-        }
-
+        // 1. Partial Commit Model (State Isolation)
+        // Note: Global Mixed Confidence Rejection REMOVED per CTO mandate.
         extractedData.products_detected.forEach(item => {
-            if (item.confidence >= 0.85) {
-                // Initialize entity bucket
-                // If same product exists, this supports split lines if we add ID, 
-                // but for now we follow the "Replace/Don't merge" turn-based rule.
-                buckets[item.product] = {
+            const normProduct = normalizeEntity(item.product);
+
+            if (item.confidence >= 0.6) {
+                buckets[normProduct] = {
+                    status: "READY_FOR_INTEGRITY",
                     params: {},
                     history: {},
                     unstable: false
                 };
+            } else if (item.confidence >= 0.3) {
+                buckets[normProduct] = {
+                    status: "PENDING_CONFIRMATION",
+                    params: {},
+                    history: {},
+                    unstable: false
+                };
+                clarificationBlocks.push(`זיהיתי שביקשת ${normProduct}, האם לאשר ולתמחר?`);
             }
         });
 
-        // 2. Param Isolation & Oscillation Detection (CTO Correction #4)
+        // 2. Param Isolation & Oscillation Detection
         extractedData.parameters_detected.forEach(param => {
-            // Apply normalization mapping
             if (PARAM_MAPPING[param.key]) {
                 param.key = PARAM_MAPPING[param.key];
             }
 
-            // Find target bucket or assign to global if missing/unassigned
-            const targetBucket = buckets[param.context];
+            const contextKey = normalizeEntity(param.context);
+            const targetBucket = buckets[contextKey];
 
             if (targetBucket) {
-                // Whitelist Enforcement
-                const allowedParams = PRODUCT_WHITELIST[param.context] || [];
+                const allowedParams = PRODUCT_WHITELIST[contextKey] || [];
                 if (!allowedParams.includes(param.key)) {
-                    console.log(`🛡️ [COMPILER] Dropping invalid param: ${param.key} for ${param.context}`);
+                    console.log(`🛡️ [COMPILER] Dropping invalid param: ${param.key} for ${contextKey}`);
                     return;
                 }
 
-                // Formal Oscillation Logic
                 if (!targetBucket.history[param.key]) targetBucket.history[param.key] = [];
                 targetBucket.history[param.key].push(param.value);
 
@@ -85,79 +101,72 @@ function compileOrder(extractedData) {
                         targetBucket.unstable = true;
                     }
                 }
-
-                // Always take latest value as current, but mark instability
                 targetBucket.params[param.key] = param.value;
             } else {
                 unassignedParams.push(param);
             }
         });
 
-        // 3. Weighted Ambiguity Rule (CTO Correction #3)
-        const isQtyAmbiguous = unassignedParams.some(p => p.key === "qty");
-        const totalParamsInput = extractedData.parameters_detected.length;
-        const ambiguityRatio = totalParamsInput > 0 ? (unassignedParams.length / totalParamsInput) : 0;
+        // 3. Bucket-Scoped Ambiguity Rule
+        const isQtyGlobal = unassignedParams.some(p => (p.key === "qty" || p.key === "quantity"));
+        const anyBucketHasQty = Object.values(buckets).some(b => b.params.qty);
 
-        // Tiered Ambiguity Response
-        if (isQtyAmbiguous) {
+        if (isQtyGlobal && !anyBucketHasQty) {
+            console.log("🚨 [COMPILER] HARD_FAIL: Ambiguous Quantity.");
             return { status: "HARD_FAIL", reason: "AMBIGUOUS_QUANTITY" };
         }
-        if (ambiguityRatio > 0.60) {
-            return { status: "HARD_FAIL", reason: "EXTREME_AMBIGUITY" };
-        }
-        if (ambiguityRatio > 0.40) {
-            return {
-                status: "CLARIFICATION_REQUIRED",
-                clarification_blocks: ["יש לי כמה פרטים שאני לא בטוח לאיזה מוצר הם שייכים. תוכל לעשות סדר?"],
-                reason: "WEIGHTED_AMBIGUITY_WARNING"
-            };
+
+        // Push clarification for significant unassigned params
+        if (unassignedParams.length > 0) {
+            const significantKeys = [...new Set(unassignedParams.filter(p => p.confidence > 0.6).map(p => p.key))];
+            if (significantKeys.length > 0) {
+                clarificationBlocks.push(`יש לי כמה פרטים (${significantKeys.join(", ")}) שאני לא בטוח לאיזה מוצר הם שייכים.`);
+            }
         }
 
         // 4. Final Validation & Stability Check
         let validatedItems = [];
+        let specificInstability = null;
+
+        console.log("   Final Buckets Check:", JSON.stringify(buckets, null, 2));
 
         for (const [product, data] of Object.entries(buckets)) {
             if (data.unstable) {
-                clarificationBlocks.push(`שמתי לב לשינוי בנתונים עבור ${product}. מה הכמות או המפרט הסופיים?`);
-                continue;
+                console.log(`🚨 [COMPILER] Instability detected for ${product}`);
+                specificInstability = product;
+                clarificationBlocks.push(`שמתי לב לשינוי בנתונים עבור ${product}. תוכל לאשר מה הכמות המדויקת?`);
+                continue; // Skip this item but allow others
             }
 
-            // Entity Completeness (Minimum requirement: qty)
-            if (!data.params.qty) {
-                clarificationBlocks.push(`לגבי ה-${product}, חסרה לי כמות. כמה להזמין?`);
-            } else {
+            // ONLY READY_FOR_INTEGRITY items are eligible for processing
+            if (data.status === "READY_FOR_INTEGRITY") {
+                console.log(`✅ [COMPILER] Validating READY item: ${product}`);
                 validatedItems.push({
-                    product: product,
-                    mapped_params: data.params,
-                    _compiler: { stability: "HIGH" }
+                    product,
+                    params: data.params
                 });
+            } else {
+                console.log(`⏳ [COMPILER] Item ${product} is ${data.status}`);
             }
         }
 
-        // 5. Strict Status Contract
+        console.log("   Final Validated Items Count:", validatedItems.length);
+
+        let status = "READY";
         if (clarificationBlocks.length > 0) {
-            return {
-                status: "CLARIFICATION_REQUIRED",
-                clarification_blocks: clarificationBlocks,
-                reason: buckets && Object.values(buckets).some(b => b.unstable) ? "PARAMETER_INSTABILITY" : "MISSING_SLOTS"
-            };
+            status = validatedItems.length > 0 ? "PARTIAL_READY" : "CLARIFICATION_REQUIRED";
         }
-
-        if (validatedItems.length === 0) {
-            return { status: "HARD_FAIL", reason: "NO_VALID_ENTITIES_CONSTRUCTED" };
-        }
-
-        console.log("📊 [COMPILER AUDIT] Buckets:", JSON.stringify(buckets, null, 2));
-        console.log("📊 [COMPILER AUDIT] Unassigned:", JSON.stringify(unassignedParams, null, 2));
 
         return {
-            status: "READY",
-            data: validatedItems
+            status,
+            items: validatedItems,
+            clarification_blocks: clarificationBlocks,
+            reason: specificInstability ? "PARAMETER_INSTABILITY" : null
         };
 
     } catch (error) {
-        console.error("💥 [COMPILER FATAL]:", error);
-        return { status: "HARD_FAIL", reason: "COMPILER_CRASH" };
+        console.error("❌ [COMPILER] Error:", error);
+        return { status: "ERROR", message: error.message };
     }
 }
 

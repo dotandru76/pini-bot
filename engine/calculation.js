@@ -114,30 +114,45 @@ function calculateWideFormat(cart, params, productKey) {
     return buildResult(cart, productKey, params, finalPrice, qty, `${qty} יח' פורמט רחב`, totalCost);
 }
 
-function buildResult(cart, product, params, price, qty, desc, cost) {
-    const item = { product, description: desc, qty, client_price: price, unit_price: (price / qty).toFixed(2), production_cost: cost?.toFixed(2), margin_warning: false };
-    const updatedCart = [...(cart || []), item];
+const { assembleProductionItem } = require('./integrity');
 
-    // --- PHASE 1.3.1: Unified Cart Margin Analyzer ---
+function buildResult(cart, product, params, price, qty, desc, cost) {
+    // 1. Initial Calc Object (Pre-Hardening)
+    const calcResult = {
+        product,
+        client_price: price,
+        unit_price: (price / qty).toFixed(2),
+        production_cost: cost?.toFixed(2),
+        description: desc,
+        engine: params.engine || 'digital' // Pass through engine type
+    };
+
+    // 2. DOMAIN PIPELINE PHASE 3: Assemble Production Item (IDs, Hashing, Normalization, Freezing)
+    const hardenedItem = assembleProductionItem(calcResult, params);
+
+    // 3. Margin Analysis (Audit Log only, logic moved to hardenedItem check if needed)
+    // We still keep the console logs for debugging as per previous work
     let totalCartPrice = 0;
     let totalCartCost = 0;
+    const virtualCart = [...(cart || []), hardenedItem];
 
-    for (const c of updatedCart) {
-        totalCartPrice += parseFloat(c.client_price || 0);
-        totalCartCost += parseFloat(c.production_cost || 0);
+    for (const c of virtualCart) {
+        // Handle both production items and legacy items if any
+        totalCartPrice += parseFloat(c.pricing_snapshot?.client_price || c.client_price || 0);
+        totalCartCost += parseFloat(c.pricing_snapshot?.production_cost || c.production_cost || 0);
     }
 
     if (totalCartPrice > 0) {
         const cartMargin = (totalCartPrice - totalCartCost) / totalCartPrice;
         if (cartMargin < PRICES.margins.profit_warning_threshold) {
-            console.log(`\x1b[41m\x1b[37m 🚨 TOTAL CART MARGIN WARN \x1b[0m Overall Cart Profit Margin is ${Math.round(cartMargin * 100)}% (Below ${PRICES.margins.profit_warning_threshold * 100}%)`);
-            item.margin_warning = true; // Flags the frontend that this addition tanked the cart margin
+            console.log(`\x1b[41m\x1b[37m 🚨 TOTAL CART MARGIN WARN \x1b[0m Overall Cart Profit Margin is ${Math.round(cartMargin * 100)}%`);
         } else {
             console.log(`\x1b[32m✅ TOTAL CART MARGIN SAFE \x1b[0m Overall Cart Profit Margin is ${Math.round(cartMargin * 100)}%`);
         }
     }
 
-    return { updatedCart, lastAdded: item };
+    // Return the single item. The Controller will handle pushToSessionCart() to enforce uniqueness.
+    return hardenedItem;
 }
 
 module.exports = { calculate_custom_job };

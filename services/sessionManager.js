@@ -21,9 +21,25 @@ function getSession(userId) {
             cart: [],           // המוצרים שנוספו לעגלה
             currentProduct: null, // המוצר שעליו מדברים כרגע
             draftAttributes: {},  // תשובות זמניות (לפני חישוב)
-            processedRequests: new Map(), // <--- PH 1.2: מילון מזהי בקשות אטומיוֹת
-            lastActive: Date.now()
+            processedRequests: new Map(),
+            lastActive: Date.now(),
+            blockState: { reason: null, ttl: 0 } // Phase 4.2: Built-in Turn-Based Memory
         };
+    }
+
+    // Phase 4.2 Security Patch: Turn-based TTL decrement
+    // Only release PARAMETER_INSTABILITY (Oscillation) blocks
+    const session = sessions[userId];
+    if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
+        if (session.blockState.ttl > 0) {
+            session.blockState.ttl--;
+            console.log(`[SESSION] TTL Decrement: ${session.blockState.ttl} left for ${userId}`);
+
+            if (session.blockState.ttl === 0) {
+                console.log(`[SESSION] TTL Expired. Releasing block for ${userId}`);
+                session.blockState.reason = null;
+            }
+        }
     }
 
     // עדכון זמן פעילות אחרון
@@ -119,6 +135,26 @@ function clearCart(userId) {
     }
 }
 
+/**
+ * Phase 4: Secure Push to Cart
+ * Enforces traceId uniqueness and prevents silent overwrites.
+ */
+function pushToSessionCart(session, item) {
+    if (!item.traceId) {
+        throw new Error("Cannot push item without traceId to cart.");
+    }
+
+    const exists = session.cart.some(cartItem => cartItem.traceId === item.traceId);
+    if (exists) {
+        console.warn(`🛡️ [SESSION] Duplicate traceId blocked: ${item.traceId}`);
+        return false;
+    }
+
+    session.cart.push(item);
+    console.log(`✅ [SESSION] Item added to cart: ${item.product} (${item.traceId.substring(0, 8)}...)`);
+    return true;
+}
+
 // מנגנון ניקוי אוטומטי לזיכרון (Garbage Collection)
 setInterval(() => {
     const now = Date.now();
@@ -133,6 +169,7 @@ module.exports = {
     getSession,
     clearSession,
     clearCart,
+    pushToSessionCart,
     checkAndLockRequest,
     cacheCompletedRequest,
     releaseFailedRequest
