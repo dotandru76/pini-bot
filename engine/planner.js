@@ -241,6 +241,12 @@ function compileOrder(extractedData, session) {
                 activeItem.history[param.key].push(param.value);
                 activeItem.attributes[param.key] = param.value;
                 session.lastSpecChangeTime = Date.now();
+
+                // Spec v5.7.3/v5.7.4: If the item was already priced and we just mutated it,
+                // downgrade it to 'extracted' so the compiler reprices it and updates the UI.
+                if (activeItem.status === 'priced') {
+                    activeItem.status = 'extracted';
+                }
             }
         });
 
