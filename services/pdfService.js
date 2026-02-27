@@ -37,6 +37,13 @@ async function generateQuotePDF(cart, customerProfile, isDraft = false) {
 
             // Header Section
             if (hasHebrewFont) doc.font(fontPath);
+
+            // Add Logo if exists
+            const logoPath = path.join(__dirname, '../public/logo.png');
+            if (fs.existsSync(logoPath)) {
+                doc.image(logoPath, 50, 40, { width: 120 }); // Place logo on the top left
+            }
+
             doc.fontSize(24).fillColor('#008069').text(reverseHebrew('הצעת מחיר - דפוס בית יצחק'), { align: 'center' });
             doc.fontSize(14).fillColor('#666666').text('Price Quote', { align: 'center' });
 
