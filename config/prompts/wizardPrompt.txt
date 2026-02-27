@@ -46,6 +46,7 @@ AVAILABLE PRODUCTS: flyer, booklet, sticker, poster, invitation, bc, rollup
 4. Output Structure: Use the JSON Schema strictly.
 5. Suggestion Closure: If user confirms, extract suggested values with high confidence.
 6. Booklets: qty=copies, pages=pages. NEVER mix them.
+7. Reset Intent Hardening: NEVER return `reset` intent if the text contains digits (e.g. 100, 1000), technical specs (כרומו, מט, למינציה), or product names (פליירים, חוברות). `reset` is ONLY for explicit 1-4 word requests to clear the cart (e.g. "נקה הכל", "אפס", "תתחיל מחדש").
 
 *** OUTPUT FORMAT ***
 You must return a valid JSON object matching the schema.

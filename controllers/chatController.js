@@ -56,11 +56,25 @@ async function handleChat(req, res) {
         }
 
         // 2. Handle System Intent vs Compiler Flow
+
+        // --- IMMUTABLE RESET GUARDRAIL (Spec v5.7.2) ---
+        if (extraction.intent === 'reset') {
+            const hasNumbers = /\d+/.test(message);
+            const hasProductName = Object.keys(DOMAIN_TEMPLATES.products || {}).some(prod =>
+                message.includes(prod) || message.includes(DOMAIN_TEMPLATES.products[prod].label)
+            );
+            const hasSpecs = ["כרומו", "למינציה", "מאט", "מט", "מבריק", "נייר", "קיפול"].some(s => message.includes(s));
+
+            if (message.split(' ').length > 4 || hasNumbers || hasProductName || hasSpecs) {
+                console.log(`🛡️ [GUARDRAIL] Intercepted false 'reset' intent. Defaulting to 'chat'. Input: "${message}"`);
+                extraction.intent = 'chat'; // Override the classification
+            }
+        }
+
         if (extraction.intent === 'reset') {
             session.cart = [];
             session.currentProduct = null;
-            session.blockState = { reason: null, ttl: 0 };
-            session.history = [];
+            session.active_products = [];
             finalResponse.text = "המערכת אופסה. מה תרצה להזמין?";
         }
         else if (extraction.intent === 'show_cart') {

@@ -3,7 +3,7 @@
     "input": "צריך 1000 כרטיסי ביקור",
     "classification": {
       "intent": "quote",
-      "answer_text": "אוקיי, 1000 כרטיסי ביקור. איזה סוג נייר תרצה?",
+      "answer_text": "הבנתי, 1000 כרטיסי ביקור. איזה סוג נייר תרצה?",
       "products_detected": [
         {
           "product": "bc",
@@ -20,9 +20,9 @@
       ],
       "_debug": {
         "tokens": {
-          "in": 857,
-          "out": 133,
-          "total": 990
+          "in": 959,
+          "out": 134,
+          "total": 1093
         },
         "governance": "v5.7-StatefulAdvisor"
       },
@@ -34,7 +34,7 @@
     "input": "אהלן פיני, מה העניינים? אני רוצה להדפיס חוברת שירים לסבתא שלי.",
     "classification": {
       "intent": "quote",
-      "answer_text": "שלום! אני שמח לעזור לך עם חוברת השירים לסבתא. כדי שאוכל לתת לך הצעת מחיר מדויקת, אני צריך לדעת כמה עמודים יהיו בחוברת וכמה עותקים תרצי להדפיס?",
+      "answer_text": "שלום! איזה כיף לסבתא! כדי שאוכל לתת לך הצעת מחיר, אני צריך לדעת כמה עמודים יש בחוברת, ובאיזו כמות מדובר?",
       "products_detected": [
         {
           "product": "booklet",
@@ -44,9 +44,9 @@
       "parameters_detected": [],
       "_debug": {
         "tokens": {
-          "in": 871,
-          "out": 124,
-          "total": 995
+          "in": 973,
+          "out": 110,
+          "total": 1083
         },
         "governance": "v5.7-StatefulAdvisor"
       },
@@ -62,7 +62,7 @@
     "input": "אני רוצה רולאפ קטן, מטר על מטר.",
     "classification": {
       "intent": "quote",
-      "answer_text": "הבנתי, אתה רוצה רולאפ בגודל מטר על מטר. מצוין! איזה סוג חומר אתה מעדיף לרולאפ שלך?",
+      "answer_text": "רולאפ בגודל מטר על מטר זה מצוין. האם יש לך העדפה לגבי סוג החומר ממנו יהיה עשוי הרולאפ?",
       "products_detected": [
         {
           "product": "rollup",
@@ -74,14 +74,14 @@
           "key": "size",
           "value": "1x1",
           "context": "rollup",
-          "confidence": 0.95
+          "confidence": 0.9
         }
       ],
       "_debug": {
         "tokens": {
-          "in": 860,
+          "in": 962,
           "out": 147,
-          "total": 1007
+          "total": 1109
         },
         "governance": "v5.7-StatefulAdvisor"
       },

@@ -15,7 +15,7 @@ async function classify(text, session) {
 
     // 1. Technical Fast Paths
     if (t.startsWith('system_')) return { intent: 'system_action', action: t, raw_text: safeText };
-    if (KEYWORDS.reset.some(k => t.includes(k))) return { intent: 'reset' };
+    if (KEYWORDS.reset.some(k => t.includes(k)) && t.split(' ').length <= 4) return { intent: 'reset' };
     if (KEYWORDS.cart.some(k => t.includes(k))) return { intent: 'show_cart' };
 
     // 2. LLM / Compiler Pipeline
