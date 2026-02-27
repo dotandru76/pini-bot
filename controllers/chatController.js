@@ -20,11 +20,8 @@ async function handleChat(req, res) {
     if (lockResult.status === 'COMPLETED') return res.json(lockResult.cachedResponse);
 
     try {
-        // 0. Security Layer: Check for existing Block State
-        if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
-            const blockRefusal = `אני עדיין מחכה שתבצע סדר בבלגן. תוכל לאשר כמות אחת מדויקת עבור המוצר ששינית? (חסימה תשתחרר בעוד ${session.blockState.ttl} הודעות)`;
-            return res.json({ text: blockRefusal, cart: session.cart });
-        }
+        // 0. The blockState UI refusal has been MOVED downstream to allow decoupled parsing!
+
 
         // --- Spec v5.7: Stateful Advisor Preparation ---
         session.statefulContext = buildSessionStateContext(session);
@@ -34,6 +31,24 @@ async function handleChat(req, res) {
         // 1. Comprehension (Extractor)
         const extraction = await classifyMessage(message, session);
         console.log("🧩 [EXTRACTION DATA]:", JSON.stringify(extraction, null, 2));
+
+        // --- DECOUPLING BLOCKSTATE (Spec v5.7.3) ---
+        if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
+            // Check if the user is answering the block or completely changing topics
+            let isSwitchingProduct = false;
+            if (extraction.products_detected && extraction.products_detected.length > 0) {
+                const requestedProduct = normalizeEntity(extraction.products_detected[0].product);
+                if (session.currentProduct !== requestedProduct) isSwitchingProduct = true;
+            }
+
+            if (isSwitchingProduct || extraction.intent === 'reset') {
+                console.log("🔄 [DECOUPLING] Detected context switch. Dropping TTL block.");
+                session.blockState = { reason: null, ttl: 0 };
+            } else {
+                const blockRefusal = `אני עדיין מחכה שתבצע סדר בבלגן. תוכל לאשר כמות אחת מדויקת עבור המוצר ששינית? (חסימה תשתחרר בעוד ${session.blockState.ttl} הודעות)`;
+                return res.json({ text: blockRefusal, cart: session.cart });
+            }
+        }
 
         // 2. Build JIT Knowledge (Mini-RAG) - Now Intent-Aware
         session.jitKnowledge = getJITKnowledge(message, extraction);

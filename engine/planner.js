@@ -62,8 +62,32 @@ const PARAM_MAPPING = {
  * Deterministic Sanitizer (Spec v5.6.1)
  */
 function applyDeterministicSanitizer(extractedData, session) {
+    const HEBREW_BINDING_MAP = {
+        "דבק חם": "perfect_binding",
+        "כריכה בחום": "perfect_binding",
+        "מילוי בצבע": "perfect_binding",
+        "כריכה רכה": "perfect_binding",
+        "כריכה קשה": "hard_cover",
+        "סיכות": "saddle_stitch",
+        "כריכת סיכות": "saddle_stitch",
+        "ספירלה": "spiral",
+        "סליל": "spiral"
+    };
+
     extractedData.parameters_detected.forEach(param => {
         const normContext = normalizeEntity(param.context);
+
+        // Spec v5.7.3 - Hebrew Mapping Stress
+        if (param.key === 'binding' || param.key === 'book_type' || param.key === 'finishing' || param.key === 'finishings') {
+            for (const [hebTerm, engValue] of Object.entries(HEBREW_BINDING_MAP)) {
+                if (String(param.value).includes(hebTerm)) {
+                    param.value = engValue;
+                    param.key = 'binding';
+                    break;
+                }
+            }
+        }
+
         if (param.key === 'qty' && normContext === 'booklet') {
             const val = String(param.value);
             const pageRegex = new RegExp(`${val}\\s*(עמודים|דפים|דף|עמוד|pages|page)`, 'i');
@@ -220,14 +244,29 @@ function compileOrder(extractedData, session) {
             }
         });
 
+        // Spec v5.7.3 - Auto-Commit Live Fix (Turn-based instability check)
+        // We track the parameters from THIS TURN ONLY to see if the user gave conflicting inputs right now
+        let turnHistory = {};
+        extractedData.parameters_detected.forEach(param => {
+            const contextKey = normalizeEntity(param.context);
+            if (contextKey === 'global') return;
+            if (!turnHistory[contextKey]) turnHistory[contextKey] = {};
+            if (!turnHistory[contextKey][param.key]) turnHistory[contextKey][param.key] = [];
+            turnHistory[contextKey][param.key].push(param.value);
+        });
+
         for (const activeItem of session.active_products) {
             if (activeItem.status === 'confirmed') continue;
 
             let itemUnstable = false;
-            for (const [key, history] of Object.entries(activeItem.history || {})) {
-                const uniqueValues = new Set(history.map(v => String(v)));
-                if (uniqueValues.size > 1) itemUnstable = true;
+            // Only check instability based on WHAT WAS SAID IN THIS ROUND
+            if (turnHistory[activeItem.type]) {
+                for (const [key, historyArray] of Object.entries(turnHistory[activeItem.type])) {
+                    const uniqueValues = new Set(historyArray.map(v => String(v)));
+                    if (uniqueValues.size > 1) itemUnstable = true;
+                }
             }
+
             let finalParams = { ...activeItem.attributes };
             buckets[activeItem.type] = {
                 status: activeItem.status === 'extracted' ? "READY_FOR_INTEGRITY" : "PENDING_CONFIRMATION",
