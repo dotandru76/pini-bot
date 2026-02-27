@@ -19,6 +19,12 @@ async function handleChat(req, res) {
     if (lockResult.status === 'PROCESSING_ERROR') return res.status(429).json({ text: "אני כבר מעבד את הבקשה הזו..." });
     if (lockResult.status === 'COMPLETED') return res.json(lockResult.cachedResponse);
 
+    // --- Spec v5.7.4: Hard Bypass for Locked Sessions ---
+    if (session.state === "locked") {
+        console.log("🛑 [HARD GATE] LLM Bypass Activated.");
+        return res.json(generate_deterministic_summary(session));
+    }
+
     try {
         // 0. The blockState UI refusal has been MOVED downstream to allow decoupled parsing!
 
@@ -31,6 +37,18 @@ async function handleChat(req, res) {
         // 1. Comprehension (Extractor)
         const extraction = await classifyMessage(message, session);
         console.log("🧩 [EXTRACTION DATA]:", JSON.stringify(extraction, null, 2));
+
+        // --- Spec v5.7.4: Semantic Gate Evaluation ---
+        const activeProds = session.active_products || [];
+        const allItemsPriced = activeProds.length > 0 && activeProds.every(p => p.status === 'priced' || p.status === 'confirmed');
+
+        if (allItemsPriced && extraction.confirmation_flag && extraction.closure_intent_score > 0.8) {
+            console.log("🔒 [CLOSURE GATE] Semantic conditions met. Locking session.");
+            session.state = "locked";
+            const finalPayload = generate_deterministic_summary(session);
+            cacheCompletedRequest(session, requestId, finalPayload);
+            return res.json(finalPayload);
+        }
 
         // --- DECOUPLING BLOCKSTATE (Spec v5.7.3) ---
         if (session.blockState && session.blockState.reason === "PARAMETER_INSTABILITY") {
@@ -220,6 +238,29 @@ async function handleImageUpload(req, res) {
         console.error("💥 Upload Error:", error);
         res.status(500).json({ text: "אופס, נתקלתי בבעיה בעיבוד התמונה." });
     }
+}
+
+// --- Spec v5.7.4: Deterministic Summary Builder ---
+function generate_deterministic_summary(session) {
+    let summaryText = "תודה! ההזמנה שלך מוכנה להפקה.\n\nסיכום הזמנה:\n";
+    let totalPrice = 0;
+
+    const uiCart = session.cart || [];
+    uiCart.forEach(item => {
+        const qty = item.qty || item.quantity || 1;
+        const price = item.pricing_snapshot?.client_price || item.client_price || 0;
+        totalPrice += price;
+        summaryText += `• ${qty} ${item.displayName} - ₪${price.toLocaleString()}\n`;
+    });
+
+    summaryText += `\nסה"כ: ₪${totalPrice.toLocaleString()}\n\n`;
+    summaryText += "הכל מוכן! לחץ כעת על הכפתור הירוק 'הורדה כ-PDF' או על סמל העגלה כדי לקבל הצעת מחיר מסודרת.";
+
+    return {
+        text: summaryText,
+        cart: uiCart,
+        locked: true
+    };
 }
 
 module.exports = { handleChat, handleImageUpload };

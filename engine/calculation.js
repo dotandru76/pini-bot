@@ -130,6 +130,7 @@ function buildResult(cart, product, params, price, qty, desc, cost) {
         unit_price: (price / qty).toFixed(2),
         production_cost: cost?.toFixed(2),
         description: desc,
+        qty: qty, // Spec v5.7.4 Qty mapping
         engine: params.engine || 'digital' // Pass through engine type
     };
 

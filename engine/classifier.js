@@ -42,6 +42,28 @@ async function classify(text, session) {
         extraction.raw_text = safeText;
         extraction.technicalMetadata = technicalMetadata;
 
+        // --- Spec v5.7.4: Deterministic Semantic Closure Gate ---
+        // Calculate closure intent and confirmation flag heuristically
+        let closureScore = 0;
+        let isConfirmed = false;
+
+        const positiveClosureSignals = ["השאר", "הכל מושלם", "סגור", "תן הצעה", "מעולה", "בדיוק", "זהו", "תתקדם", "שלח בהקדם", "המשך", "בסדר", "מוכן"];
+        const conditionSignals = ["אבל", "חוץ מ", "אולי", "לשנות", "רגע", "שנה", "תחליף", "במקום"];
+
+        const hasPositiveSignal = positiveClosureSignals.some(s => t.includes(s));
+        const hasCondition = conditionSignals.some(s => t.includes(s));
+
+        if (hasPositiveSignal && !hasCondition && extraction.intent !== 'update' && extraction.intent !== 'reset') {
+            closureScore = 0.9;
+            isConfirmed = true;
+        } else if (hasCondition || extraction.intent === 'update') {
+            closureScore = 0.0;
+            isConfirmed = false;
+        }
+
+        extraction.closure_intent_score = closureScore;
+        extraction.confirmation_flag = isConfirmed;
+
         return extraction;
 
     } catch (e) {
