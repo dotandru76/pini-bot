@@ -1,0 +1,94 @@
+{
+  "test1": {
+    "input": "צריך 1000 כרטיסי ביקור",
+    "classification": {
+      "intent": "quote",
+      "answer_text": "אוקיי, 1000 כרטיסי ביקור. איזה סוג נייר תרצה?",
+      "products_detected": [
+        {
+          "product": "bc",
+          "confidence": 0.95
+        }
+      ],
+      "parameters_detected": [
+        {
+          "key": "qty",
+          "value": "1000",
+          "context": "bc",
+          "confidence": 1
+        }
+      ],
+      "_debug": {
+        "tokens": {
+          "in": 857,
+          "out": 133,
+          "total": 990
+        },
+        "governance": "v5.7-StatefulAdvisor"
+      },
+      "raw_text": "צריך 1000 כרטיסי ביקור",
+      "technicalMetadata": null
+    }
+  },
+  "test2": {
+    "input": "אהלן פיני, מה העניינים? אני רוצה להדפיס חוברת שירים לסבתא שלי.",
+    "classification": {
+      "intent": "quote",
+      "answer_text": "שלום! אני שמח לעזור לך עם חוברת השירים לסבתא. כדי שאוכל לתת לך הצעת מחיר מדויקת, אני צריך לדעת כמה עמודים יהיו בחוברת וכמה עותקים תרצי להדפיס?",
+      "products_detected": [
+        {
+          "product": "booklet",
+          "confidence": 0.95
+        }
+      ],
+      "parameters_detected": [],
+      "_debug": {
+        "tokens": {
+          "in": 871,
+          "out": 124,
+          "total": 995
+        },
+        "governance": "v5.7-StatefulAdvisor"
+      },
+      "raw_text": "אהלן פיני, מה העניינים? אני רוצה להדפיס חוברת שירים לסבתא שלי.",
+      "technicalMetadata": null
+    },
+    "planner_status": "CONSULTATIVE_ACTIVE",
+    "planner_guidance": [
+      "כדי לתמחר ספר, אני צריך לדעת: כמה עמודים יש בו? מה הגודל (A4/A5)? ואיזה סוג כריכה (רכה/קשה/סיכות)?"
+    ]
+  },
+  "test3": {
+    "input": "אני רוצה רולאפ קטן, מטר על מטר.",
+    "classification": {
+      "intent": "quote",
+      "answer_text": "הבנתי, אתה רוצה רולאפ בגודל מטר על מטר. מצוין! איזה סוג חומר אתה מעדיף לרולאפ שלך?",
+      "products_detected": [
+        {
+          "product": "rollup",
+          "confidence": 1
+        }
+      ],
+      "parameters_detected": [
+        {
+          "key": "size",
+          "value": "1x1",
+          "context": "rollup",
+          "confidence": 0.95
+        }
+      ],
+      "_debug": {
+        "tokens": {
+          "in": 860,
+          "out": 147,
+          "total": 1007
+        },
+        "governance": "v5.7-StatefulAdvisor"
+      },
+      "raw_text": "אני רוצה רולאפ קטן, מטר על מטר.",
+      "technicalMetadata": null
+    },
+    "planner_status": "CONSULTATIVE_ACTIVE",
+    "planner_validation": []
+  }
+}

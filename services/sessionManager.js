@@ -22,7 +22,7 @@ function getSession(userId) {
             id: userId,
             cart: [],           // המוצרים שנוספו לעגלה
             currentProduct: null, // המוצר שעליו מדברים כרגע
-            draftAttributes: {},  // תשובות זמניות (לפני חישוב)
+            active_products: [],  // [Spec v5.7.1] מודל שיחה שומר סטטוס של מוצרים: draft, priced
             processedRequests: new Map(),
             lastActive: Date.now(),
             lastSpecChangeTime: Date.now(), // Tracking for Semantic Aging
@@ -48,7 +48,7 @@ function getSession(userId) {
 
     // Phase 5.3: Semantic Aging (Drift Detection)
     const driftDelta = (Date.now() - session.lastSpecChangeTime) / 1000 / 60; // in minutes
-    if (driftDelta >= 8 && driftDelta <= 12 && session.draftAttributes && Object.keys(session.draftAttributes).length > 0) {
+    if (driftDelta >= 8 && driftDelta <= 12 && session.active_products && session.active_products.length > 0) {
         session.driftDetected = true;
         console.log(`⏳ [SESSION] Semantic Aging detected for ${userId}: ${driftDelta.toFixed(1)}m`);
     } else {
@@ -133,7 +133,7 @@ function releaseFailedRequest(session, requestId) {
 function clearSession(userId) {
     if (sessions[userId]) {
         sessions[userId].currentProduct = null;
-        sessions[userId].draftAttributes = {};
+        sessions[userId].active_products = [];
         sessions[userId].history = [];
         sessions[userId].lastBotMessage = null;
         console.log(`🧹 Session context cleared for: ${userId}`);
@@ -144,7 +144,7 @@ function clearCart(userId) {
     if (sessions[userId]) {
         sessions[userId].cart = [];
         sessions[userId].currentProduct = null;
-        sessions[userId].draftAttributes = {};
+        sessions[userId].active_products = [];
         sessions[userId].history = [];
         sessions[userId].lastBotMessage = null;
         console.log(`🗑️ Cart emptied for: ${userId}`);

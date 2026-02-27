@@ -81,16 +81,16 @@ function applyDeterministicSanitizer(extractedData, session) {
  */
 function buildSessionStateContext(session) {
     const product = session.currentProduct || "unknown";
-    const draft = session.draftAttributes[product] || { params: {} };
+    const activeProduct = (session.active_products || []).find(p => p.type === product && p.status !== 'confirmed') || { attributes: {} };
     let missing = [];
     const template = DOMAIN_TEMPLATES.products[product];
     if (template && template.mandatory) {
-        missing = template.mandatory.filter(p => !draft.params[p]);
+        missing = template.mandatory.filter(p => !activeProduct.attributes[p]);
     }
     return {
         current_intent: session.lastIntent || "unknown",
         active_product: product,
-        extracted_slots: draft.params,
+        extracted_slots: activeProduct.attributes,
         missing_mandatory_slots: missing,
         conversation_phase: missing.length > 0 ? "slot_filling" : (product !== "unknown" ? "ready_for_quote" : "discovery"),
         last_bot_question: session.lastBotMessage || "None"
@@ -161,8 +161,8 @@ function getJITKnowledge(text, extraction = null) {
  */
 function compileOrder(extractedData, session) {
     try {
-        console.log("🧩 [COMPILER] Processing turn (v5.7 - Stateful Advisor)...");
-        if (!session.draftAttributes) session.draftAttributes = {};
+        console.log("🧩 [COMPILER] Processing turn (v5.7.1 - Unified Product State)...");
+        if (!session.active_products) session.active_products = [];
         applyDeterministicSanitizer(extractedData, session);
 
         let buckets = {};
@@ -183,12 +183,17 @@ function compileOrder(extractedData, session) {
         extractedData.products_detected.forEach(item => {
             const normProduct = normalizeEntity(item.product);
             if (!DOMAIN_TEMPLATES.products[normProduct]) return;
-            if (!session.draftAttributes[normProduct]) {
-                session.draftAttributes[normProduct] = { params: {}, history: {}, status: 'PENDING' };
+
+            let activeItem = session.active_products.find(p => p.type === normProduct && p.status !== 'confirmed');
+            if (!activeItem) {
+                activeItem = { type: normProduct, status: 'draft', attributes: {}, history: {} };
+                session.active_products.push(activeItem);
             }
-            if (item.confidence >= 0.6) session.draftAttributes[normProduct].status = 'EXTRACTED';
+
+            if (item.confidence >= 0.6 && activeItem.status === 'draft') activeItem.status = 'extracted';
+
             if (isDeleteIntent && (extractedData.raw_text.includes(normProduct) || extractedData.raw_text.includes(DOMAIN_TEMPLATES.products[normProduct]?.label))) {
-                delete session.draftAttributes[normProduct];
+                session.active_products = session.active_products.filter(p => p !== activeItem);
                 if (session.cart) session.cart = session.cart.filter(c => c.product !== normProduct);
                 deletedItems.push(normProduct);
             }
@@ -199,28 +204,33 @@ function compileOrder(extractedData, session) {
             const contextKey = normalizeEntity(param.context);
             if (contextKey === 'global') return;
             if (!DOMAIN_TEMPLATES.products[contextKey]) return;
-            if (!session.draftAttributes[contextKey]) {
-                session.draftAttributes[contextKey] = { params: {}, history: {}, status: 'PENDING' };
+
+            let activeItem = session.active_products.find(p => p.type === contextKey && p.status !== 'confirmed');
+            if (!activeItem) {
+                activeItem = { type: contextKey, status: 'draft', attributes: {}, history: {} };
+                session.active_products.push(activeItem);
             }
-            const target = session.draftAttributes[contextKey];
+
             const allowedParams = PRODUCT_WHITELIST[contextKey] || [];
             if (allowedParams.includes(param.key)) {
-                if (!target.history[param.key]) target.history[param.key] = [];
-                target.history[param.key].push(param.value);
-                target.params[param.key] = param.value;
+                if (!activeItem.history[param.key]) activeItem.history[param.key] = [];
+                activeItem.history[param.key].push(param.value);
+                activeItem.attributes[param.key] = param.value;
                 session.lastSpecChangeTime = Date.now();
             }
         });
 
-        for (const [product, data] of Object.entries(session.draftAttributes)) {
+        for (const activeItem of session.active_products) {
+            if (activeItem.status === 'confirmed') continue;
+
             let itemUnstable = false;
-            for (const [key, history] of Object.entries(data.history)) {
+            for (const [key, history] of Object.entries(activeItem.history || {})) {
                 const uniqueValues = new Set(history.map(v => String(v)));
                 if (uniqueValues.size > 1) itemUnstable = true;
             }
-            let finalParams = { ...data.params };
-            buckets[product] = {
-                status: data.status === 'EXTRACTED' ? "READY_FOR_INTEGRITY" : "PENDING_CONFIRMATION",
+            let finalParams = { ...activeItem.attributes };
+            buckets[activeItem.type] = {
+                status: activeItem.status === 'extracted' ? "READY_FOR_INTEGRITY" : "PENDING_CONFIRMATION",
                 params: finalParams,
                 unstable: itemUnstable
             };

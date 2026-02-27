@@ -80,7 +80,7 @@ async function handleChat(req, res) {
                 if (compilation.deleted_items && compilation.deleted_items.length > 0) {
                     compilation.deleted_items.forEach(product => {
                         session.cart = session.cart.filter(item => item.product !== product);
-                        delete session.draftAttributes[product];
+                        // session.active_products deletion is handled by the planner
                     });
                 }
 
@@ -92,11 +92,14 @@ async function handleChat(req, res) {
                         ...item.params
                     });
                     pushToSessionCart(session, productionItem);
-                    delete session.draftAttributes[item.product];
+
+                    // Spec v5.7.1: Keep the product in the session state but mark it as priced
+                    const activeProd = (session.active_products || []).find(p => p.type === item.product && p.status !== 'confirmed');
+                    if (activeProd) activeProd.status = 'priced';
                 });
 
                 // C. Status Updates (Only append if LLM didn't explain the status)
-                const draftProducts = Object.keys(session.draftAttributes || {});
+                const draftProducts = (session.active_products || []).filter(p => p.status === 'draft').map(p => p.type);
                 if (draftProducts.length > 0 && !responseMsg.includes("📌") && !responseMsg.includes("חסר")) {
                     const pendingLabels = draftProducts.map(p => DOMAIN_TEMPLATES.products[p]?.label || p);
                     const readyLabels = session.cart.map(i => i.displayName);
@@ -125,7 +128,8 @@ async function handleChat(req, res) {
             }
 
             const uiCart = [...session.cart];
-            Object.keys(session.draftAttributes || {}).forEach(prodKey => {
+            (session.active_products || []).filter(p => p.status === 'draft').forEach(draftItem => {
+                const prodKey = draftItem.type;
                 if (!uiCart.find(c => c.product === prodKey)) {
                     const meta = DOMAIN_TEMPLATES.products[prodKey] || {};
                     uiCart.push({
@@ -133,7 +137,7 @@ async function handleChat(req, res) {
                         displayName: meta.label || prodKey,
                         isPending: true,
                         client_price: 0,
-                        qty: session.draftAttributes[prodKey].params?.qty || 0
+                        qty: draftItem.attributes?.qty || 0
                     });
                 }
             });
